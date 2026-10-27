@@ -36,7 +36,10 @@ jobs:
           if [ -z "$FROM" ] || [ "$FROM" = "0000000000000000000000000000000000000000" ]; then
             FROM="$TO~1"
           fi
-          bun scripts/check-commits.ts "$FROM..$TO"
+          RANGE="$FROM..$TO"
+          # The first commit of the history has no parent: it is checked alone.
+          git rev-parse -q --verify "$FROM^{commit}" >/dev/null || RANGE="$TO"
+          bun scripts/check-commits.ts "$RANGE"
 
   nuxt:
     runs-on: ubuntu-latest
