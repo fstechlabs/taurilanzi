@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1220" height="708" viewBox="0 0 1220 708">
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="0.35" stop-color="#0e6fb8"/>
+      <stop offset="0.75" stop-color="#0a2f6b"/>
+      <stop offset="1" stop-color="#050f2c"/>
+    </linearGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e0f7ff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#e0f7ff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="b" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="22"/></filter>
+  </defs>
+  <rect width="1220" height="708" fill="url(#sea)"/>
+  <g filter="url(#b)">
+    <polygon points="250,-20 380,-20 560,708 300,708" fill="url(#ray)"/>
+    <polygon points="560,-20 640,-20 760,708 600,708" fill="url(#ray)" opacity="0.7"/>
+    <polygon points="820,-20 960,-20 1180,708 900,708" fill="url(#ray)" opacity="0.8"/>
+  </g>
+  <circle cx="140" cy="560" r="10" fill="none" stroke="#bfefff" stroke-opacity="0.5" stroke-width="2"/><circle cx="170" cy="500" r="6" fill="none" stroke="#bfefff" stroke-opacity="0.5" stroke-width="2"/><circle cx="150" cy="430" r="4" fill="none" stroke="#bfefff" stroke-opacity="0.5" stroke-width="2"/><circle cx="1060" cy="620" r="12" fill="none" stroke="#bfefff" stroke-opacity="0.5" stroke-width="2"/><circle cx="1090" cy="540" r="7" fill="none" stroke="#bfefff" stroke-opacity="0.5" stroke-width="2"/><circle cx="1070" cy="470" r="4" fill="none" stroke="#bfefff" stroke-opacity="0.5" stroke-width="2"/><circle cx="700" cy="650" r="8" fill="none" stroke="#bfefff" stroke-opacity="0.5" stroke-width="2"/><circle cx="720" cy="590" r="5" fill="none" stroke="#bfefff" stroke-opacity="0.5" stroke-width="2"/>
+  <path d="M0 640 C 200 600, 380 690, 610 650 S 1000 610, 1220 660 V708 H0Z" fill="#030a20"/>
+</svg>

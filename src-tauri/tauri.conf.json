@@ -1,0 +1,66 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Taurilanzi Local Dev",
+  "version": "0.0.0",
+  "identifier": "com.taurilanzi.dev",
+  "build": {
+    "frontendDist": "../src-nuxt/.output/public",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun run generate"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "create": false,
+        "width": 1360,
+        "height": 860,
+        "resizable": true,
+        "fullscreen": false,
+        "minWidth": 1100,
+        "minHeight": 700,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "font-src": "'self' data:",
+        "img-src": "'self' data: blob: deck: http://deck.localhost",
+        "connect-src": "'self' ipc: http://ipc.localhost deck: http://deck.localhost https://api.iconify.design",
+        "frame-src": "http://127.0.0.1:*"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "13.0",
+      "files": {
+        "Resources/es.lproj/InfoPlist.strings": "locales/es.lproj/InfoPlist.strings"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI1RTEyOURFMjUxMzA5QjcKUldTM0NSTWwzaW5odGEyODhkeXFJRk9Pd051c3Q0cVV1d1NqK3hLdW0zKzJvU2FEV2lpSzlzSDMK",
+      "endpoints": [],
+      "requireSignedVersion": true
+    }
+  }
+}

@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Nuxt and Vite outputs (dist is a symlink nuxt generate leaves)
+.output/
+.data/
+.nuxt/
+.nitro/
+.cache/
+dist
+
+# Rust and Tauri (see also src-tauri/.gitignore)
+target/
+
+# The Node bundled with the app, downloaded by scripts/fetch-node.ts
+src-tauri/resources/node/
+
+# Update archives served locally by scripts/serve-updates.ts, and what a release publishes
+/.updates/
+/.release/
+
+# End-to-end test output
+tests/e2e/logs/
+tests/e2e/screens/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+bun-debug.log*
+
+# Environment and secrets: never commit them
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.p8
+*.mobileprovision
+
+# Editors and OS
+.DS_Store
+.idea/
+.fleet/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Local settings of AI tools
+.claude/settings.local.json

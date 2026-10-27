@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: sans-serif; color: #eee; background: #18181b; margin: 12px; }
+  </style>
+</head>
+<body>
+  <p>Cuenta: <span id="count">?</span></p>
+  <p>Raíz del plugin: <span id="root"></span></p>
+  <p>Servidor de fuera: <span id="answer">…</span></p>
+  <script>
+    // Acts on its own as it loads, since tests cannot click inside a frame of another origin: it
+    // calls a server of another origin, hands the answer to the plugin and, once the plugin
+    // answers, saves both.
+    const ECHO = 'http://127.0.0.1:39071/eco'
+    const query = new URLSearchParams(location.search)
+    const uuid = query.get('uuid')
+    const key = query.get('key')
+    const actionid = query.get('actionid')
+    const ws = new WebSocket(`ws://${query.get('address')}:${query.get('port')}`)
+    const send = (cmd, fields) => ws.send(JSON.stringify({ cmd, uuid, key, actionid, ...fields }))
+    const parts = location.pathname.split('/')
+    const root = parts.slice(0, parts.findIndex(p => p.endsWith('ulanziPlugin')) + 1).join('/')
+    document.getElementById('root').textContent = root
+    let started = false
+    let param = {}
+    ws.onopen = () => ws.send(JSON.stringify({ code: 0, cmd: 'connected', uuid, key, actionid }))
+    ws.onmessage = async (event) => {
+      const message = JSON.parse(event.data)
+      if (message.code !== undefined && message.cmdType !== 'REQUEST') {
+        return
+      }
+      if ((message.cmd === 'add' || message.cmd === 'paramfromapp') && !started) {
+        started = true
+        document.getElementById('count').textContent = message.param?.count ?? 0
+        param = message.param ?? {}
+        let answer
+        try {
+          const response = await fetch(ECHO, { method: 'POST', body: 'hola', headers: { 'X-Test': 'si' } })
+          answer = await response.text()
+        }
+        catch (err) {
+          answer = `error ${err}`
+        }
+        document.getElementById('answer').textContent = answer
+        send('sendToPlugin', { payload: { echo: answer } })
+      }
+      if (message.cmd === 'sendToPropertyInspector' && message.payload?.pong !== undefined) {
+        const inspector = root.endsWith('ulanziPlugin') ? 'conectado' : 'sin raíz'
+        send('setSettings', { settings: { ...param, inspector, echo: document.getElementById('answer').textContent, pong: message.payload.pong } })
+      }
+    }
+  </script>
+</body>
+</html>

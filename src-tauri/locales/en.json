@@ -1,0 +1,330 @@
+{
+  "menu": {
+    "app": {
+      "about": "About {name}",
+      "services": "Services",
+      "hide": "Hide {name}",
+      "hideOthers": "Hide Others",
+      "showAll": "Show All",
+      "quit": "Quit {name}"
+    },
+    "edit": {
+      "title": "Edit",
+      "undo": "Undo",
+      "redo": "Redo",
+      "cut": "Cut",
+      "copy": "Copy",
+      "paste": "Paste",
+      "selectAll": "Select All"
+    },
+    "window": {
+      "title": "Window",
+      "minimize": "Minimize",
+      "close": "Close Window"
+    }
+  },
+  "tray": {
+    "moveToApplications": "Move the app to Applications so it starts by itself",
+    "open": "Open {name}",
+    "profile": "Profile",
+    "chosenBy": "{profile} (by {app})",
+    "brightness": "Brightness",
+    "brightnessNow": "Now: {percent} %",
+    "pause": "Pause the dock",
+    "quit": "Quit",
+    "status": {
+      "starting": "Starting…",
+      "paused": "Dock paused",
+      "connected": "{model} connected",
+      "disconnected": "Dock disconnected"
+    },
+    "updates": {
+      "onlyInstalled": "Updates: only in the installed app",
+      "check": "Check for Updates…",
+      "checking": "Checking for updates…",
+      "upToDate": "Up to date. Check again…",
+      "notConfigured": "No update server",
+      "downloading": "Downloading version {version}…",
+      "ready": "Install version {version} and restart",
+      "installing": "Installing…",
+      "failed": "Update failed. Try again…"
+    }
+  },
+  "defaults": {
+    "homePage": "Home",
+    "profile": "Default",
+    "back": "Back"
+  },
+  "profiles": {
+    "homePage": "Home",
+    "copy": "{name} (copy)",
+    "numbered": "Profile {number}"
+  },
+  "pages": {
+    "numbered": "Page {number}",
+    "copy": "{name} (copy)"
+  },
+  "assets": {
+    "rawBytes": "send the file as raw bytes",
+    "imageTooBig": "images can be up to 10 MB",
+    "soundTooBig": "sounds can be up to 30 MB",
+    "unsupportedType": "use a PNG, JPEG, WebP, GIF or SVG image, or an MP3, WAV, M4A, FLAC or OGG sound"
+  },
+  "actions": {
+    "unsupportedUrl": "only http and https URLs can be opened",
+    "notFound": "{path} does not exist",
+    "notAnApp": "{path} is not an app",
+    "unknownKey": "unknown key {key}",
+    "noAccessibility": "the app is not allowed to control the keyboard: grant it Accessibility",
+    "noKeyboardPermission": "the app is not allowed to use its virtual keyboard: grant it in the action's settings",
+    "launch": "could not launch it: {reason}",
+    "sound": "could not play the sound: {reason}",
+    "http": "the request failed: {reason}",
+    "httpStatus": "the server answered {status}",
+    "clipboard": "could not use the clipboard: {reason}",
+    "keysRefused": "Windows did not let the app press the keys: an app running as administrator, or the lock screen, is in front",
+    "noBrightness": "no screen lets the computer change its brightness",
+    "unsupported": "not supported on this system yet",
+    "noServer": "the action's server is no longer in the integrations"
+  },
+  "obs": {
+    "notConnected": "OBS is not connected",
+    "timeout": "OBS did not answer in time",
+    "lost": "the connection to OBS was lost",
+    "rejected": "OBS could not do it: {message}",
+    "protocol": "unexpected answer from OBS: {details}",
+    "secrets": "could not store the password: {reason}",
+    "stopped": "the OBS client is not running"
+  },
+  "hass": {
+    "notConnected": "Home Assistant is not connected",
+    "timeout": "Home Assistant did not answer in time",
+    "lost": "the connection to Home Assistant was lost",
+    "rejected": "Home Assistant could not do it: {message}",
+    "protocol": "unexpected answer from Home Assistant: {details}",
+    "unknownEntity": "Home Assistant has no {entity}",
+    "unsupported": "{entity} cannot do that",
+    "secrets": "could not save it: {reason}",
+    "stopped": "the Home Assistant client is not running",
+    "states": {
+      "unavailable": "Unavailable",
+      "unknown": "Unknown"
+    },
+    "widgets": {
+      "offline": "Not connected",
+      "missing": "Not found",
+      "templateError": "Template error",
+      "dayTime": "{day}, {time}",
+      "yes": "Yes",
+      "no": "No",
+      "today": "Today"
+    },
+    "time": {
+      "now": "now",
+      "minutesAgo": "{amount} min ago",
+      "inMinutes": "in {amount} min",
+      "hoursAgo": "{amount} h ago",
+      "inHours": "in {amount} h",
+      "daysAgo": "{amount} d ago",
+      "inDays": "in {amount} d"
+    },
+    "tiles": {
+      "lastRun": "Last {when}",
+      "activate": "Activate",
+      "press": "Press",
+      "oscillating": "Oscillating",
+      "target": "→ {value}",
+      "humidity": "Humidity {value}",
+      "tilt": "Tilt {value}",
+      "battery": "Battery {value}",
+      "volume": "Volume {value}",
+      "sets": "Sets at {time}",
+      "rises": "Rises at {time}",
+      "option": "{index} of {count}",
+      "installed": "You have {version}",
+      "pending": "to do",
+      "people": "people"
+    }
+  },
+  "plugins": {
+    "notStarted": "the plugins could not start",
+    "notInstalled": "that plugin is not installed",
+    "install": {
+      "notAPlugin": "not a Ulanzi plugin: there is no .ulanziPlugin folder with a manifest.json",
+      "unsafePaths": "the ZIP has paths that would leave the plugin folder",
+      "badManifest": "the manifest cannot be read: {reason}",
+      "damagedZip": "the ZIP is damaged: {reason}",
+      "invalidId": "the id {id} is not valid",
+      "notRemovable": "only plugins installed in the app can be removed"
+    },
+    "community": {
+      "catalog": "could not read the community catalog: {reason}",
+      "unknown": "that plugin is not in the catalog",
+      "host": "that plugin cannot be downloaded from {host}",
+      "download": "could not download the plugin: {reason}"
+    },
+    "launcher": {
+      "python": "Python plugins cannot be used yet",
+      "needsNode": "It needs Node 20 or later, or Ulanzi Studio installed"
+    }
+  },
+  "widgets": {
+    "decimalSeparator": ".",
+    "reading": "Reading…",
+    "weekdays": {
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday",
+      "sunday": "Sunday"
+    },
+    "months": {
+      "january": "January",
+      "february": "February",
+      "march": "March",
+      "april": "April",
+      "may": "May",
+      "june": "June",
+      "july": "July",
+      "august": "August",
+      "september": "September",
+      "october": "October",
+      "november": "November",
+      "december": "December"
+    },
+    "date": {
+      "dayMonth": "{month} {day}",
+      "withYear": "{date}, {year}"
+    },
+    "calendar": {
+      "initials": {
+        "monday": "M",
+        "tuesday": "T",
+        "wednesday": "W",
+        "thursday": "T",
+        "friday": "F",
+        "saturday": "S",
+        "sunday": "S"
+      }
+    },
+    "countdown": {
+      "oneDay": "1 day",
+      "days": "{days} days",
+      "done": "Done!",
+      "noDate": "No date"
+    },
+    "timer": {
+      "done": "Time's up!",
+      "pressToStart": "Press to start",
+      "paused": "Paused"
+    },
+    "stopwatch": {
+      "pressToStart": "Press to start",
+      "paused": "Paused"
+    },
+    "worldClocks": {
+      "addCity": "Add a city",
+      "tomorrow": "tomorrow",
+      "yesterday": "yesterday"
+    },
+    "systemMonitor": {
+      "disk": "Disk"
+    },
+    "network": {
+      "down": "DOWN",
+      "up": "UP"
+    },
+    "battery": {
+      "none": "No battery",
+      "chargingFullIn": "Charging · full in {time}",
+      "charging": "Charging",
+      "charged": "Charged",
+      "pluggedIn": "Plugged in",
+      "timeLeft": "{time} left",
+      "onBattery": "On battery"
+    },
+    "nowPlaying": {
+      "nothing": "Nothing playing"
+    },
+    "temperatures": {
+      "noSensors": "No sensors",
+      "disk": "Disk",
+      "battery": "Battery"
+    },
+    "latency": {
+      "noRouter": "No router",
+      "invalidHost": "{host} is not a valid address",
+      "noReply": "No reply"
+    },
+    "volume": {
+      "speakers": "Speakers",
+      "muted": "Muted",
+      "mic": "Mic"
+    },
+    "moon": {
+      "phases": {
+        "new": "New moon",
+        "waxingCrescent": "Waxing crescent",
+        "firstQuarter": "First quarter",
+        "waxingGibbous": "Waxing gibbous",
+        "full": "Full moon",
+        "waningGibbous": "Waning gibbous",
+        "lastQuarter": "Last quarter",
+        "waningCrescent": "Waning crescent"
+      },
+      "next": {
+        "full": "full",
+        "new": "new"
+      },
+      "today": "today",
+      "tomorrow": "tomorrow",
+      "inDays": "in {days} days"
+    },
+    "progress": {
+      "day": "Day",
+      "week": "Week",
+      "month": "Month",
+      "year": "Year"
+    },
+    "wordClock": {
+      "lead": "It's",
+      "leadOne": "It's",
+      "minutes": {
+        "oClock": "{hour} o'clock",
+        "fivePast": "five past {hour}",
+        "tenPast": "ten past {hour}",
+        "quarterPast": "quarter past {hour}",
+        "twentyPast": "twenty past {hour}",
+        "twentyFivePast": "twenty-five past {hour}",
+        "halfPast": "half past {hour}",
+        "twentyFiveTo": "twenty-five to {hour}",
+        "twentyTo": "twenty to {hour}",
+        "quarterTo": "quarter to {hour}",
+        "tenTo": "ten to {hour}",
+        "fiveTo": "five to {hour}"
+      },
+      "hours": {
+        "one": "one",
+        "two": "two",
+        "three": "three",
+        "four": "four",
+        "five": "five",
+        "six": "six",
+        "seven": "seven",
+        "eight": "eight",
+        "nine": "nine",
+        "ten": "ten",
+        "eleven": "eleven",
+        "twelve": "twelve"
+      }
+    },
+    "phrases": {
+      "empty": "Write your phrases"
+    }
+  },
+  "integrations": {
+    "missing": "That server is no longer in the integrations"
+  }
+}

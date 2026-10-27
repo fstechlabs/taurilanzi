@@ -1,0 +1,13 @@
+{
+  "Name": "Contador de prueba",
+  "Category": "Pruebas",
+  "Actions": [
+    {
+      "Name": "Contar",
+      "Tooltip": "Suma uno en cada pulsación"
+    },
+    {
+      "Name": "Girar"
+    }
+  ]
+}

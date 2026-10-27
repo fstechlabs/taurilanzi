@@ -1,0 +1,1729 @@
+{
+  "actions": {
+    "catalog": {
+      "needsHardware": "Cuando haya hardware para probarlo",
+      "lightsKeywords": "luz, ulanzi connect",
+      "hassKeywords": "domótica, casa, hogar, smart home",
+      "sections": {
+        "system": {
+          "name": "Sistema",
+          "description": "Apps, archivos, webs, texto y atajos"
+        },
+        "media": {
+          "name": "Multimedia",
+          "description": "Reproducción, volumen y brillo"
+        },
+        "pages": {
+          "name": "Páginas",
+          "description": "Moverse por las páginas y los perfiles"
+        },
+        "sequence": {
+          "name": "Secuencia",
+          "description": "Esperas, azar y gestos"
+        },
+        "sound": {
+          "name": "Sonido",
+          "description": "Botonera de sonidos"
+        },
+        "obs": {
+          "name": "OBS Studio",
+          "description": "Grabar, emitir, escenas y fuentes"
+        },
+        "home_assistant": {
+          "name": "Home Assistant",
+          "description": "Luces, clima, persianas, escenas y cualquier acción de tu casa"
+        },
+        "lights": {
+          "name": "Luces Ulanzi",
+          "description": "Luces de la gama Ulanzi Connect"
+        },
+        "tc002": {
+          "name": "Ulanzi TC002",
+          "description": "Pantalla de la gama TC002"
+        }
+      },
+      "entries": {
+        "open": {
+          "name": "Abrir app, archivo o carpeta",
+          "description": "Lo abre como si le dieras doble clic",
+          "keywords": "aplicación, lanzar, ejecutar, documento, finder"
+        },
+        "closeApp": {
+          "name": "Cerrar app",
+          "description": "Cierra todas sus ventanas, como Salir en su menú",
+          "keywords": "salir, quit, terminar, aplicación"
+        },
+        "openUrl": {
+          "name": "Abrir web",
+          "description": "Abre una dirección en el navegador",
+          "keywords": "url, navegador, enlace, página web, sitio"
+        },
+        "http": {
+          "name": "Petición HTTP",
+          "description": "Llama a una API o un webhook con el método, las cabeceras y el cuerpo que quieras",
+          "keywords": "api, webhook, rest, get, post, put, delete, json, curl, home assistant, n8n, zapier, ifttt, request"
+        },
+        "typeText": {
+          "name": "Escribir texto",
+          "description": "Escribe un texto donde esté el cursor",
+          "keywords": "teclear, pegar, firma, plantilla, snippet"
+        },
+        "hotkey": {
+          "name": "Atajo de teclado",
+          "description": "Pulsa una combinación de teclas",
+          "keywords": "shortcut, combinación, comando, tecla"
+        },
+        "switchHotkey": {
+          "name": "Alternar entre dos atajos",
+          "description": "Cada pulsación lanza un atajo distinto, con su propio aspecto",
+          "keywords": "toggle, dos estados, conmutar"
+        },
+        "media": {
+          "playPause": {
+            "name": "Reproducir o pausar",
+            "description": "Como la tecla ▶︎⏸ del teclado",
+            "keywords": "play, pausa, música"
+          },
+          "next": {
+            "name": "Siguiente pista",
+            "description": "Salta a la siguiente canción",
+            "keywords": "next, canción"
+          },
+          "previous": {
+            "name": "Pista anterior",
+            "description": "Vuelve a la canción anterior",
+            "keywords": "prev, canción"
+          },
+          "volumeUp": {
+            "name": "Subir volumen",
+            "description": "Un paso más de volumen",
+            "keywords": "sonido, más"
+          },
+          "volumeDown": {
+            "name": "Bajar volumen",
+            "description": "Un paso menos de volumen",
+            "keywords": "sonido, menos"
+          },
+          "mute": {
+            "name": "Silenciar",
+            "description": "Quita o devuelve el sonido",
+            "keywords": "mute, mudo"
+          },
+          "brightnessUp": {
+            "name": "Subir brillo de pantalla",
+            "description": "Más brillo en la pantalla",
+            "keywords": "pantalla, monitor"
+          },
+          "brightnessDown": {
+            "name": "Bajar brillo de pantalla",
+            "description": "Menos brillo en la pantalla",
+            "keywords": "pantalla, monitor"
+          }
+        },
+        "openPage": {
+          "name": "Ir a página",
+          "description": "La línea de esta tecla en la mesa",
+          "keywords": "navegar, carpeta, subcarpeta, enlazar"
+        },
+        "back": {
+          "name": "Volver",
+          "description": "A la página de la que se vino",
+          "keywords": "atrás, carpeta padre"
+        },
+        "home": {
+          "name": "Ir al inicio",
+          "description": "A la página de inicio del perfil",
+          "keywords": "principal, home"
+        },
+        "previousPage": {
+          "name": "Página anterior",
+          "description": "La anterior en el orden de las páginas del perfil; tras la primera, la última",
+          "keywords": "prev"
+        },
+        "nextPage": {
+          "name": "Página siguiente",
+          "description": "La siguiente en el orden de las páginas del perfil; tras la última, la primera",
+          "keywords": "next"
+        },
+        "switchProfile": {
+          "name": "Cambiar de perfil",
+          "description": "Pasa el dock a otro perfil, donde se quedó",
+          "keywords": "perfil, preset, configuración"
+        },
+        "pageIndicator": {
+          "name": "Indicador de página",
+          "description": "La tecla muestra en qué página está el dock",
+          "keywords": "número, contador, nombre de página"
+        },
+        "delay": {
+          "name": "Esperar",
+          "description": "Pausa antes de la siguiente acción de la lista",
+          "keywords": "retardo, delay, pausa, macro, acción múltiple"
+        },
+        "random": {
+          "name": "Acción aleatoria",
+          "description": "En cada pulsación hace una de las acciones que elijas, al azar",
+          "keywords": "azar, random, sorpresa"
+        },
+        "toggleSequences": {
+          "name": "Alternar entre dos secuencias",
+          "description": "Una pulsación hace una lista de acciones y la siguiente, otra",
+          "keywords": "toggle, acción múltiple, macro, dos estados"
+        },
+        "playSound": {
+          "name": "Reproducir sonido",
+          "description": "Un audio de tu ordenador, con su volumen y su salida",
+          "keywords": "audio, música, canción, mp3, wav, efecto, soundboard, botonera"
+        },
+        "stopSounds": {
+          "name": "Parar sonidos",
+          "description": "Corta todos los sonidos que estén sonando",
+          "keywords": "silencio, stop, detener"
+        },
+        "obs": {
+          "record": {
+            "name": "Grabar",
+            "description": "Empieza o para la grabación",
+            "keywords": "rec, grabación"
+          },
+          "recordPause": {
+            "name": "Pausar grabación",
+            "description": "Pausa o reanuda la grabación",
+            "keywords": "grabación"
+          },
+          "stream": {
+            "name": "Emitir en directo",
+            "description": "Empieza o para la emisión",
+            "keywords": "stream, directo, twitch, youtube"
+          },
+          "virtualCam": {
+            "name": "Cámara virtual",
+            "description": "Enciende o apaga la cámara virtual",
+            "keywords": "webcam"
+          },
+          "replayBuffer": {
+            "name": "Búfer de repetición",
+            "description": "Enciende o apaga el búfer",
+            "keywords": "replay"
+          },
+          "replaySave": {
+            "name": "Guardar repetición",
+            "description": "Guarda lo último del búfer",
+            "keywords": "replay, clip"
+          },
+          "studioMode": {
+            "name": "Modo estudio",
+            "description": "Activa o quita el modo estudio",
+            "keywords": "vista previa"
+          },
+          "transition": {
+            "name": "Transición",
+            "description": "Pasa la vista previa al programa",
+            "keywords": "modo estudio"
+          },
+          "sceneTransition": {
+            "name": "Efecto de transición",
+            "description": "Elige la transición entre escenas",
+            "keywords": "fundido, corte"
+          },
+          "screenshot": {
+            "name": "Captura de pantalla",
+            "description": "Captura la salida o una fuente",
+            "keywords": "foto, imagen"
+          },
+          "sceneCollection": {
+            "name": "Colección de escenas",
+            "description": "Cambia de colección"
+          },
+          "profile": {
+            "name": "Perfil de OBS",
+            "description": "Cambia de perfil de OBS"
+          },
+          "scene": {
+            "name": "Escena",
+            "description": "Cambia a una escena",
+            "keywords": "cambiar escena"
+          },
+          "sourceVisibility": {
+            "name": "Visibilidad de fuente",
+            "description": "Muestra u oculta una fuente",
+            "keywords": "mostrar, ocultar"
+          },
+          "chapter": {
+            "name": "Añadir capítulo",
+            "description": "Marca un capítulo en la grabación",
+            "keywords": "marcador"
+          },
+          "filter": {
+            "name": "Filtro",
+            "description": "Activa o quita un filtro"
+          },
+          "mediaSource": {
+            "name": "Control de fuente multimedia",
+            "description": "Reproduce, pausa o reinicia un vídeo",
+            "keywords": "vídeo, reproducir"
+          },
+          "audioMixer": {
+            "name": "Mezclador de audio",
+            "description": "Silencia o ajusta una fuente de audio",
+            "keywords": "volumen, micro, silenciar, mute"
+          }
+        },
+        "homeAssistant": {
+          "switch": {
+            "name": "Encender o apagar",
+            "description": "Enciende, apaga, abre, cierra o bloquea una entidad",
+            "keywords": "luz, enchufe, interruptor, persiana, cerradura, ventilador, toggle"
+          },
+          "run": {
+            "name": "Activar escena o script",
+            "description": "Activa una escena, un script, un botón o una automatización",
+            "keywords": "escena, script, botón, automatización, rutina"
+          },
+          "level": {
+            "name": "Ajustar un nivel",
+            "description": "Brillo, volumen, temperatura, posición, velocidad o un número",
+            "keywords": "brillo, volumen, temperatura, termostato, persiana, posición, velocidad, regular"
+          },
+          "choose": {
+            "name": "Elegir una opción",
+            "description": "Un modo, un efecto, una fuente, una opción de un selector",
+            "keywords": "modo, efecto, preset, fuente, selector, opción, ciclo"
+          },
+          "media": {
+            "name": "Controlar un reproductor",
+            "description": "Reproducir, pausar, saltar, volumen y silencio",
+            "keywords": "música, tele, altavoz, spotify, sonos, play, pausa"
+          },
+          "color": {
+            "name": "Color de una luz",
+            "description": "Pone una luz del color que elijas",
+            "keywords": "rgb, color, luz"
+          },
+          "alarm": {
+            "name": "Alarma",
+            "description": "Arma o desarma un panel de alarma",
+            "keywords": "seguridad, armar, desarmar"
+          },
+          "call": {
+            "name": "Acción de Home Assistant",
+            "description": "Cualquier acción de cualquier integración, con sus campos",
+            "keywords": "servicio, acción, notificación, notify, tts, integración"
+          },
+          "assist": {
+            "name": "Decirle algo a Assist",
+            "description": "Manda una frase a Assist, como si se la dijeras",
+            "keywords": "voz, asistente, conversación, frase"
+          },
+          "event": {
+            "name": "Lanzar un evento",
+            "description": "Lanza un evento para que lo recojan tus automatizaciones",
+            "keywords": "evento, automatización, disparador"
+          }
+        },
+        "lights": {
+          "switch": {
+            "name": "Encender o apagar luz",
+            "description": "Enciende o apaga una luz"
+          },
+          "brightness": {
+            "name": "Brillo de la luz",
+            "description": "Cambia el brillo"
+          },
+          "temperature": {
+            "name": "Temperatura de color",
+            "description": "Más cálida o más fría"
+          },
+          "color": {
+            "name": "Color de la luz",
+            "description": "Elige un color"
+          },
+          "effect": {
+            "name": "Efecto de luz",
+            "description": "Pon un efecto"
+          },
+          "temperatureBrightness": {
+            "name": "Temperatura y brillo",
+            "description": "Ambos a la vez"
+          },
+          "effectBrightness": {
+            "name": "Efecto y brillo",
+            "description": "Ambos a la vez"
+          }
+        },
+        "tc002": {
+          "brightness": {
+            "name": "Brillo del TC002",
+            "description": "Cambia el brillo de la pantalla"
+          },
+          "app": {
+            "name": "Control de apps del TC002",
+            "description": "Abre una app en la pantalla"
+          }
+        }
+      }
+    },
+    "plugins": {
+      "sectionBy": "Plugin de {author}",
+      "section": "Plugin",
+      "forDials": "Es para diales u otros modelos: el D200 no la puede usar"
+    },
+    "keys": {
+      "space": "Espacio",
+      "home": "Inicio",
+      "end": "Fin",
+      "pageUp": "Re Pág",
+      "pageDown": "Av Pág",
+      "enter": "Intro",
+      "numpadEnter": "Num Intro",
+      "tab": "Tab",
+      "backspace": "Retroceso",
+      "delete": "Supr",
+      "numLock": "Bloq Num"
+    },
+    "list": {
+      "empty": "La tecla no hace nada al pulsarla.",
+      "emptyRandom": "Añade las acciones entre las que elegir.",
+      "groupEmpty": "Nada al pulsarla.",
+      "add": "Añadir acción",
+      "addRandom": "Añadir acción al azar",
+      "unknownPlugin": "Acción de un plugin no instalado",
+      "actionLabel": "Acción {n}: {name}",
+      "dragLabel": "Arrastrar para cambiar el orden de la acción {n}",
+      "dragTitle": "Arrastra para cambiar el orden",
+      "remove": "Quitar acción",
+      "when": "Cuando",
+      "gestures": {
+        "press": {
+          "label": "Al pulsar",
+          "heading": "Al pulsar"
+        },
+        "doublePress": {
+          "label": "Con doble pulsación",
+          "heading": "Con doble pulsación · la pulsación normal espera un momento por si llega la segunda"
+        },
+        "longPress": {
+          "label": "Al mantener pulsada",
+          "heading": "Al mantener pulsada medio segundo"
+        }
+      },
+      "unavailable": {
+        "pluginOnlyPress": "Las acciones de plugin solo van en la pulsación normal de la tecla",
+        "pluginTwoStates": "Una tecla de dos estados no puede llevar una acción de plugin: el plugin la dibuja",
+        "pluginTaken": "Esta tecla ya tiene una acción de plugin",
+        "setUpFromKey": "Se configura desde la tecla",
+        "navigatesOnce": "Esta tecla ya mueve el dock: solo puede hacerlo una vez",
+        "linesOnlyPress": "Solo la pulsación normal lleva a una página de la mesa",
+        "noOtherPage": "Crea otra página en la mesa para poder ir a ella",
+        "oneProfile": "Solo hay un perfil"
+      }
+    },
+    "picker": {
+      "description": "Todas las acciones de Ulanzi Studio. Busca por nombre o por lo que quieras hacer.",
+      "searchPlaceholder": "Atajo, volumen, abrir app, OBS…",
+      "search": "Buscar acción",
+      "clearSearch": "Borrar búsqueda",
+      "sections": "Secciones",
+      "all": "Todas",
+      "showSoon": "Mostrar próximamente",
+      "noPermissions": "Sin permisos especiales",
+      "clearFilters": "Quitar filtros",
+      "actions": "Acciones",
+      "noResults": "Ninguna acción coincide con la búsqueda.",
+      "unavailable": "No disponible",
+      "soon": "Próximamente",
+      "plugin": "Plugin",
+      "accessibility": {
+        "macos": "Accesibilidad",
+        "linux": "Permiso de teclado"
+      },
+      "movesDock": "Mueve el dock"
+    },
+    "details": {
+      "accessibility": {
+        "macos": "macOS no deja a la app pulsar teclas ni escribir hasta que le des permiso de Accesibilidad.",
+        "linux": "Linux no deja a la app pulsar teclas ni escribir hasta que le des permiso, una vez, con la contraseña de administrador."
+      },
+      "grantPermission": "Dar permiso",
+      "configureLabel": "Configurar {name}",
+      "configure": "Configurar…",
+      "dialogDescription": "{description}. Los cambios se guardan solos.",
+      "ready": "Lista para usar.",
+      "done": "Hecho",
+      "pluginMissing": "Plugin no instalado",
+      "pluginSettings": "Sus ajustes los guarda el propio plugin",
+      "pluginStopped": "El plugin no está en marcha",
+      "address": "Dirección",
+      "textPlaceholder": "El texto que se escribirá",
+      "textLabel": "Texto a escribir",
+      "pressEnter": "Pulsar Intro al terminar",
+      "paste": "Pegar en vez de teclear",
+      "pasteHint": "(más rápido, cualquier carácter)",
+      "mediaKey": "Tecla multimedia",
+      "targetPage": "Página de destino",
+      "choosePage": "Elige una página",
+      "targetProfile": "Perfil de destino",
+      "chooseProfile": "Elige un perfil",
+      "wait": "Espera",
+      "waitSeconds": "Segundos de espera"
+    },
+    "hotkey": {
+      "control": "Control",
+      "option": "Opción",
+      "shift": "Mayúsculas",
+      "command": "Comando",
+      "recording": "Pulsa el atajo…",
+      "none": "Sin atajo",
+      "cancel": "Cancelar",
+      "record": "Grabar",
+      "key": "Tecla del atajo",
+      "keyPlaceholder": "Tecla",
+      "hint": {
+        "macos": "Graba el atajo pulsándolo, o elige las teclas. Los que usa macOS (⌘Tab, ⌘Espacio…) hay que elegirlos a mano.",
+        "windows": "Graba el atajo pulsándolo, o elige las teclas. Los que usa Windows (Alt+Tab, Win+L…) hay que elegirlos a mano.",
+        "linux": "Graba el atajo pulsándolo, o elige las teclas. Los que usa el escritorio (Alt+Tab, Super…) hay que elegirlos a mano."
+      }
+    },
+    "http": {
+      "errors": {
+        "badAddress": "La dirección tiene que empezar por http:// o https://",
+        "noAddress": "Escribe la dirección",
+        "headerName": "Una cabecera no tiene nombre o lleva espacios o símbolos",
+        "headerLines": "El valor de una cabecera no puede tener varias líneas",
+        "timeout": "El tiempo máximo va de 1 a 120 segundos",
+        "json": "El cuerpo no es un JSON válido",
+        "textType": "Di qué tipo de texto es el cuerpo",
+        "formField": "Todos los campos del formulario necesitan nombre"
+      },
+      "summary": {
+        "headers": "{n} cabecera | {n} cabeceras",
+        "noHeaders": "sin cabeceras",
+        "noAddress": "(sin dirección)",
+        "body": {
+          "none": "sin cuerpo",
+          "json": "cuerpo JSON",
+          "text": "cuerpo de texto",
+          "form": "formulario"
+        }
+      },
+      "bodyKinds": {
+        "none": "Ninguno",
+        "json": "JSON",
+        "text": "Texto",
+        "form": "Formulario"
+      },
+      "method": "Método",
+      "url": "Dirección de la petición",
+      "headers": "Cabeceras",
+      "addHeader": "Añadir cabecera",
+      "noHeaders": "Sin cabeceras.",
+      "name": "Nombre",
+      "value": "Valor",
+      "headerName": "Nombre de la cabecera {n}",
+      "headerValue": "Valor de la cabecera {n}",
+      "removeHeader": "Quitar la cabecera {n}",
+      "body": "Cuerpo",
+      "bodyKind": "Tipo de cuerpo",
+      "jsonBody": "Cuerpo JSON",
+      "invalidJson": "JSON no válido: {error}",
+      "jsonHint": "Se envía con Content-Type: application/json",
+      "format": "Formatear",
+      "textType": "Tipo del texto",
+      "textBody": "Cuerpo de texto",
+      "field": "Campo",
+      "fieldName": "Nombre del campo {n}",
+      "fieldValue": "Valor del campo {n}",
+      "removeField": "Quitar el campo {n}",
+      "addField": "Añadir campo",
+      "bodyless": "Muchos servidores no esperan cuerpo en una petición {method}.",
+      "showResult": "Mostrar el resultado en la tecla",
+      "showResultHint": "Un ✓ verde o una ✗ roja durante un momento",
+      "more": "Más opciones",
+      "timeout": "Tiempo máximo de espera",
+      "timeoutLabel": "Segundos de espera de la petición",
+      "insecure": "Aceptar certificados no válidos",
+      "insecureHint": "Para aparatos de tu red con certificado propio, como Home Assistant en https://…local",
+      "tryHint": "Hace la petición ahora y enseña la respuesta",
+      "try": "Probar petición",
+      "failed": "No se pudo hacer la petición: {error}",
+      "noContent": "Sin contenido.",
+      "truncated": "Solo se muestran los primeros 64 KB."
+    },
+    "obs": {
+      "errors": {
+        "transition": "Elige la transición",
+        "duration": "Una transición dura entre 50 ms y 20 s",
+        "collection": "Elige la colección de escenas",
+        "profile": "Elige el perfil de OBS",
+        "scene": "Elige la escena",
+        "sceneAndSource": "Elige la escena y la fuente",
+        "sourceAndFilter": "Elige la fuente y el filtro",
+        "source": "Elige la fuente",
+        "step": "Un paso de volumen va de 1 a 30 dB",
+        "volume": "El volumen llega hasta 100"
+      },
+      "status": {
+        "off": "Sin conectar: ninguna tecla usa OBS",
+        "connecting": "Conectando con OBS…",
+        "connected": "Conectado a OBS {version}",
+        "unreachable": "OBS no está abierto o no tiene activado el servidor WebSocket",
+        "passwordRequired": "OBS pide contraseña",
+        "wrongPassword": "La contraseña de OBS no es correcta",
+        "incompatible": "Hace falta OBS 28 o posterior",
+        "failed": "No se pudo conectar con OBS"
+      },
+      "switch": {
+        "record": {
+          "on": "Empezar",
+          "off": "Parar"
+        },
+        "recordPause": {
+          "on": "Pausar",
+          "off": "Reanudar"
+        },
+        "stream": {
+          "on": "Empezar",
+          "off": "Parar"
+        },
+        "virtualCam": {
+          "on": "Encender",
+          "off": "Apagar"
+        },
+        "replayBuffer": {
+          "on": "Encender",
+          "off": "Apagar"
+        },
+        "studioMode": {
+          "on": "Activar",
+          "off": "Quitar"
+        },
+        "sourceVisibility": {
+          "on": "Mostrar",
+          "off": "Ocultar"
+        },
+        "filter": {
+          "on": "Activar",
+          "off": "Desactivar"
+        },
+        "mute": {
+          "on": "Silenciar",
+          "off": "Activar sonido"
+        }
+      },
+      "while": {
+        "record": "mientras OBS graba",
+        "recordPause": "mientras la grabación está en pausa",
+        "stream": "mientras OBS emite",
+        "virtualCam": "mientras la cámara virtual está encendida",
+        "replayBuffer": "mientras el búfer de repetición está encendido",
+        "studioMode": "mientras el modo estudio está activo",
+        "sourceVisibility": "mientras la fuente se ve",
+        "filter": "mientras el filtro está activo",
+        "mute": "mientras la fuente está silenciada",
+        "scenePreview": "mientras es la escena de la vista previa",
+        "sceneProgram": "mientras es la escena en el programa"
+      },
+      "media": {
+        "playPause": "Reproducir o pausar",
+        "play": "Reproducir",
+        "pause": "Pausar",
+        "stop": "Parar",
+        "restart": "Volver a empezar",
+        "next": "Siguiente",
+        "previous": "Anterior"
+      },
+      "chooseFolder": "Elige dónde se guardan las capturas",
+      "transition": "Transición",
+      "duration": "Duración",
+      "durationPlaceholder": "La que tenga",
+      "durationLabel": "Duración de la transición en milisegundos",
+      "sourceOrScene": "Fuente o escena",
+      "programScene": "La escena en el programa",
+      "recordingsFolder": "Donde OBS guarda las grabaciones",
+      "saveToRecordings": "Guardar donde OBS guarda las grabaciones",
+      "folder": "Carpeta",
+      "sceneCollection": "Colección de escenas",
+      "profile": "Perfil de OBS",
+      "scene": "Escena",
+      "toPreview": "A la vista previa",
+      "studioModeHint": "(en modo estudio)",
+      "source": "Fuente",
+      "chapterPlaceholder": "Nombre del capítulo (opcional)",
+      "chapterLabel": "Nombre del capítulo",
+      "chapterHint": "Solo al grabar en MP4 híbrido, con OBS 30.2 o posterior.",
+      "filter": "Filtro",
+      "mediaSource": "Fuente multimedia",
+      "mediaControl": "Qué hace con el vídeo",
+      "audioSource": "Fuente de audio",
+      "muteOrVolume": "Silencio o volumen",
+      "mute": "Silencio",
+      "volume": "Volumen",
+      "volumeWay": "Cómo cambia el volumen",
+      "up": "Subir",
+      "down": "Bajar",
+      "set": "Fijar",
+      "percent": "Volumen en porcentaje",
+      "decibels": "Decibelios",
+      "setHint": "La posición del control en el mezclador de OBS.",
+      "stepHint": "Nunca pasa de 0 dB, el tope del mezclador de OBS.",
+      "transitionHint": "Pasa la vista previa al programa con la transición elegida en OBS. Solo en modo estudio.",
+      "replayHint": "El búfer de repetición tiene que estar encendido.",
+      "whatItDoes": "Qué hace",
+      "toggle": "Alternar",
+      "follows": "La tecla sigue a OBS: muestra el estado 2 {state}.",
+      "removeGestures": "Quita la doble pulsación y la pulsación larga para darle dos estados",
+      "giveStates": "Le da dos estados: el segundo se ve {state}",
+      "showOnKey": "Mostrar en la tecla si está activo",
+      "typeByHand": "{status}. Puedes escribir los nombres a mano.",
+      "settingsLink": "Ajustes de OBS",
+      "names": {
+        "pick": "Elegir de OBS: {label}",
+        "pickTitle": "Elegir de lo que hay en OBS",
+        "connectTitle": "Conecta OBS para elegir de su lista",
+        "reading": "Leyendo de OBS…",
+        "readFailed": "No se pudo leer de OBS",
+        "none": "OBS no tiene ninguno"
+      }
+    },
+    "hass": {
+      "entity": "Entidad",
+      "chooseEntity": "Elige una entidad",
+      "searchEntity": "Busca por nombre, área o id",
+      "useTyped": "Usar «{id}»",
+      "reading": "Leyendo las entidades…",
+      "noEntities": "Ninguna entidad encaja",
+      "typeId": "Sin conexión: escribe el id de la entidad, como light.cocina",
+      "switch": {
+        "onOff": {
+          "on": "Encender",
+          "off": "Apagar"
+        },
+        "openClose": {
+          "on": "Abrir",
+          "off": "Cerrar"
+        },
+        "lockUnlock": {
+          "on": "Bloquear",
+          "off": "Desbloquear"
+        },
+        "startDock": {
+          "on": "Empezar",
+          "off": "A la base"
+        },
+        "startPause": {
+          "on": "Empezar",
+          "off": "Pausar"
+        },
+        "armDisarm": {
+          "on": "Armar",
+          "off": "Desarmar"
+        },
+        "enableDisable": {
+          "on": "Activar",
+          "off": "Desactivar"
+        },
+        "runStop": {
+          "on": "Ejecutar",
+          "off": "Parar"
+        },
+        "installSkip": {
+          "on": "Instalar",
+          "off": "Omitir"
+        },
+        "upDown": {
+          "on": "Sumar",
+          "off": "Restar"
+        }
+      },
+      "errors": {
+        "entity": "Elige la entidad",
+        "step": "El paso no puede ser cero",
+        "value": "Escribe el valor",
+        "range": "Ese valor se sale del rango",
+        "option": "Elige la opción",
+        "action": "Elige la acción",
+        "data": "Los campos de la acción van en un objeto",
+        "text": "Escribe lo que le dices",
+        "event": "Ponle nombre al evento, sin espacios"
+      },
+      "while": {
+        "active": "mientras la entidad está encendida",
+        "chosen": "mientras está en «{option}»",
+        "playing": "mientras está reproduciendo",
+        "muted": "mientras está silenciado",
+        "shuffling": "mientras está en aleatorio"
+      },
+      "status": {
+        "off": "Sin conectar: ninguna tecla usa Home Assistant",
+        "connecting": "Conectando con Home Assistant…",
+        "connected": "Conectado a Home Assistant {version}",
+        "connectedTo": "Conectado a {location} · Home Assistant {version}",
+        "noAddress": "Falta la dirección de Home Assistant",
+        "unreachable": "No hay nada en esa dirección, o Home Assistant no está en marcha",
+        "notHomeAssistant": "Esa dirección no es la de Home Assistant",
+        "certificate": "El certificado no es de confianza: activa «Aceptar certificados no verificados»",
+        "tokenRequired": "Falta el token de acceso",
+        "wrongToken": "Home Assistant no acepta el token",
+        "failed": "No se pudo conectar con Home Assistant"
+      },
+      "cannotSwitch": "Esta entidad solo mide: no se puede encender ni apagar",
+      "whatItDoes": "Qué hace",
+      "toggle": "Alternar",
+      "onlyRuns": "Cada pulsación la activa.",
+      "runHint": "Cada pulsación la activa. En una cerradura, abre el pestillo.",
+      "level": "Qué ajusta",
+      "levels": {
+        "brightness": "Brillo",
+        "colorTemp": "Temperatura de color",
+        "position": "Posición",
+        "tilt": "Inclinación",
+        "speed": "Velocidad",
+        "volume": "Volumen",
+        "temperature": "Temperatura objetivo",
+        "humidity": "Humedad objetivo",
+        "value": "Valor"
+      },
+      "way": "Cómo cambia",
+      "up": "Subir",
+      "down": "Bajar",
+      "set": "Fijar",
+      "amount": "Cantidad",
+      "setHint": "Lo pone en ese valor, dentro de los límites de la entidad.",
+      "stepHint": "Lo cambia desde donde esté, sin pasarse de los límites de la entidad.",
+      "optionKind": "Qué opción",
+      "options": {
+        "option": "Opción del selector",
+        "effect": "Efecto",
+        "hvacMode": "Modo de climatización",
+        "preset": "Modo preestablecido",
+        "fanMode": "Modo del ventilador",
+        "swingMode": "Oscilación",
+        "source": "Fuente",
+        "soundMode": "Modo de sonido",
+        "repeat": "Repetir",
+        "mode": "Modo",
+        "operationMode": "Modo de funcionamiento",
+        "fanSpeed": "Potencia de aspiración"
+      },
+      "whichOption": "Cuál elige",
+      "next": "Siguiente",
+      "previous": "Anterior",
+      "this": "Esta",
+      "option": "Opción",
+      "chooseOption": "Elige la opción",
+      "mediaControl": "Qué hace con el reproductor",
+      "media": {
+        "playPause": "Reproducir o pausar",
+        "play": "Reproducir",
+        "pause": "Pausar",
+        "stop": "Parar",
+        "next": "Siguiente",
+        "previous": "Anterior",
+        "volumeUp": "Subir volumen",
+        "volumeDown": "Bajar volumen",
+        "mute": "Silenciar o activar sonido",
+        "shuffle": "Aleatorio sí o no"
+      },
+      "color": "Color de la luz",
+      "colorHint": "La enciende de este color.",
+      "alarmMode": "Qué hace la alarma",
+      "alarm": {
+        "disarm": "Desarmar",
+        "armHome": "Armar en casa",
+        "armAway": "Armar fuera",
+        "armNight": "Armar noche",
+        "armVacation": "Armar vacaciones",
+        "armCustomBypass": "Armar personalizado",
+        "trigger": "Disparar"
+      },
+      "assistPlaceholder": "Enciende las luces del salón",
+      "assistText": "Lo que le dices a Assist",
+      "agent": "Agente de conversación",
+      "defaultAgent": "El de Home Assistant",
+      "assistHint": "Assist lo entiende en el idioma que tenga configurado. Si no lo entiende, la tecla lo marca con una cruz.",
+      "eventPlaceholder": "taurilanzi_pulsada",
+      "eventType": "Tipo de evento",
+      "eventData": "Datos del evento en JSON",
+      "jsonError": "No es un objeto JSON válido",
+      "eventHint": "Datos opcionales, como un objeto JSON. Tus automatizaciones pueden usar el evento como disparador.",
+      "follows": "La tecla sigue a Home Assistant: muestra el estado 2 {state}.",
+      "removeGestures": "Quita la doble pulsación y la pulsación larga para darle dos estados",
+      "giveStates": "Le da a la tecla un segundo estado que se ve {state}",
+      "showOnKey": "Mostrar en la tecla si está activo",
+      "notConnected": "{status}. Puedes elegir a mano lo que ya sepas.",
+      "settingsLink": "Ajustes de Home Assistant",
+      "code": "Código",
+      "saveCode": "Guardar",
+      "removeCode": "Quitar el código",
+      "codeFailed": "No se pudo guardar el código.",
+      "codeSaved": {
+        "macos": "Código guardado en el llavero de macOS.",
+        "windows": "Código guardado en el Administrador de credenciales de Windows.",
+        "linux": "Código guardado en el llavero del escritorio."
+      },
+      "codeHint": "Si Home Assistant pide un código para esta entidad, guárdalo aquí: va al llavero, no a la configuración.",
+      "call": {
+        "choose": "Elige",
+        "remove": "Quitar {name}",
+        "addOne": "Añadir…",
+        "addTo": {
+          "areas": "Añadir un área…",
+          "devices": "Añadir un dispositivo…",
+          "floors": "Añadir una planta…",
+          "labels": "Añadir una etiqueta…"
+        },
+        "hours": "Horas",
+        "minutes": "Minutos",
+        "seconds": "Segundos",
+        "jsonHint": "JSON, o texto tal cual.",
+        "action": "Acción",
+        "chooseAction": "Elige una acción",
+        "search": "Busca por nombre o id, como notify",
+        "noActions": "Ninguna acción encaja",
+        "typeAction": "Sin conexión: escribe la acción abajo",
+        "actionId": "Id de la acción",
+        "target": "Sobre qué actúa",
+        "addEntity": "Añadir una entidad",
+        "fields": "Campos",
+        "raw": "Editar en JSON",
+        "data": "Campos de la acción en JSON",
+        "rawHint": "Los campos tal y como los recibe Home Assistant.",
+        "noFields": "Esta acción no tiene campos; puedes escribirlos en JSON si los necesita.",
+        "example": "Ejemplo: {example}",
+        "clear": "Quitar {name}",
+        "noTarget": "Sin objetivo"
+      },
+      "states": {
+        "unknown": "Desconocido",
+        "unavailable": "No disponible"
+      },
+      "look": {
+        "title": "Cómo se ve en la tecla",
+        "followsOther": "Otra acción de la tecla ya decide sus dos estados",
+        "offColor": "Apagado",
+        "onColor": "Encendido",
+        "failed": "No se pudo traer el icono de Home Assistant.",
+        "card": "Mostrar como tarjeta",
+        "cardHint": "Icono, nombre y estado de la entidad, siempre al día, con los datos que importan según su tipo.",
+        "icon": "Icono",
+        "ownIcon": "Elegido por ti",
+        "haIconLive": "El de Home Assistant, cambia con su estado",
+        "haIcon": "El de Home Assistant",
+        "changeIcon": "Cambiar",
+        "resetIcon": "Volver al de Home Assistant",
+        "name": "Nombre",
+        "text": "Texto",
+        "resetName": "Volver al de Home Assistant",
+        "nameHint": "Vacío usa el nombre que tiene en Home Assistant.",
+        "textHint": "El texto que se dibuja en la tecla.",
+        "background": "Cambiar de fondo con su estado"
+      },
+      "summary": {
+        "assist": "Se lo dice a Assist",
+        "event": "Lanza este evento en Home Assistant"
+      }
+    },
+    "path": {
+      "chooseApp": "Elige una app",
+      "chooseFile": "Elige un archivo",
+      "chooseFolder": "Elige una carpeta",
+      "apps": "Apps",
+      "closeHint": "Elige la app que se cerrará.",
+      "openHint": "Elige qué se abre al pulsar la tecla.",
+      "changeApp": "Cambiar app",
+      "app": "App",
+      "file": "Archivo",
+      "folder": "Carpeta"
+    },
+    "pluginInspector": {
+      "notInstalled": "El plugin de esta acción no está instalado. Instálalo para configurarla.",
+      "notRunning": "El plugin no está en marcha ahora mismo: puede que sus ajustes no carguen hasta que arranque.",
+      "noSettings": "Esta acción no tiene ajustes: el plugin la maneja por su cuenta.",
+      "settingsOf": "Ajustes de {name}"
+    },
+    "sound": {
+      "modes": {
+        "restart": {
+          "name": "Empezar de nuevo",
+          "hint": "Cada pulsación lo vuelve a empezar"
+        },
+        "overlap": {
+          "name": "Superponer",
+          "hint": "Cada pulsación suena encima de la anterior"
+        },
+        "toggle": {
+          "name": "Pulsar para parar",
+          "hint": "Si está sonando, la tecla lo para"
+        },
+        "loop": {
+          "name": "En bucle",
+          "hint": "Suena sin parar hasta pulsar otra vez"
+        }
+      },
+      "uploadFailed": "No se pudo usar ese archivo. Formatos: MP3, WAV, M4A, FLAC u OGG de hasta 30 MB.",
+      "none": "Ningún sonido",
+      "change": "Cambiar",
+      "choose": "Elegir",
+      "file": "Archivo de sonido",
+      "volume": "Volumen",
+      "again": "Al pulsar otra vez",
+      "output": "Salida de audio",
+      "defaultOutput": "Salida predeterminada del sistema",
+      "disconnected": "{device} (no conectada)"
+    }
+  },
+  "common": {
+    "toasts": {
+      "close": "Cerrar aviso"
+    },
+    "colorPicker": {
+      "saturation": "Saturación y brillo",
+      "hue": "Matiz",
+      "hex": "Código del color",
+      "recent": "Usados hace poco",
+      "recentSwatch": "Reciente {color}"
+    }
+  },
+  "dock": {
+    "key": {
+      "label": "Tecla {n}",
+      "empty": "Vacía",
+      "remove": "Eliminar tecla"
+    }
+  },
+  "editor": {
+    "inspector": {
+      "resize": "Cambiar el ancho del inspector",
+      "noKey": "Selecciona una tecla de cualquier página para ver y editar su configuración.",
+      "wideKey": "Ventana ancha",
+      "key": "Tecla {number}",
+      "empty": "Esta tecla está vacía.",
+      "setUp": "Configurar tecla",
+      "preview": "Vista previa real · {size}",
+      "states": "Estados de la tecla",
+      "state": "Estado {number}",
+      "look": "Aspecto",
+      "lookOfState": "Aspecto del estado {number}",
+      "live": "Información en vivo",
+      "liveOfState": "Información en vivo del estado {number}",
+      "actions": "Acciones",
+      "actionsOfState": "Acciones del estado {number}",
+      "actionsHint": "Cada pulsación hace las acciones del estado en que está la tecla y pasa al otro.",
+      "statesSection": "Estados",
+      "twoStates": "Dos estados",
+      "twoStatesHint": "Alterna aspecto y acciones en cada pulsación, como un interruptor",
+      "twoStatesBlocked": "Quita la doble pulsación y la pulsación larga de sus acciones para darle dos estados.",
+      "twoStatesUnavailable": "Esta tecla tiene acciones con doble pulsación o pulsación larga: quítalas para darle dos estados",
+      "unsaved": "Sin guardar: {problem}",
+      "saved": "Guardado",
+      "saving": "Guardando…",
+      "tryKey": "Probar tecla",
+      "tryGesture": "Probar un gesto de la tecla",
+      "tryWait": "Espera a que se guarde para probarla",
+      "tryHint": "Hace lo mismo que pulsarla en el dock",
+      "clearKey": "Vaciar tecla"
+    },
+    "gestures": {
+      "press": "Pulsación",
+      "doublePress": "Doble pulsación",
+      "longPress": "Pulsación larga"
+    },
+    "errors": {
+      "save": "No se pudo guardar la tecla.",
+      "try": "No se pudo probar la tecla.",
+      "upload": "No se pudo subir la imagen. Formatos: PNG, JPG, WebP, GIF o SVG de hasta 10 MB.",
+      "icon": "No se pudo descargar el icono. Prueba de nuevo en unos segundos."
+    },
+    "validation": {
+      "urlMissing": "Escribe una dirección",
+      "urlScheme": "Solo direcciones http:// o https://",
+      "oneNavigation": "Una tecla solo puede mover el dock una vez",
+      "pageOnlyOnPress": "Solo la pulsación normal puede llevar a una página de la mesa",
+      "open": "Elige qué se abre",
+      "closeApp": "Elige qué app se cierra",
+      "typeText": "Escribe el texto",
+      "hotkey": "Graba o elige el atajo",
+      "openPage": "Elige la página de destino",
+      "switchProfile": "Elige el perfil",
+      "delay": "Una espera puede durar como mucho un minuto",
+      "playSound": "Elige el sonido",
+      "random": "Añade acciones a la acción aleatoria"
+    },
+    "newKey": {
+      "text": "Nueva",
+      "page": "Página"
+    },
+    "background": {
+      "title": "Fondo",
+      "solid": "Color",
+      "gradient": "Degradado",
+      "color": "Color de fondo",
+      "from": "Color inicial del degradado",
+      "to": "Color final del degradado",
+      "angle": "Ángulo"
+    },
+    "image": {
+      "title": "Imagen",
+      "searchIcon": "Buscar icono",
+      "upload": "Subir imagen",
+      "editedIcon": "{icon} (editado)",
+      "edited": "Imagen editada",
+      "own": "Imagen propia",
+      "edit": "Editar",
+      "original": "Volver a la original",
+      "remove": "Quitar imagen",
+      "color": "Color",
+      "iconColor": "Color del icono",
+      "fit": "Encajar",
+      "cover": "Rellenar",
+      "inset": "Margen"
+    },
+    "text": {
+      "title": "Texto",
+      "default": "Texto",
+      "show": "Mostrar texto",
+      "content": "Texto de la tecla",
+      "insert": "Insertar dato de la página",
+      "variables": {
+        "page": "Nombre de la página",
+        "pageNumber": "Número de la página",
+        "pageCount": "Total de páginas"
+      },
+      "size": "Tamaño",
+      "color": "Color del texto",
+      "top": "Arriba",
+      "middle": "Centro",
+      "bottom": "Abajo"
+    },
+    "timeZone": {
+      "label": "Zona horaria",
+      "mac": "Hora del ordenador",
+      "search": "Buscar ciudad o zona…",
+      "searchLabel": "Buscar zona horaria",
+      "noMatch": "Ninguna zona con ese nombre."
+    },
+    "canvas": {
+      "newPage": "Nueva página",
+      "newPageHere": "Nueva página aquí",
+      "fitAll": "Ver todo",
+      "undo": "Deshacer",
+      "undoTitle": "Deshacer ({shortcut})",
+      "redo": "Rehacer",
+      "redoTitle": "Rehacer ({shortcut})",
+      "rename": "Renombrar página",
+      "pageName": "Nombre de la página",
+      "cancel": "Cancelar",
+      "save": "Guardar",
+      "errors": {
+        "link": "No se pudo enlazar la tecla.",
+        "removeKey": "No se pudo eliminar la tecla.",
+        "create": "No se pudo crear la página.",
+        "move": "No se pudo mover la página.",
+        "rename": "No se pudo renombrar la página.",
+        "remove": "No se pudo eliminar la página.",
+        "show": "No se pudo mostrar la página.",
+        "duplicate": "No se pudo duplicar la página.",
+        "home": "No se pudo cambiar el inicio."
+      }
+    },
+    "page": {
+      "show": "Mostrar en el dock",
+      "rename": "Renombrar",
+      "duplicate": "Duplicar",
+      "home": "Usar como inicio",
+      "remove": "Eliminar",
+      "homePage": "Página de inicio",
+      "onDock": "En el dock",
+      "options": "Opciones de {name}",
+      "linkKey": "Arrastra para enlazar la tecla {number}"
+    },
+    "link": {
+      "remove": "Eliminar tecla y enlace",
+      "removeHint": "Elimina la tecla de la que sale esta línea",
+      "bend": "Punto {number} de la línea",
+      "bendHint": "Arrastra para mover · doble clic para borrar"
+    },
+    "imageEditor": {
+      "title": "Editar imagen",
+      "frameScreen": "Encuadra la imagen en la pantalla del dock.",
+      "frameKey": "Encuadra la imagen en la tecla.",
+      "originalKept": "La original se guarda aparte, así que puedes volver a editarla cuando quieras.",
+      "stage": "Encuadre de la imagen",
+      "loading": "Cargando imagen…",
+      "hint": "Arrastra para mover · rueda o pellizco para acercar · doble clic para rellenar",
+      "gapsScreen": "Las bandas oscuras son los huecos entre teclas",
+      "gapsKey": "Los huecos muestran el fondo de la tecla",
+      "zoom": "Zoom",
+      "zoomOut": "Alejar",
+      "zoomIn": "Acercar",
+      "straighten": "Enderezar",
+      "rotateLeft": "Girar a la izquierda",
+      "rotateLeftTitle": "Girar a la izquierda (Mayús+R)",
+      "rotateRight": "Girar a la derecha",
+      "rotateRightTitle": "Girar a la derecha (R)",
+      "flipX": "Voltear en horizontal",
+      "flipY": "Voltear en vertical",
+      "fill": "Rellenar",
+      "fillScreen": "Que la imagen llene la pantalla, recortando lo que sobre",
+      "fillKey": "Que la imagen llene la tecla, recortando lo que sobre",
+      "fit": "Encajar",
+      "fitTitle": "Que se vea la imagen entera",
+      "reset": "Restablecer",
+      "loadError": "No se pudo cargar la imagen original.",
+      "saveError": "No se pudo guardar la imagen. Prueba de nuevo.",
+      "copyScreen": "Se guarda una copia de {width}×{height} px para el salvapantallas.",
+      "copyKey": "Se guarda una copia de {width}×{height} px para la tecla.",
+      "cancel": "Cancelar",
+      "apply": "Aplicar"
+    },
+    "scenes": {
+      "sunset": "Atardecer retro",
+      "aurora": "Aurora",
+      "ocean": "Océano",
+      "neon": "Neón",
+      "mountains": "Montañas",
+      "graphite": "Grafito"
+    },
+    "fontWeights": {
+      "regular": "Regular",
+      "medium": "Medium",
+      "semibold": "Semibold",
+      "bold": "Bold",
+      "black": "Black"
+    }
+  },
+  "icons": {
+    "categories": {
+      "ui24": "Interfaz 24 px",
+      "ui16And32": "Interfaz 16 y 32 px",
+      "uiOther": "Interfaz, otros tamaños",
+      "uiMulticolor": "Interfaz multicolor",
+      "material": "Material",
+      "logos": "Logos y marcas",
+      "emoji": "Emoji",
+      "flags": "Banderas y mapas",
+      "programming": "Programación",
+      "thematic": "Temáticos",
+      "archived": "Archivados",
+      "other": "Otras"
+    },
+    "collections": {
+      "label": "Colección",
+      "all": "Todas las colecciones",
+      "search": "Buscar colección…",
+      "searchLabel": "Buscar colección",
+      "multicolor": "Multicolor",
+      "noMatch": "Ninguna colección con ese nombre."
+    },
+    "details": {
+      "multicolor": "multicolor"
+    },
+    "picker": {
+      "title": "Buscar icono",
+      "description": "Busca en inglés ({home}, {play}), pega una clave ({key}) o un enlace de icones.js.org, o elige una colección para explorarla.",
+      "search": "Buscar icono",
+      "clear": "Borrar búsqueda",
+      "kind": "Tipo de colección",
+      "anyKind": "Cualquier tipo",
+      "style": "Estilo",
+      "anyStyle": "Cualquier estilo",
+      "fill": "Relleno",
+      "stroke": "Trazo",
+      "color": "Color",
+      "anyColor": "Cualquier color",
+      "mono": "Un color",
+      "monoHint": "Toman el color que elijas para la tecla",
+      "multicolor": "Multicolor",
+      "multicolorHint": "Tienen sus propios colores",
+      "clearFilters": "Quitar filtros",
+      "category": "Categoría de la colección",
+      "allIcons": "Todos los iconos",
+      "count": "{total} icono | {total} iconos",
+      "openIcones": "Ver en Icones",
+      "searching": "Buscando…",
+      "error": "No se pudo buscar. ¿Hay conexión a internet?",
+      "recent": "Usados hace poco",
+      "ideas": "Ideas para empezar",
+      "noResults": "Sin resultados.",
+      "truncated": "Solo se muestran los primeros {shown}. Afina la búsqueda o filtra por colección.",
+      "loadMore": "Cargar más ({left} restantes)",
+      "credit": "Iconos de {iconify}, más de 200 colecciones libres.",
+      "explore": "Explóralas en {site}"
+    }
+  },
+  "plugins": {
+    "list": {
+      "title": "Plugins",
+      "add": "Añadir plugin",
+      "community": "Plugins de la comunidad…",
+      "fromZip": "Instalar desde un ZIP…",
+      "fromFolder": "Instalar desde una carpeta…",
+      "reload": "Buscar plugins nuevos",
+      "openFolder": "Abrir la carpeta de plugins",
+      "failed": "Los plugins no han podido arrancar.",
+      "none": "Ninguno instalado",
+      "zipFilter": "Plugin de Ulanzi"
+    },
+    "status": {
+      "running": "En marcha",
+      "starting": "Arrancando",
+      "restarting": "Se ha parado; arrancando otra vez",
+      "passive": "Solo imágenes",
+      "stopped": "Parado"
+    },
+    "version": "versión {version}",
+    "updateAvailable": "Hay una versión nueva",
+    "updateTo": "Actualizar a {version}",
+    "updated": "Plugin actualizado",
+    "installed": "Plugin instalado",
+    "installFailed": "No se pudo instalar el plugin",
+    "dialog": {
+      "updatedTo": "{name} ya está en la versión {version}.",
+      "updatedLatest": "{name} ya está en la versión nueva.",
+      "updateFailed": "No se pudo actualizar el plugin",
+      "removeFailed": "No se pudo quitar el plugin",
+      "actions": "Acciones",
+      "otherModels": "Para diales u otros modelos",
+      "updating": "Actualizando…",
+      "restart": "Reiniciar",
+      "folder": "Carpeta",
+      "confirmRemove": "¿Quitar el plugin?",
+      "remove": "Quitar"
+    },
+    "community": {
+      "title": "Plugins de la comunidad",
+      "description": "Del catálogo de Ulanzi Community Store, solo los que funcionan en este ordenador. Son de otros autores y se ejecutan en tu ordenador: instala los que te fíes.",
+      "search": "Buscar",
+      "searchLabel": "Buscar plugins",
+      "reload": "Volver a leer el catálogo",
+      "loadFailed": "No se ha podido leer el catálogo. Comprueba la conexión y vuelve a intentarlo.",
+      "loading": "Leyendo el catálogo…",
+      "noMatch": "Ningún plugin coincide.",
+      "installed": "Instalado",
+      "ready": "{name} ya está en la app.",
+      "downloads": "1 descarga | {downloads} descargas",
+      "installing": "Instalando…",
+      "install": "Instalar",
+      "source": "Código",
+      "warning": "El análisis automático del catálogo ha encontrado avisos en este plugin ({findings}). Revisa su código antes de instalarlo.",
+      "critical": "{n} críticos",
+      "high": "{n} altos",
+      "secrets": "{n} secretos",
+      "noDetail": "sin detalle",
+      "dials": "También trae acciones para diales, que aún no funcionan en la app.",
+      "choose": "Elige un plugin"
+    }
+  },
+  "settings": {
+    "tabs": {
+      "general": "General",
+      "dock": "Dock",
+      "presses": "Pulsaciones",
+      "new-keys": "Teclas nuevas",
+      "idle": "Bloqueo y reposo",
+      "profiles": "Perfiles",
+      "integrations": "Integraciones"
+    },
+    "general": {
+      "language": "Idioma",
+      "languageHint": "El de la app y el de los textos que dibuja en las teclas.",
+      "system": "El del sistema"
+    },
+    "title": "Ajustes",
+    "saveFailed": "No se pudieron guardar los ajustes.",
+    "minutes": {
+      "never": "Nunca"
+    },
+    "dock": {
+      "brightness": "Brillo",
+      "brightnessLabel": "Brillo del dock",
+      "sleep": "Suspensión",
+      "sleepHint": "El dock apaga la pantalla tras este rato sin pulsar teclas.",
+      "sleepLabel": "Suspensión del dock"
+    },
+    "presses": {
+      "long": "Pulsación larga",
+      "longHint": "Lo que hay que mantener la tecla para que cuente como larga.",
+      "longLabel": "Duración de la pulsación larga",
+      "double": "Doble pulsación",
+      "doubleHint": "Margen para la segunda pulsación. Las teclas con doble pulsación esperan este rato antes de actuar.",
+      "doubleLabel": "Margen de la doble pulsación"
+    },
+    "newKeys": {
+      "description": "Cómo nace una tecla: desde el inspector, al trazar una línea en la mesa o la tecla Volver de una página nueva.",
+      "background": "Fondo",
+      "backgroundLabel": "Fondo de las teclas nuevas",
+      "textColor": "Color del texto",
+      "textColorLabel": "Color del texto de las teclas nuevas",
+      "font": "Fuente",
+      "fontLabel": "Fuente de las teclas nuevas",
+      "weightLabel": "Grosor de la fuente de las teclas nuevas",
+      "textSize": "Tamaño del texto",
+      "textSizeLabel": "Tamaño del texto de las teclas nuevas",
+      "position": "Posición del texto",
+      "positionLabel": "Posición del texto de las teclas nuevas",
+      "top": "Arriba",
+      "middle": "Centro",
+      "bottom": "Abajo",
+      "preview": "Así nace una tecla"
+    },
+    "idle": {
+      "onLock": "Con el ordenador bloqueado",
+      "onLockLabel": "Qué hace el dock con el ordenador bloqueado",
+      "screensaver": "Salvapantallas",
+      "off": "Apagar pantalla",
+      "keep": "Seguir igual",
+      "idle": "Salvapantallas en reposo",
+      "idleHint": "Tras este rato sin tocar el dock. La primera pulsación lo quita sin hacer nada más.",
+      "idleLabel": "Salvapantallas tras un rato sin tocar el dock",
+      "offAfter": "Apagar la pantalla",
+      "offAfterHint": "Tras este rato de salvapantallas.",
+      "offAfterLabel": "Apagar la pantalla tras un rato de salvapantallas",
+      "brightness": "Brillo del salvapantallas",
+      "image": "Imagen",
+      "imageHint": "El dock guarda una copia y la muestra él solo cuando la app no está abierta.",
+      "editImage": "Editar imagen",
+      "uploadImage": "Subir imagen",
+      "connectToTry": "Conecta el dock para probarla",
+      "stopTrial": "Parar la prueba",
+      "tryOnDock": "Probar en el dock",
+      "imageLabel": "Imagen del salvapantallas",
+      "images": "Imágenes del salvapantallas",
+      "yourImage": "Tu imagen"
+    },
+    "profiles": {
+      "follow": "Cambiar de perfil según la app activa",
+      "followHint": "Cuando pasa al frente una app vinculada a un perfil, el dock cambia a ese perfil. Al salir de ella vuelve al que tenías elegido.",
+      "linkedApps": "Apps vinculadas",
+      "linkedAppsHint": "Cada app puede estar vinculada a un solo perfil. También se editan desde el menú de cada perfil (clic derecho o ⋯ en la barra lateral).",
+      "noApps": "Ninguna app",
+      "edit": "Editar"
+    }
+  },
+  "shell": {
+    "header": {
+      "search": "Buscar teclas, acciones, perfiles…"
+    },
+    "sidebar": {
+      "devices": "Dispositivos",
+      "connected": "Conectado",
+      "disconnected": "Desconectado",
+      "account": "Cuenta",
+      "accountHint": "Inicia sesión para guardar tu configuración en la nube. Disponible pronto.",
+      "soon": "Pronto",
+      "settings": "Ajustes"
+    },
+    "statusBar": {
+      "starting": "Arrancando…",
+      "engineDown": "El motor no responde",
+      "device": "{model} · firmware {firmware}",
+      "disconnected": "Dock desconectado",
+      "paused": "Dock en pausa",
+      "brightness": "Brillo {value} %",
+      "sleep": "Suspensión: {value}",
+      "never": "nunca",
+      "minutes": "{value} min",
+      "grantDock": "Dar permiso para usar el dock"
+    },
+    "update": {
+      "title": "Versión {version} disponible",
+      "body": "Al instalarla, la app se reinicia. Si la dejas para más adelante, te la recuerda dentro de una semana.",
+      "installing": "Instalando y reiniciando…",
+      "later": "Recordar más adelante",
+      "install": "Instalar ahora"
+    },
+    "profiles": {
+      "list": "Perfiles",
+      "defaultName": "Perfil {n}",
+      "new": "Nuevo perfil",
+      "rename": "Renombrar perfil",
+      "newHint": "Empieza con una página de inicio vacía y pasa a ser el perfil del dock.",
+      "nameLabel": "Nombre del perfil",
+      "cancel": "Cancelar",
+      "save": "Guardar",
+      "create": "Crear",
+      "use": "Usar {name}",
+      "chosenBy": "Elegido al pasar {app} al frente",
+      "linkedApps": "Apps vinculadas: {apps}",
+      "options": "Opciones de {name}",
+      "menu": {
+        "keep": "Mantener este perfil",
+        "use": "Usar este perfil",
+        "rename": "Renombrar",
+        "duplicate": "Duplicar",
+        "apps": "Apps vinculadas…",
+        "delete": "Eliminar"
+      },
+      "errors": {
+        "rename": "No se pudo renombrar el perfil.",
+        "create": "No se pudo crear el perfil.",
+        "pin": "No se pudo fijar el perfil.",
+        "switch": "No se pudo cambiar de perfil.",
+        "duplicate": "No se pudo duplicar el perfil.",
+        "delete": "No se pudo eliminar el perfil.",
+        "move": "No se pudo mover el perfil."
+      }
+    },
+    "linkedApps": {
+      "title": "Apps de «{name}»",
+      "description": "Cuando una de estas apps pasa al frente, el dock cambia a este perfil. Al salir de ella vuelve al perfil que tenías elegido.",
+      "followOff": "El cambio automático de perfil está desactivado.",
+      "enableInSettings": "Actívalo en Ajustes",
+      "linked": "Apps vinculadas",
+      "remove": "Quitar {name}",
+      "none": "Ninguna app vinculada.",
+      "add": "Añadir",
+      "refresh": "Actualizar las apps abiertas",
+      "link": "Vincular {name}",
+      "elsewhere": "en «{name}»",
+      "lastUsed": "la última que usaste",
+      "running": "Apps abiertas",
+      "linkedHere": "Vinculada",
+      "pickOther": "Elegir otra app…",
+      "pickTitle": "Elige una app",
+      "appsFilter": "Apps",
+      "notAnApp": "Eso no es una app.",
+      "saveFailed": "No se pudo guardar el cambio.",
+      "alreadyLinked": "{app} ya está vinculada a «{profile}». Quítala de allí primero.",
+      "linkedElsewhere": "{app} ya está vinculada a otro perfil.",
+      "linkFailed": "No se pudo vincular {app}.",
+      "detection": {
+        "needs_extension": "En GNOME la app necesita una pequeña extensión suya para saber qué app está delante.",
+        "needs_relogin": "La extensión ya está. Cierra la sesión y vuelve a entrar para que GNOME la cargue.",
+        "unavailable": "Este escritorio no deja saber qué app está delante, así que los perfiles no cambiarán solos.",
+        "install": "Instalar la extensión"
+      }
+    }
+  },
+  "widgets": {
+    "kinds": {
+      "digitalClock": "Reloj digital",
+      "analogClock": "Reloj analógico",
+      "systemMonitor": "Monitor del sistema",
+      "network": "Red",
+      "countdown": "Cuenta atrás",
+      "worldClocks": "Relojes del mundo",
+      "calendar": "Calendario",
+      "timer": "Temporizador",
+      "battery": "Batería",
+      "nowPlaying": "Ahora suena",
+      "temperatures": "Temperaturas",
+      "topProcesses": "Lo que más consume",
+      "latency": "Latencia",
+      "volume": "Volumen",
+      "moon": "Fase lunar",
+      "progress": "Progreso del tiempo",
+      "stopwatch": "Cronómetro",
+      "counter": "Contador",
+      "wordClock": "Reloj en palabras",
+      "phrases": "Frases",
+      "hassEntity": "Entidad",
+      "hassGraph": "Gráfica de una entidad",
+      "hassEntities": "Varias entidades",
+      "hassPicture": "Cámara o imagen",
+      "hassWeather": "El tiempo",
+      "hassTemplate": "Plantilla"
+    },
+    "periods": {
+      "day": "Día",
+      "week": "Semana",
+      "month": "Mes",
+      "year": "Año"
+    },
+    "metrics": {
+      "cpu": "CPU",
+      "ram": "RAM",
+      "gpu": "GPU",
+      "disk": "Disco"
+    },
+    "lines": {
+      "none": "Nada",
+      "date": "Fecha",
+      "weekday": "Día de la semana",
+      "weekdayDate": "Día de la semana y fecha"
+    },
+    "defaultPhrases": {
+      "first": "Un paso cada vez",
+      "second": "Hoy va a salir bien"
+    },
+    "fields": {
+      "show": "Mostrar",
+      "live": "Información en vivo",
+      "none": "Ninguna",
+      "hint": "Se actualiza sola en el dock. La tecla conserva su fondo, imagen, texto y acciones; el texto queda por encima.",
+      "seconds": "Segundos",
+      "showSeconds": "Mostrar los segundos",
+      "format": "Formato",
+      "secondLine": "Debajo de la hora",
+      "secondHand": "Segundero",
+      "showSecondHand": "Mostrar el segundero",
+      "dateBeside": "Fecha al lado",
+      "dateBesideHint": "Día de la semana y fecha junto a la esfera",
+      "showDate": "Mostrar la fecha",
+      "timeZone": "Zona horaria",
+      "label": "Etiqueta",
+      "clockPlaceholder": "Por ejemplo, Tokio",
+      "clockLabel": "Etiqueta del reloj",
+      "metrics": "Datos",
+      "diskHint": "Disco es lo ocupado del disco de arranque.",
+      "networkHint": "Velocidad de bajada y subida de todas las conexiones del ordenador.",
+      "view": "Vista",
+      "bars": "Barras",
+      "figures": "Cifras",
+      "graph": "Gráfica",
+      "period": "Periodo",
+      "graphMinutes": "Minutos de la gráfica",
+      "minutesUnit": "minutos",
+      "graphNetworkHint": "Bajada en color y subida en blanco, a escala de la más rápida del periodo.",
+      "graphHint": "La app toma datos cada 2 segundos mientras alguna tecla tenga una gráfica, así que se va llenando desde que la activas, hasta 24 horas (1440 minutos). Al cerrar la app empieza de cero.",
+      "until": "Hasta",
+      "countdownTarget": "Fecha y hora de la cuenta atrás",
+      "countdownPlaceholder": "Por ejemplo, Vacaciones",
+      "countdownLabel": "Etiqueta de la cuenta atrás",
+      "whenReached": "Al llegar",
+      "donePlaceholder": "¡Ya está!",
+      "whenReachedLabel": "Texto al llegar",
+      "cities": "Ciudades",
+      "removeCity": "Quitar {city}",
+      "cityName": "Nombre de {city}",
+      "addCity": "Añadir ciudad",
+      "citiesHint": "En la tecla ancha salen las {max}, una al lado de otra; en una tecla normal, las dos primeras. El punto lleno es de día y el hueco, de noche.",
+      "calendarHint": "El día de hoy y, en la tecla ancha, el mes entero con hoy marcado.",
+      "duration": "Duración",
+      "timerMinutes": "Minutos del temporizador",
+      "timerSeconds": "Segundos del temporizador",
+      "timerPlaceholder": "Por ejemplo, Pomodoro",
+      "timerLabel": "Etiqueta del temporizador",
+      "whenDone": "Al terminar",
+      "timeUpPlaceholder": "¡Tiempo!",
+      "whenDoneLabel": "Texto al terminar",
+      "timerHint": "Pulsa la tecla para empezar o pausar, y mantenla pulsada para volver a empezar. Las acciones de la tecla se siguen haciendo.",
+      "batteryHint": "Carga de la batería del ordenador, si está cargando y el tiempo que queda. Se pone en rojo por debajo del 20 % sin cargador.",
+      "nowPlayingHint": {
+        "macos": "La canción de Música o de Spotify. La primera vez, macOS pide permiso para que la app consulte cada una.",
+        "windows": "La canción de la app que suene, si la muestra en los controles multimedia de Windows, como Spotify o el navegador.",
+        "linux": "La canción del reproductor que suene, si la comparte con el escritorio, como Spotify, Rhythmbox o el navegador."
+      },
+      "temperaturesHint": "Del procesador, el disco y la batería, en grados. La barra va de 20 a 100 °C.",
+      "by": "Por",
+      "sortBy": "Ordenar por",
+      "memory": "Memoria",
+      "processesHint": "Las tres apps que más usan, sumando sus procesos con el mismo nombre.",
+      "host": "Equipo",
+      "hostPlaceholder": "El router",
+      "hostLabel": "Equipo al que hacer ping",
+      "latencyHint": "Hace ping cada 2 segundos y dibuja los últimos 2 minutos. Vacío, mide el router; también vale un nombre o una dirección, como 1.1.1.1.",
+      "volumeHint": "El volumen de salida y el del micrófono del ordenador, y si está en silencio.",
+      "moonHint": "La fase de la luna, cuánto se ve iluminada y cuánto falta para la llena o la nueva.",
+      "periods": "Periodos",
+      "progressHint": "Cuánto ha pasado de cada uno. La semana empieza el lunes.",
+      "stopwatchPlaceholder": "Por ejemplo, Reunión",
+      "stopwatchLabel": "Etiqueta del cronómetro",
+      "stopwatchHint": "Pulsa la tecla para empezar o pausar, y mantenla pulsada para ponerlo a cero.",
+      "counterPlaceholder": "Por ejemplo, Cafés",
+      "counterLabel": "Etiqueta del contador",
+      "step": "Cada pulsación suma",
+      "stepLabel": "Lo que suma cada pulsación",
+      "counterHint": "Mantén la tecla pulsada para ponerlo a cero. Se guarda al cerrar la app; con un número negativo, resta.",
+      "wordClockHint": "La hora como se dice, de cinco en cinco minutos: «Son las tres y cuarto».",
+      "phrases": "Frases, una por línea",
+      "phrasesLabel": "Frases",
+      "changeEvery": "Cambiar cada",
+      "phraseSeconds": "Segundos entre frases",
+      "secondsUnit": "segundos",
+      "phrasesHint": "Al pulsar la tecla pasa a la siguiente. Con 0 solo cambia al pulsar.",
+      "style": "Estilo",
+      "font": "Fuente",
+      "textColor": "Color del texto",
+      "accentColor": "Color de acento"
+    },
+    "hass": {
+      "labelPlaceholder": "El nombre de la entidad",
+      "entity": "Entidad",
+      "shows": "Qué muestra",
+      "state": "Su estado",
+      "iconFailed": "No se pudo traer el icono.",
+      "period": "Últimas",
+      "hours": "Horas de la gráfica",
+      "hoursUnit": "horas",
+      "label": "Etiqueta",
+      "entities": "Entidades",
+      "removeEntity": "Quitar la entidad",
+      "itemLabel": "Etiqueta de la entidad",
+      "addEntity": "Añadir entidad",
+      "entitiesHint": "Hasta {max} una al lado de otra en la tecla ancha; las teclas cuadradas muestran las dos primeras.",
+      "every": "Cada",
+      "seconds": "Segundos entre imágenes",
+      "pictureHint": "Las cámaras solo se piden mientras su página está en el dock.",
+      "forecast": "Con la previsión",
+      "forecastHint": "Los próximos días, en la tecla ancha.",
+      "template": "Plantilla",
+      "templateHint": "Una plantilla de Home Assistant: la calcula él cada vez que cambia algo de lo que lee."
+    }
+  },
+  "integrations": {
+    "kinds": {
+      "obs": "OBS Studio",
+      "hass": "Home Assistant"
+    },
+    "about": {
+      "obs": "La app habla con OBS Studio por obs-websocket, que viene dentro de OBS desde la versión 28: no hay que instalar nada en OBS.",
+      "hass": "La app habla con Home Assistant por su API WebSocket, con un token de acceso de larga duración. Se conecta en cuanto tiene dirección y sigue los cambios al momento."
+    },
+    "new": {
+      "obs": "Nuevo servidor de OBS",
+      "hass": "Nuevo servidor de Home Assistant"
+    },
+    "edit": {
+      "obs": "Servidor de OBS",
+      "hass": "Servidor de Home Assistant"
+    },
+    "connect": "Conectar",
+    "name": "Nombre",
+    "nameHint": "Para distinguirlo en las acciones si tienes más de uno.",
+    "obs": {
+      "host": "Servidor",
+      "port": "Puerto",
+      "hostHint": "El ordenador donde está OBS: 127.0.0.1 si es este mismo.",
+      "password": "Contraseña",
+      "noPassword": "Sin contraseña",
+      "passwordHint": "Solo si OBS tiene activada la autenticación.",
+      "howTo": "En OBS, abre Herramientas → Ajustes del servidor WebSocket, activa el servidor y copia aquí el puerto y la contraseña (con «Mostrar información de conexión»)."
+    },
+    "hass": {
+      "url": "Dirección",
+      "urlHint": "La que abres en el navegador: http://homeassistant.local:8123, una IP o tu dirección de Nabu Casa.",
+      "insecure": "Aceptar certificados no verificados",
+      "insecureHint": "Para un Home Assistant con https y un certificado propio.",
+      "token": "Token de acceso",
+      "noToken": "Pega el token",
+      "tokenHint": "Un token de larga duración de tu perfil de Home Assistant.",
+      "howTo": "En Home Assistant, abre tu perfil → Seguridad → Tokens de acceso de larga duración, crea uno y pégalo aquí. Solo se muestra una vez.",
+      "openTokens": "Abrir la página de tokens",
+      "remote": "Home Assistant también puede mover el dock: lanza desde una automatización el evento «taurilanzi» con page (una página del perfil activo), profile, brightness (0–100) o wake: true para despertarlo."
+    },
+    "removeSecret": "Quitar del llavero",
+    "secretSaved": {
+      "macos": "Guardado en el llavero de macOS.",
+      "windows": "Guardado en el Administrador de credenciales de Windows.",
+      "linux": "Guardado en el llavero del escritorio."
+    },
+    "remove": "Quitar servidor",
+    "confirmRemove": "¿Quitar «{name}»? Pulsa otra vez",
+    "close": "Cerrar",
+    "save": "Guardar",
+    "errors": {
+      "name": "Ponle un nombre",
+      "url": "Escribe la dirección de Home Assistant",
+      "choose": "Elige el servidor"
+    },
+    "none": "No tienes ningún servidor de {kind}",
+    "noneHint": "Añade uno para que la acción tenga con quién hablar. Luego lo verás también en Ajustes → Integraciones.",
+    "add": "Añadir servidor de {kind}",
+    "server": "Servidor",
+    "addAnother": "Añadir otro servidor…",
+    "editServer": "Editar {name}",
+    "editButton": "Editar",
+    "empty": "Todavía no hay ningún servidor de {kind}."
+  }
+}

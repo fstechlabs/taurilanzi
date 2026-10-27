@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1220" height="708" viewBox="0 0 1220 708">
+  <defs>
+    <radialGradient id="light" cx="0.18" cy="0.1" r="1.1">
+      <stop offset="0" stop-color="#3f3f46"/>
+      <stop offset="0.5" stop-color="#18181b"/>
+      <stop offset="1" stop-color="#050506"/>
+    </radialGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1220" height="708" fill="url(#light)"/>
+  <polygon points="420,0 700,0 300,708 20,708" fill="url(#sheen)"/>
+  <polygon points="820,0 900,0 500,708 420,708" fill="url(#sheen)"/>
+</svg>

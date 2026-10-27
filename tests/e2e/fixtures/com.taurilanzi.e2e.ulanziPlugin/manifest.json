@@ -1,0 +1,44 @@
+{
+  "UUID": "com.taurilanzi.e2e.counter",
+  "Name": "Test counter",
+  "Author": "Taurilanzi",
+  "Description": "Plugin for the end-to-end tests: counts presses with the protocol of Ulanzi Studio.",
+  "Version": "1.0.0",
+  "Icon": "images/icon.svg",
+  "Category": "Tests",
+  "CodePath": "plugin/app.js",
+  "Type": "JavaScript",
+  "Actions": [
+    {
+      "UUID": "com.taurilanzi.e2e.counter.count",
+      "Name": "Count",
+      "Tooltip": "Adds one on every press",
+      "Icon": "images/icon.svg",
+      "PropertyInspectorPath": "inspector/inspector.html",
+      "States": [
+        {
+          "Image": "images/off.svg"
+        },
+        {
+          "Image": "images/on.svg"
+        }
+      ],
+      "Controllers": [
+        "Keypad"
+      ]
+    },
+    {
+      "UUID": "com.taurilanzi.e2e.counter.dial",
+      "Name": "Turn",
+      "Icon": "images/icon.svg",
+      "States": [
+        {
+          "Image": "images/icon.svg"
+        }
+      ],
+      "Controllers": [
+        "Encoder"
+      ]
+    }
+  ]
+}

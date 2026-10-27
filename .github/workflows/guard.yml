@@ -1,0 +1,52 @@
+name: guard
+
+# Only the repository's admins change the CI, the release scripts, the updater configuration and
+# the .gitignore files: a pull request from anyone else that touches them is closed.
+# pull_request_target runs this file as it is on main, so a pull request cannot change it. It must
+# never check out or run the pull request's code: it only reads the list of files through the API.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  protected-files:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          permission=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$AUTHOR/permission" --jq .permission 2>/dev/null || echo none)
+          if [ "$permission" = "admin" ]; then
+            echo "$AUTHOR is an admin"
+            exit 0
+          fi
+          # Renamed files count by their old name too.
+          protected=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
+              --jq '.[] | .filename, (.previous_filename // empty)' \
+            | grep -E '^\.github/|(^|/)\.gitignore$|^\.githooks/|^scripts/|^src-tauri/tauri[^/]*\.json$' \
+            | sort -u || true)
+          if [ -z "$protected" ]; then
+            echo "no protected files"
+            exit 0
+          fi
+          {
+            echo "This pull request changes files that only the maintainers of Taurilanzi change:"
+            echo
+            while read -r file; do
+              printf -- "- \`%s\`\n" "$file"
+            done <<< "$protected"
+            echo
+            echo "They run with the keys that sign every update, or decide what ends up in the repository,"
+            echo "so pull requests that touch them are closed automatically. If one of them needs a change,"
+            echo "please open an issue describing it, and leave those files out of the pull request."
+          } > comment.md
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md
+          gh pr close "$PR" --repo "$GITHUB_REPOSITORY"

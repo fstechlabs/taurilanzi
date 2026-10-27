@@ -1,0 +1,5 @@
+# Lets the user at the computer use the Ulanzi D200 and the app's virtual keyboard, with no root.
+# Before 73-seat-late.rules, which turns the uaccess tag into access for that user.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2207", ATTRS{idProduct}=="0019", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="2207", ATTR{idProduct}=="0019", TAG+="uaccess"
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"

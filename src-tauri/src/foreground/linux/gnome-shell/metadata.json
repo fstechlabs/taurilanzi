@@ -1,0 +1,7 @@
+{
+  "uuid": "taurilanzi@taurilanzi.com",
+  "name": "Taurilanzi",
+  "description": "Tells the Taurilanzi app which app is in front, so its stream dock can switch profiles.",
+  "url": "https://github.com/fstechlabs/taurilanzi",
+  "shell-version": [@VERSIONS@]
+}

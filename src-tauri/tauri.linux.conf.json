@@ -1,0 +1,22 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "bundle": {
+    "targets": ["appimage", "deb", "rpm"],
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/lib/udev/rules.d/70-taurilanzi.rules": "packaging/linux/70-taurilanzi.rules",
+          "/usr/lib/modules-load.d/taurilanzi.conf": "packaging/linux/modules-load.conf"
+        },
+        "postInstallScript": "packaging/linux/post-install.sh"
+      },
+      "rpm": {
+        "files": {
+          "/usr/lib/udev/rules.d/70-taurilanzi.rules": "packaging/linux/70-taurilanzi.rules",
+          "/usr/lib/modules-load.d/taurilanzi.conf": "packaging/linux/modules-load.conf"
+        },
+        "postInstallScript": "packaging/linux/post-install.sh"
+      }
+    }
+  }
+}

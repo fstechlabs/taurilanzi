@@ -1,0 +1,14 @@
+{
+  "productName": "Taurilanzi",
+  "identifier": "com.taurilanzi.desktop",
+  "bundle": {
+    "resources": {
+      "resources/node/*": "node/"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://github.com/fstechlabs/taurilanzi/releases/latest/download/latest.json"]
+    }
+  }
+}

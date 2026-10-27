@@ -1,0 +1,16 @@
+{
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": [
+        "default",
+        {
+          "identifier": "e2e",
+          "description": "What the WebdriverIO service needs, only in builds for the end-to-end tests",
+          "windows": ["main"],
+          "permissions": ["core:window:default", "wdio:default"]
+        }
+      ]
+    }
+  }
+}

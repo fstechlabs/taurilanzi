@@ -1,0 +1,330 @@
+{
+  "menu": {
+    "app": {
+      "about": "Acerca de {name}",
+      "services": "Servicios",
+      "hide": "Ocultar {name}",
+      "hideOthers": "Ocultar otros",
+      "showAll": "Mostrar todo",
+      "quit": "Salir de {name}"
+    },
+    "edit": {
+      "title": "Edición",
+      "undo": "Deshacer",
+      "redo": "Rehacer",
+      "cut": "Cortar",
+      "copy": "Copiar",
+      "paste": "Pegar",
+      "selectAll": "Seleccionar todo"
+    },
+    "window": {
+      "title": "Ventana",
+      "minimize": "Minimizar",
+      "close": "Cerrar ventana"
+    }
+  },
+  "tray": {
+    "moveToApplications": "Mueve la app a Aplicaciones para que arranque sola",
+    "open": "Abrir {name}",
+    "profile": "Perfil",
+    "chosenBy": "{profile} (por {app})",
+    "brightness": "Brillo",
+    "brightnessNow": "Ahora: {percent} %",
+    "pause": "Pausar el dock",
+    "quit": "Salir",
+    "status": {
+      "starting": "Arrancando…",
+      "paused": "Dock en pausa",
+      "connected": "{model} conectado",
+      "disconnected": "Dock desconectado"
+    },
+    "updates": {
+      "onlyInstalled": "Actualizaciones: solo en la app instalada",
+      "check": "Buscar actualizaciones…",
+      "checking": "Buscando actualizaciones…",
+      "upToDate": "Está al día. Buscar de nuevo…",
+      "notConfigured": "Sin servidor de actualizaciones",
+      "downloading": "Descargando la versión {version}…",
+      "ready": "Instalar la versión {version} y reiniciar",
+      "installing": "Instalando…",
+      "failed": "No se pudo actualizar. Reintentar…"
+    }
+  },
+  "defaults": {
+    "homePage": "Inicio",
+    "profile": "Predeterminado",
+    "back": "Volver"
+  },
+  "profiles": {
+    "homePage": "Inicio",
+    "copy": "{name} (copia)",
+    "numbered": "Perfil {number}"
+  },
+  "pages": {
+    "numbered": "Página {number}",
+    "copy": "{name} (copia)"
+  },
+  "assets": {
+    "rawBytes": "envía el archivo como bytes sin más",
+    "imageTooBig": "las imágenes pueden ocupar hasta 10 MB",
+    "soundTooBig": "los sonidos pueden ocupar hasta 30 MB",
+    "unsupportedType": "usa una imagen PNG, JPEG, WebP, GIF o SVG, o un sonido MP3, WAV, M4A, FLAC u OGG"
+  },
+  "actions": {
+    "unsupportedUrl": "solo se pueden abrir direcciones http y https",
+    "notFound": "{path} no existe",
+    "notAnApp": "{path} no es una app",
+    "unknownKey": "tecla desconocida: {key}",
+    "noAccessibility": "la app no tiene permiso para controlar el teclado: dale acceso en Accesibilidad",
+    "noKeyboardPermission": "la app no tiene permiso para usar el teclado virtual: dáselo en los ajustes de la acción",
+    "launch": "no se pudo abrir: {reason}",
+    "sound": "no se pudo reproducir el sonido: {reason}",
+    "http": "la petición falló: {reason}",
+    "httpStatus": "el servidor respondió {status}",
+    "clipboard": "no se pudo usar el portapapeles: {reason}",
+    "keysRefused": "Windows no dejó pulsar las teclas: delante hay una app con permisos de administrador o la pantalla de bloqueo",
+    "noBrightness": "no hay ninguna pantalla cuyo brillo pueda cambiarse desde el ordenador",
+    "unsupported": "todavía no funciona en este sistema",
+    "noServer": "el servidor de la acción ya no está en las integraciones"
+  },
+  "obs": {
+    "notConnected": "OBS no está conectado",
+    "timeout": "OBS no respondió a tiempo",
+    "lost": "se perdió la conexión con OBS",
+    "rejected": "OBS no pudo hacerlo: {message}",
+    "protocol": "respuesta inesperada de OBS: {details}",
+    "secrets": "no se pudo guardar la contraseña: {reason}",
+    "stopped": "el cliente de OBS no está en marcha"
+  },
+  "hass": {
+    "notConnected": "Home Assistant no está conectado",
+    "timeout": "Home Assistant no respondió a tiempo",
+    "lost": "se perdió la conexión con Home Assistant",
+    "rejected": "Home Assistant no pudo hacerlo: {message}",
+    "protocol": "respuesta inesperada de Home Assistant: {details}",
+    "unknownEntity": "Home Assistant no tiene {entity}",
+    "unsupported": "{entity} no puede hacer eso",
+    "secrets": "no se pudo guardar: {reason}",
+    "stopped": "el cliente de Home Assistant no está en marcha",
+    "states": {
+      "unavailable": "No disponible",
+      "unknown": "Desconocido"
+    },
+    "widgets": {
+      "offline": "Sin conexión",
+      "missing": "No encontrado",
+      "templateError": "Error en la plantilla",
+      "dayTime": "{day}, {time}",
+      "yes": "Sí",
+      "no": "No",
+      "today": "Hoy"
+    },
+    "time": {
+      "now": "ahora",
+      "minutesAgo": "hace {amount} min",
+      "inMinutes": "en {amount} min",
+      "hoursAgo": "hace {amount} h",
+      "inHours": "en {amount} h",
+      "daysAgo": "hace {amount} d",
+      "inDays": "en {amount} d"
+    },
+    "tiles": {
+      "lastRun": "Última vez {when}",
+      "activate": "Activar",
+      "press": "Pulsar",
+      "oscillating": "Oscilando",
+      "target": "→ {value}",
+      "humidity": "Humedad {value}",
+      "tilt": "Inclinación {value}",
+      "battery": "Batería {value}",
+      "volume": "Volumen {value}",
+      "sets": "Se pone a las {time}",
+      "rises": "Sale a las {time}",
+      "option": "{index} de {count}",
+      "installed": "Tienes la {version}",
+      "pending": "pendientes",
+      "people": "personas"
+    }
+  },
+  "plugins": {
+    "notStarted": "los plugins no han podido arrancar",
+    "notInstalled": "ese plugin no está instalado",
+    "install": {
+      "notAPlugin": "no es un plugin de Ulanzi: falta una carpeta .ulanziPlugin con manifest.json",
+      "unsafePaths": "el ZIP tiene rutas que saldrían de la carpeta del plugin",
+      "badManifest": "el manifest no se puede leer: {reason}",
+      "damagedZip": "el ZIP está dañado: {reason}",
+      "invalidId": "el id {id} no es válido",
+      "notRemovable": "solo se pueden quitar los plugins instalados en la app"
+    },
+    "community": {
+      "catalog": "no se pudo leer el catálogo de la comunidad: {reason}",
+      "unknown": "ese plugin no está en el catálogo",
+      "host": "ese plugin no se puede descargar desde {host}",
+      "download": "no se pudo descargar el plugin: {reason}"
+    },
+    "launcher": {
+      "python": "Los plugins en Python todavía no se pueden usar",
+      "needsNode": "Hace falta Node 20 o posterior, o tener instalado Ulanzi Studio"
+    }
+  },
+  "widgets": {
+    "decimalSeparator": ",",
+    "reading": "Leyendo…",
+    "weekdays": {
+      "monday": "Lunes",
+      "tuesday": "Martes",
+      "wednesday": "Miércoles",
+      "thursday": "Jueves",
+      "friday": "Viernes",
+      "saturday": "Sábado",
+      "sunday": "Domingo"
+    },
+    "months": {
+      "january": "enero",
+      "february": "febrero",
+      "march": "marzo",
+      "april": "abril",
+      "may": "mayo",
+      "june": "junio",
+      "july": "julio",
+      "august": "agosto",
+      "september": "septiembre",
+      "october": "octubre",
+      "november": "noviembre",
+      "december": "diciembre"
+    },
+    "date": {
+      "dayMonth": "{day} de {month}",
+      "withYear": "{date} de {year}"
+    },
+    "calendar": {
+      "initials": {
+        "monday": "L",
+        "tuesday": "M",
+        "wednesday": "X",
+        "thursday": "J",
+        "friday": "V",
+        "saturday": "S",
+        "sunday": "D"
+      }
+    },
+    "countdown": {
+      "oneDay": "1 día",
+      "days": "{days} días",
+      "done": "¡Ya está!",
+      "noDate": "Sin fecha"
+    },
+    "timer": {
+      "done": "¡Tiempo!",
+      "pressToStart": "Pulsa para empezar",
+      "paused": "En pausa"
+    },
+    "stopwatch": {
+      "pressToStart": "Pulsa para empezar",
+      "paused": "En pausa"
+    },
+    "worldClocks": {
+      "addCity": "Añade una ciudad",
+      "tomorrow": "mañana",
+      "yesterday": "ayer"
+    },
+    "systemMonitor": {
+      "disk": "Disco"
+    },
+    "network": {
+      "down": "BAJADA",
+      "up": "SUBIDA"
+    },
+    "battery": {
+      "none": "Sin batería",
+      "chargingFullIn": "Cargando · llena en {time}",
+      "charging": "Cargando",
+      "charged": "Cargada",
+      "pluggedIn": "Enchufada",
+      "timeLeft": "Quedan {time}",
+      "onBattery": "Con batería"
+    },
+    "nowPlaying": {
+      "nothing": "Nada sonando"
+    },
+    "temperatures": {
+      "noSensors": "Sin sensores",
+      "disk": "Disco",
+      "battery": "Batería"
+    },
+    "latency": {
+      "noRouter": "Sin router",
+      "invalidHost": "{host} no es una dirección válida",
+      "noReply": "Sin respuesta"
+    },
+    "volume": {
+      "speakers": "Altavoz",
+      "muted": "Silencio",
+      "mic": "Micro"
+    },
+    "moon": {
+      "phases": {
+        "new": "Luna nueva",
+        "waxingCrescent": "Creciente",
+        "firstQuarter": "Cuarto creciente",
+        "waxingGibbous": "Gibosa creciente",
+        "full": "Luna llena",
+        "waningGibbous": "Gibosa menguante",
+        "lastQuarter": "Cuarto menguante",
+        "waningCrescent": "Menguante"
+      },
+      "next": {
+        "full": "llena",
+        "new": "nueva"
+      },
+      "today": "hoy",
+      "tomorrow": "mañana",
+      "inDays": "en {days} días"
+    },
+    "progress": {
+      "day": "Día",
+      "week": "Semana",
+      "month": "Mes",
+      "year": "Año"
+    },
+    "wordClock": {
+      "lead": "Son las",
+      "leadOne": "Es la",
+      "minutes": {
+        "oClock": "{hour} en punto",
+        "fivePast": "{hour} y cinco",
+        "tenPast": "{hour} y diez",
+        "quarterPast": "{hour} y cuarto",
+        "twentyPast": "{hour} y veinte",
+        "twentyFivePast": "{hour} y veinticinco",
+        "halfPast": "{hour} y media",
+        "twentyFiveTo": "{hour} menos veinticinco",
+        "twentyTo": "{hour} menos veinte",
+        "quarterTo": "{hour} menos cuarto",
+        "tenTo": "{hour} menos diez",
+        "fiveTo": "{hour} menos cinco"
+      },
+      "hours": {
+        "one": "una",
+        "two": "dos",
+        "three": "tres",
+        "four": "cuatro",
+        "five": "cinco",
+        "six": "seis",
+        "seven": "siete",
+        "eight": "ocho",
+        "nine": "nueve",
+        "ten": "diez",
+        "eleven": "once",
+        "twelve": "doce"
+      }
+    },
+    "phrases": {
+      "empty": "Escribe tus frases"
+    }
+  },
+  "integrations": {
+    "missing": "Ese servidor ya no está en las integraciones"
+  }
+}

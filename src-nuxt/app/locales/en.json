@@ -1,0 +1,1729 @@
+{
+  "actions": {
+    "catalog": {
+      "needsHardware": "When there is hardware to test it on",
+      "lightsKeywords": "light, lamp, ulanzi connect",
+      "hassKeywords": "home automation, house, smart home",
+      "sections": {
+        "system": {
+          "name": "System",
+          "description": "Apps, files, websites, text and shortcuts"
+        },
+        "media": {
+          "name": "Media",
+          "description": "Playback, volume and brightness"
+        },
+        "pages": {
+          "name": "Pages",
+          "description": "Move between pages and profiles"
+        },
+        "sequence": {
+          "name": "Sequence",
+          "description": "Waits, chance and gestures"
+        },
+        "sound": {
+          "name": "Sound",
+          "description": "Soundboard"
+        },
+        "obs": {
+          "name": "OBS Studio",
+          "description": "Record, stream, scenes and sources"
+        },
+        "home_assistant": {
+          "name": "Home Assistant",
+          "description": "Lights, climate, covers, scenes and any action of your home"
+        },
+        "lights": {
+          "name": "Ulanzi lights",
+          "description": "Lights of the Ulanzi Connect range"
+        },
+        "tc002": {
+          "name": "Ulanzi TC002",
+          "description": "Screen of the TC002 range"
+        }
+      },
+      "entries": {
+        "open": {
+          "name": "Open app, file or folder",
+          "description": "Opens it as if you double-clicked it",
+          "keywords": "application, launch, run, document, finder"
+        },
+        "closeApp": {
+          "name": "Close app",
+          "description": "Closes all its windows, like Quit in its menu",
+          "keywords": "quit, exit, kill, application"
+        },
+        "openUrl": {
+          "name": "Open website",
+          "description": "Opens an address in the browser",
+          "keywords": "url, browser, link, web page, site"
+        },
+        "http": {
+          "name": "HTTP request",
+          "description": "Calls an API or a webhook with any method, headers and body",
+          "keywords": "api, webhook, rest, get, post, put, delete, json, curl, home assistant, n8n, zapier, ifttt, request, call"
+        },
+        "typeText": {
+          "name": "Type text",
+          "description": "Types a text wherever the cursor is",
+          "keywords": "type, paste, signature, template, snippet"
+        },
+        "hotkey": {
+          "name": "Keyboard shortcut",
+          "description": "Presses a key combination",
+          "keywords": "shortcut, hotkey, combination, command, key"
+        },
+        "switchHotkey": {
+          "name": "Toggle between two shortcuts",
+          "description": "Each press sends a different shortcut, each with its own look",
+          "keywords": "toggle, two states, switch"
+        },
+        "media": {
+          "playPause": {
+            "name": "Play or pause",
+            "description": "Like the ▶︎⏸ key on the keyboard",
+            "keywords": "play, pause, music"
+          },
+          "next": {
+            "name": "Next track",
+            "description": "Skips to the next song",
+            "keywords": "next, song, skip"
+          },
+          "previous": {
+            "name": "Previous track",
+            "description": "Goes back to the previous song",
+            "keywords": "prev, song, back"
+          },
+          "volumeUp": {
+            "name": "Volume up",
+            "description": "One step louder",
+            "keywords": "sound, louder, more"
+          },
+          "volumeDown": {
+            "name": "Volume down",
+            "description": "One step quieter",
+            "keywords": "sound, quieter, less"
+          },
+          "mute": {
+            "name": "Mute",
+            "description": "Turns the sound off or back on",
+            "keywords": "mute, silence"
+          },
+          "brightnessUp": {
+            "name": "Screen brightness up",
+            "description": "A brighter screen",
+            "keywords": "screen, display, monitor"
+          },
+          "brightnessDown": {
+            "name": "Screen brightness down",
+            "description": "A dimmer screen",
+            "keywords": "screen, display, monitor"
+          }
+        },
+        "openPage": {
+          "name": "Go to page",
+          "description": "This key's line on the canvas",
+          "keywords": "navigate, folder, subfolder, link"
+        },
+        "back": {
+          "name": "Back",
+          "description": "To the page you came from",
+          "keywords": "back, return, parent folder"
+        },
+        "home": {
+          "name": "Go home",
+          "description": "To the profile's home page",
+          "keywords": "home, main, start"
+        },
+        "previousPage": {
+          "name": "Previous page",
+          "description": "The previous one in the order of the profile's pages; after the first, the last",
+          "keywords": "prev, back"
+        },
+        "nextPage": {
+          "name": "Next page",
+          "description": "The next one in the order of the profile's pages; after the last, the first",
+          "keywords": "next, forward"
+        },
+        "switchProfile": {
+          "name": "Switch profile",
+          "description": "Moves the dock to another profile, where it was left",
+          "keywords": "profile, preset, configuration"
+        },
+        "pageIndicator": {
+          "name": "Page indicator",
+          "description": "The key shows which page the dock is on",
+          "keywords": "number, counter, page name"
+        },
+        "delay": {
+          "name": "Wait",
+          "description": "Pauses before the next action in the list",
+          "keywords": "delay, wait, pause, macro, multi action"
+        },
+        "random": {
+          "name": "Random action",
+          "description": "Each press runs one of the actions you choose, at random",
+          "keywords": "random, chance, surprise, shuffle"
+        },
+        "toggleSequences": {
+          "name": "Toggle between two sequences",
+          "description": "One press runs a list of actions and the next, another",
+          "keywords": "toggle, multi action, macro, two states"
+        },
+        "playSound": {
+          "name": "Play sound",
+          "description": "An audio file from your computer, with its own volume and output",
+          "keywords": "audio, music, song, mp3, wav, effect, soundboard, sfx"
+        },
+        "stopSounds": {
+          "name": "Stop sounds",
+          "description": "Stops every sound that is playing",
+          "keywords": "silence, stop, halt"
+        },
+        "obs": {
+          "record": {
+            "name": "Record",
+            "description": "Starts or stops recording",
+            "keywords": "rec, recording"
+          },
+          "recordPause": {
+            "name": "Pause recording",
+            "description": "Pauses or resumes recording",
+            "keywords": "recording"
+          },
+          "stream": {
+            "name": "Stream live",
+            "description": "Starts or stops streaming",
+            "keywords": "stream, live, twitch, youtube"
+          },
+          "virtualCam": {
+            "name": "Virtual camera",
+            "description": "Turns the virtual camera on or off",
+            "keywords": "webcam, virtual cam"
+          },
+          "replayBuffer": {
+            "name": "Replay buffer",
+            "description": "Turns the buffer on or off",
+            "keywords": "replay"
+          },
+          "replaySave": {
+            "name": "Save replay",
+            "description": "Saves the latest from the buffer",
+            "keywords": "replay, clip"
+          },
+          "studioMode": {
+            "name": "Studio mode",
+            "description": "Turns studio mode on or off",
+            "keywords": "preview"
+          },
+          "transition": {
+            "name": "Transition",
+            "description": "Sends the preview to program",
+            "keywords": "studio mode"
+          },
+          "sceneTransition": {
+            "name": "Transition effect",
+            "description": "Picks the transition between scenes",
+            "keywords": "fade, cut"
+          },
+          "screenshot": {
+            "name": "Screenshot",
+            "description": "Captures the output or a source",
+            "keywords": "photo, image, capture"
+          },
+          "sceneCollection": {
+            "name": "Scene collection",
+            "description": "Switches collection"
+          },
+          "profile": {
+            "name": "OBS profile",
+            "description": "Switches OBS profile"
+          },
+          "scene": {
+            "name": "Scene",
+            "description": "Switches to a scene",
+            "keywords": "switch scene"
+          },
+          "sourceVisibility": {
+            "name": "Source visibility",
+            "description": "Shows or hides a source",
+            "keywords": "show, hide"
+          },
+          "chapter": {
+            "name": "Add chapter",
+            "description": "Marks a chapter in the recording",
+            "keywords": "marker, bookmark"
+          },
+          "filter": {
+            "name": "Filter",
+            "description": "Turns a filter on or off"
+          },
+          "mediaSource": {
+            "name": "Media source control",
+            "description": "Plays, pauses or restarts a video",
+            "keywords": "video, play"
+          },
+          "audioMixer": {
+            "name": "Audio mixer",
+            "description": "Mutes or adjusts an audio source",
+            "keywords": "volume, mic, mute"
+          }
+        },
+        "homeAssistant": {
+          "switch": {
+            "name": "Turn on or off",
+            "description": "Turns on, off, opens, closes or locks an entity",
+            "keywords": "light, plug, switch, cover, blind, lock, fan, toggle"
+          },
+          "run": {
+            "name": "Activate scene or script",
+            "description": "Activates a scene, a script, a button or an automation",
+            "keywords": "scene, script, button, automation, routine"
+          },
+          "level": {
+            "name": "Adjust a level",
+            "description": "Brightness, volume, temperature, position, speed or a number",
+            "keywords": "brightness, dim, volume, temperature, thermostat, cover, position, speed"
+          },
+          "choose": {
+            "name": "Choose an option",
+            "description": "A mode, an effect, a source, an option of a select",
+            "keywords": "mode, effect, preset, source, select, option, cycle"
+          },
+          "media": {
+            "name": "Control a media player",
+            "description": "Play, pause, skip, volume and mute",
+            "keywords": "music, tv, speaker, spotify, sonos, play, pause"
+          },
+          "color": {
+            "name": "Color of a light",
+            "description": "Sets a light to the color you choose",
+            "keywords": "rgb, colour, light"
+          },
+          "alarm": {
+            "name": "Alarm",
+            "description": "Arms or disarms an alarm panel",
+            "keywords": "security, arm, disarm"
+          },
+          "call": {
+            "name": "Home Assistant action",
+            "description": "Any action of any integration, with its fields",
+            "keywords": "service, action, notification, notify, tts, integration"
+          },
+          "assist": {
+            "name": "Tell Assist something",
+            "description": "Sends a sentence to Assist, as if you said it",
+            "keywords": "voice, assistant, conversation, sentence"
+          },
+          "event": {
+            "name": "Fire an event",
+            "description": "Fires an event for your automations to pick up",
+            "keywords": "event, automation, trigger"
+          }
+        },
+        "lights": {
+          "switch": {
+            "name": "Turn light on or off",
+            "description": "Turns a light on or off"
+          },
+          "brightness": {
+            "name": "Light brightness",
+            "description": "Changes the brightness"
+          },
+          "temperature": {
+            "name": "Color temperature",
+            "description": "Warmer or cooler"
+          },
+          "color": {
+            "name": "Light color",
+            "description": "Picks a color"
+          },
+          "effect": {
+            "name": "Light effect",
+            "description": "Sets an effect"
+          },
+          "temperatureBrightness": {
+            "name": "Temperature and brightness",
+            "description": "Both at once"
+          },
+          "effectBrightness": {
+            "name": "Effect and brightness",
+            "description": "Both at once"
+          }
+        },
+        "tc002": {
+          "brightness": {
+            "name": "TC002 brightness",
+            "description": "Changes the screen brightness"
+          },
+          "app": {
+            "name": "TC002 app control",
+            "description": "Opens an app on the screen"
+          }
+        }
+      }
+    },
+    "plugins": {
+      "sectionBy": "Plugin by {author}",
+      "section": "Plugin",
+      "forDials": "It is for dials or other models: the D200 cannot use it"
+    },
+    "keys": {
+      "space": "Space",
+      "home": "Home",
+      "end": "End",
+      "pageUp": "Page Up",
+      "pageDown": "Page Down",
+      "enter": "Enter",
+      "numpadEnter": "Num Enter",
+      "tab": "Tab",
+      "backspace": "Backspace",
+      "delete": "Delete",
+      "numLock": "Num Lock"
+    },
+    "list": {
+      "empty": "The key does nothing when pressed.",
+      "emptyRandom": "Add the actions to pick from.",
+      "groupEmpty": "Nothing when pressed.",
+      "add": "Add action",
+      "addRandom": "Add random pick",
+      "unknownPlugin": "Action of a plugin that is not installed",
+      "actionLabel": "Action {n}: {name}",
+      "dragLabel": "Drag to reorder action {n}",
+      "dragTitle": "Drag to reorder",
+      "remove": "Remove action",
+      "when": "When",
+      "gestures": {
+        "press": {
+          "label": "On press",
+          "heading": "On press"
+        },
+        "doublePress": {
+          "label": "On double press",
+          "heading": "On double press · the normal press waits a moment in case a second one comes"
+        },
+        "longPress": {
+          "label": "On hold",
+          "heading": "On hold for half a second"
+        }
+      },
+      "unavailable": {
+        "pluginOnlyPress": "Plugin actions only go on the key's normal press",
+        "pluginTwoStates": "A two-state key cannot have a plugin action: the plugin draws the key",
+        "pluginTaken": "This key already has a plugin action",
+        "setUpFromKey": "Set up from the key",
+        "navigatesOnce": "This key already moves the dock: it can only do it once",
+        "linesOnlyPress": "Only the normal press leads to a page on the canvas",
+        "noOtherPage": "Create another page on the canvas to go to it",
+        "oneProfile": "There is only one profile"
+      }
+    },
+    "picker": {
+      "description": "All the actions of Ulanzi Studio. Search by name or by what you want to do.",
+      "searchPlaceholder": "Shortcut, volume, open app, OBS…",
+      "search": "Search actions",
+      "clearSearch": "Clear search",
+      "sections": "Sections",
+      "all": "All",
+      "showSoon": "Show coming soon",
+      "noPermissions": "No special permissions",
+      "clearFilters": "Clear filters",
+      "actions": "Actions",
+      "noResults": "No action matches the search.",
+      "unavailable": "Unavailable",
+      "soon": "Coming soon",
+      "plugin": "Plugin",
+      "accessibility": {
+        "macos": "Accessibility",
+        "linux": "Keyboard permission"
+      },
+      "movesDock": "Moves the dock"
+    },
+    "details": {
+      "accessibility": {
+        "macos": "macOS does not let the app press keys or type until you give it Accessibility permission.",
+        "linux": "Linux does not let the app press keys or type until you allow it, once, with the administrator password."
+      },
+      "grantPermission": "Give permission",
+      "configureLabel": "Set up {name}",
+      "configure": "Set up…",
+      "dialogDescription": "{description}. Changes are saved as you go.",
+      "ready": "Ready to use.",
+      "done": "Done",
+      "pluginMissing": "Plugin not installed",
+      "pluginSettings": "The plugin keeps its own settings",
+      "pluginStopped": "The plugin is not running",
+      "address": "Address",
+      "textPlaceholder": "The text to type",
+      "textLabel": "Text to type",
+      "pressEnter": "Press Return when done",
+      "paste": "Paste instead of typing",
+      "pasteHint": "(faster, any character)",
+      "mediaKey": "Media key",
+      "targetPage": "Destination page",
+      "choosePage": "Choose a page",
+      "targetProfile": "Destination profile",
+      "chooseProfile": "Choose a profile",
+      "wait": "Wait",
+      "waitSeconds": "Seconds to wait"
+    },
+    "hotkey": {
+      "control": "Control",
+      "option": "Option",
+      "shift": "Shift",
+      "command": "Command",
+      "recording": "Press the shortcut…",
+      "none": "No shortcut",
+      "cancel": "Cancel",
+      "record": "Record",
+      "key": "Shortcut key",
+      "keyPlaceholder": "Key",
+      "hint": {
+        "macos": "Record the shortcut by pressing it, or choose the keys. Those macOS uses (⌘Tab, ⌘Space…) must be chosen by hand.",
+        "windows": "Record the shortcut by pressing it, or choose the keys. Those Windows uses (Alt+Tab, Win+L…) must be chosen by hand.",
+        "linux": "Record the shortcut by pressing it, or choose the keys. Those the desktop uses (Alt+Tab, Super…) must be chosen by hand."
+      }
+    },
+    "http": {
+      "errors": {
+        "badAddress": "The address must start with http:// or https://",
+        "noAddress": "Type the address",
+        "headerName": "A header has no name or has spaces or symbols",
+        "headerLines": "A header value cannot span several lines",
+        "timeout": "The timeout goes from 1 to 120 seconds",
+        "json": "The body is not valid JSON",
+        "textType": "Say what type of text the body is",
+        "formField": "Every form field needs a name"
+      },
+      "summary": {
+        "headers": "{n} header | {n} headers",
+        "noHeaders": "no headers",
+        "noAddress": "(no address)",
+        "body": {
+          "none": "no body",
+          "json": "JSON body",
+          "text": "text body",
+          "form": "form"
+        }
+      },
+      "bodyKinds": {
+        "none": "None",
+        "json": "JSON",
+        "text": "Text",
+        "form": "Form"
+      },
+      "method": "Method",
+      "url": "Request address",
+      "headers": "Headers",
+      "addHeader": "Add header",
+      "noHeaders": "No headers.",
+      "name": "Name",
+      "value": "Value",
+      "headerName": "Name of header {n}",
+      "headerValue": "Value of header {n}",
+      "removeHeader": "Remove header {n}",
+      "body": "Body",
+      "bodyKind": "Body type",
+      "jsonBody": "JSON body",
+      "invalidJson": "Invalid JSON: {error}",
+      "jsonHint": "Sent with Content-Type: application/json",
+      "format": "Format",
+      "textType": "Text type",
+      "textBody": "Text body",
+      "field": "Field",
+      "fieldName": "Name of field {n}",
+      "fieldValue": "Value of field {n}",
+      "removeField": "Remove field {n}",
+      "addField": "Add field",
+      "bodyless": "Many servers do not expect a body in a {method} request.",
+      "showResult": "Show the result on the key",
+      "showResultHint": "A green ✓ or a red ✗ for a moment",
+      "more": "More options",
+      "timeout": "Timeout",
+      "timeoutLabel": "Request timeout in seconds",
+      "insecure": "Accept invalid certificates",
+      "insecureHint": "For devices on your network with their own certificate, like Home Assistant at https://…local",
+      "tryHint": "Sends the request now and shows the response",
+      "try": "Test request",
+      "failed": "Could not make the request: {error}",
+      "noContent": "No content.",
+      "truncated": "Only the first 64 KB are shown."
+    },
+    "obs": {
+      "errors": {
+        "transition": "Choose the transition",
+        "duration": "A transition lasts between 50 ms and 20 s",
+        "collection": "Choose the scene collection",
+        "profile": "Choose the OBS profile",
+        "scene": "Choose the scene",
+        "sceneAndSource": "Choose the scene and the source",
+        "sourceAndFilter": "Choose the source and the filter",
+        "source": "Choose the source",
+        "step": "A volume step goes from 1 to 30 dB",
+        "volume": "Volume goes up to 100"
+      },
+      "status": {
+        "off": "Not connected: no key uses OBS",
+        "connecting": "Connecting to OBS…",
+        "connected": "Connected to OBS {version}",
+        "unreachable": "OBS is not open or its WebSocket server is off",
+        "passwordRequired": "OBS asks for a password",
+        "wrongPassword": "The OBS password is wrong",
+        "incompatible": "OBS 28 or later is needed",
+        "failed": "Could not connect to OBS"
+      },
+      "switch": {
+        "record": {
+          "on": "Start",
+          "off": "Stop"
+        },
+        "recordPause": {
+          "on": "Pause",
+          "off": "Resume"
+        },
+        "stream": {
+          "on": "Start",
+          "off": "Stop"
+        },
+        "virtualCam": {
+          "on": "Turn on",
+          "off": "Turn off"
+        },
+        "replayBuffer": {
+          "on": "Turn on",
+          "off": "Turn off"
+        },
+        "studioMode": {
+          "on": "Turn on",
+          "off": "Turn off"
+        },
+        "sourceVisibility": {
+          "on": "Show",
+          "off": "Hide"
+        },
+        "filter": {
+          "on": "Enable",
+          "off": "Disable"
+        },
+        "mute": {
+          "on": "Mute",
+          "off": "Unmute"
+        }
+      },
+      "while": {
+        "record": "while OBS is recording",
+        "recordPause": "while recording is paused",
+        "stream": "while OBS is streaming",
+        "virtualCam": "while the virtual camera is on",
+        "replayBuffer": "while the replay buffer is on",
+        "studioMode": "while studio mode is on",
+        "sourceVisibility": "while the source is visible",
+        "filter": "while the filter is on",
+        "mute": "while the source is muted",
+        "scenePreview": "while it is the preview scene",
+        "sceneProgram": "while it is the program scene"
+      },
+      "media": {
+        "playPause": "Play or pause",
+        "play": "Play",
+        "pause": "Pause",
+        "stop": "Stop",
+        "restart": "Restart",
+        "next": "Next",
+        "previous": "Previous"
+      },
+      "chooseFolder": "Choose where screenshots are saved",
+      "transition": "Transition",
+      "duration": "Duration",
+      "durationPlaceholder": "OBS default",
+      "durationLabel": "Transition duration in milliseconds",
+      "sourceOrScene": "Source or scene",
+      "programScene": "The program scene",
+      "recordingsFolder": "Where OBS saves recordings",
+      "saveToRecordings": "Save where OBS saves recordings",
+      "folder": "Folder",
+      "sceneCollection": "Scene collection",
+      "profile": "OBS profile",
+      "scene": "Scene",
+      "toPreview": "To preview",
+      "studioModeHint": "(in studio mode)",
+      "source": "Source",
+      "chapterPlaceholder": "Chapter name (optional)",
+      "chapterLabel": "Chapter name",
+      "chapterHint": "Only when recording to hybrid MP4, with OBS 30.2 or later.",
+      "filter": "Filter",
+      "mediaSource": "Media source",
+      "mediaControl": "What it does with the video",
+      "audioSource": "Audio source",
+      "muteOrVolume": "Mute or volume",
+      "mute": "Mute",
+      "volume": "Volume",
+      "volumeWay": "How the volume changes",
+      "up": "Up",
+      "down": "Down",
+      "set": "Set",
+      "percent": "Volume in percent",
+      "decibels": "Decibels",
+      "setHint": "The position of the fader in the OBS mixer.",
+      "stepHint": "Never goes above 0 dB, the top of the OBS mixer.",
+      "transitionHint": "Sends the preview to program with the transition chosen in OBS. Studio mode only.",
+      "replayHint": "The replay buffer must be on.",
+      "whatItDoes": "What it does",
+      "toggle": "Toggle",
+      "follows": "The key follows OBS: it shows state 2 {state}.",
+      "removeGestures": "Remove the double press and the long press to give it two states",
+      "giveStates": "Gives it two states: the second shows {state}",
+      "showOnKey": "Show on the key whether it is on",
+      "typeByHand": "{status}. You can type the names by hand.",
+      "settingsLink": "OBS settings",
+      "names": {
+        "pick": "Pick from OBS: {label}",
+        "pickTitle": "Pick from what is in OBS",
+        "connectTitle": "Connect OBS to pick from its list",
+        "reading": "Reading from OBS…",
+        "readFailed": "Could not read from OBS",
+        "none": "OBS has none"
+      }
+    },
+    "hass": {
+      "entity": "Entity",
+      "chooseEntity": "Choose an entity",
+      "searchEntity": "Search by name, area or id",
+      "useTyped": "Use “{id}”",
+      "reading": "Reading the entities…",
+      "noEntities": "No entity matches",
+      "typeId": "Not connected: type the entity id, such as light.kitchen",
+      "switch": {
+        "onOff": {
+          "on": "Turn on",
+          "off": "Turn off"
+        },
+        "openClose": {
+          "on": "Open",
+          "off": "Close"
+        },
+        "lockUnlock": {
+          "on": "Lock",
+          "off": "Unlock"
+        },
+        "startDock": {
+          "on": "Start",
+          "off": "Dock"
+        },
+        "startPause": {
+          "on": "Start",
+          "off": "Pause"
+        },
+        "armDisarm": {
+          "on": "Arm",
+          "off": "Disarm"
+        },
+        "enableDisable": {
+          "on": "Enable",
+          "off": "Disable"
+        },
+        "runStop": {
+          "on": "Run",
+          "off": "Stop"
+        },
+        "installSkip": {
+          "on": "Install",
+          "off": "Skip"
+        },
+        "upDown": {
+          "on": "Add",
+          "off": "Subtract"
+        }
+      },
+      "errors": {
+        "entity": "Choose the entity",
+        "step": "The step cannot be zero",
+        "value": "Write the value",
+        "range": "That value is out of range",
+        "option": "Choose the option",
+        "action": "Choose the action",
+        "data": "The fields of the action go in an object",
+        "text": "Write what you say",
+        "event": "Name the event, without spaces"
+      },
+      "while": {
+        "active": "while the entity is on",
+        "chosen": "while it is on “{option}”",
+        "playing": "while it plays",
+        "muted": "while it is muted",
+        "shuffling": "while it shuffles"
+      },
+      "status": {
+        "off": "Not connected: no key uses Home Assistant",
+        "connecting": "Connecting to Home Assistant…",
+        "connected": "Connected to Home Assistant {version}",
+        "connectedTo": "Connected to {location} · Home Assistant {version}",
+        "noAddress": "Home Assistant's address is missing",
+        "unreachable": "Nothing answers at that address, or Home Assistant is not running",
+        "notHomeAssistant": "That address is not Home Assistant's",
+        "certificate": "The certificate is not trusted: turn on “Accept unverified certificates”",
+        "tokenRequired": "The access token is missing",
+        "wrongToken": "Home Assistant does not accept the token",
+        "failed": "Could not connect to Home Assistant"
+      },
+      "cannotSwitch": "This entity only measures: it cannot be turned on or off",
+      "whatItDoes": "What it does",
+      "toggle": "Toggle",
+      "onlyRuns": "Each press activates it.",
+      "runHint": "Each press activates it. On a lock, it opens the latch.",
+      "level": "What it adjusts",
+      "levels": {
+        "brightness": "Brightness",
+        "colorTemp": "Color temperature",
+        "position": "Position",
+        "tilt": "Tilt",
+        "speed": "Speed",
+        "volume": "Volume",
+        "temperature": "Target temperature",
+        "humidity": "Target humidity",
+        "value": "Value"
+      },
+      "way": "How it changes",
+      "up": "Up",
+      "down": "Down",
+      "set": "Set",
+      "amount": "Amount",
+      "setHint": "Sets it to that value, within the entity's limits.",
+      "stepHint": "Changes it from where it is, without going past the entity's limits.",
+      "optionKind": "Which option",
+      "options": {
+        "option": "Option of the select",
+        "effect": "Effect",
+        "hvacMode": "HVAC mode",
+        "preset": "Preset",
+        "fanMode": "Fan mode",
+        "swingMode": "Swing",
+        "source": "Source",
+        "soundMode": "Sound mode",
+        "repeat": "Repeat",
+        "mode": "Mode",
+        "operationMode": "Operation mode",
+        "fanSpeed": "Suction power"
+      },
+      "whichOption": "Which it picks",
+      "next": "Next",
+      "previous": "Previous",
+      "this": "This one",
+      "option": "Option",
+      "chooseOption": "Choose the option",
+      "mediaControl": "What it does with the player",
+      "media": {
+        "playPause": "Play or pause",
+        "play": "Play",
+        "pause": "Pause",
+        "stop": "Stop",
+        "next": "Next",
+        "previous": "Previous",
+        "volumeUp": "Volume up",
+        "volumeDown": "Volume down",
+        "mute": "Mute or unmute",
+        "shuffle": "Shuffle on or off"
+      },
+      "color": "Color of the light",
+      "colorHint": "Turns it on in this color.",
+      "alarmMode": "What the alarm does",
+      "alarm": {
+        "disarm": "Disarm",
+        "armHome": "Arm home",
+        "armAway": "Arm away",
+        "armNight": "Arm night",
+        "armVacation": "Arm vacation",
+        "armCustomBypass": "Arm custom",
+        "trigger": "Trigger"
+      },
+      "assistPlaceholder": "Turn on the living room lights",
+      "assistText": "What you tell Assist",
+      "agent": "Conversation agent",
+      "defaultAgent": "Home Assistant's",
+      "assistHint": "Assist understands it in the language it is set up in. If it does not understand, the key shows a cross.",
+      "eventPlaceholder": "taurilanzi_pressed",
+      "eventType": "Event type",
+      "eventData": "Event data as JSON",
+      "jsonError": "Not a valid JSON object",
+      "eventHint": "Optional data, as a JSON object. Your automations can use the event as a trigger.",
+      "follows": "The key follows Home Assistant: it shows state 2 {state}.",
+      "removeGestures": "Remove the double press and the long press to give it two states",
+      "giveStates": "Gives the key a second state shown {state}",
+      "showOnKey": "Show on the key when it is on",
+      "notConnected": "{status}. You can still type what you know.",
+      "settingsLink": "Home Assistant settings",
+      "code": "Code",
+      "saveCode": "Save",
+      "removeCode": "Remove the code",
+      "codeFailed": "Could not save the code.",
+      "codeSaved": {
+        "macos": "Code saved in the macOS keychain.",
+        "windows": "Code saved in the Windows Credential Manager.",
+        "linux": "Code saved in the desktop keyring."
+      },
+      "codeHint": "If Home Assistant asks for a code for this entity, save it here: it goes to the keychain, not the configuration.",
+      "call": {
+        "choose": "Choose",
+        "remove": "Remove {name}",
+        "addOne": "Add…",
+        "addTo": {
+          "areas": "Add an area…",
+          "devices": "Add a device…",
+          "floors": "Add a floor…",
+          "labels": "Add a label…"
+        },
+        "hours": "Hours",
+        "minutes": "Minutes",
+        "seconds": "Seconds",
+        "jsonHint": "JSON, or plain text.",
+        "action": "Action",
+        "chooseAction": "Choose an action",
+        "search": "Search by name or id, such as notify",
+        "noActions": "No action matches",
+        "typeAction": "Not connected: type the action below",
+        "actionId": "Action id",
+        "target": "What it acts on",
+        "addEntity": "Add an entity",
+        "fields": "Fields",
+        "raw": "Edit as JSON",
+        "data": "Fields of the action as JSON",
+        "rawHint": "The fields as Home Assistant takes them.",
+        "noFields": "This action has no fields; write them as JSON if it needs any.",
+        "example": "Example: {example}",
+        "clear": "Remove {name}",
+        "noTarget": "No target"
+      },
+      "states": {
+        "unknown": "Unknown",
+        "unavailable": "Unavailable"
+      },
+      "look": {
+        "title": "How it shows on the key",
+        "followsOther": "Another action of the key already decides its two states",
+        "offColor": "Off",
+        "onColor": "On",
+        "failed": "Could not fetch the icon from Home Assistant.",
+        "card": "Show as a card",
+        "cardHint": "The entity's icon, name and state, always up to date, with what matters for its kind.",
+        "icon": "Icon",
+        "ownIcon": "Chosen by you",
+        "haIconLive": "Home Assistant's, changes with its state",
+        "haIcon": "Home Assistant's",
+        "changeIcon": "Change",
+        "resetIcon": "Back to Home Assistant's",
+        "name": "Name",
+        "text": "Text",
+        "resetName": "Back to Home Assistant's",
+        "nameHint": "Empty uses its name in Home Assistant.",
+        "textHint": "The text drawn on the key.",
+        "background": "Change background with its state"
+      },
+      "summary": {
+        "assist": "Says it to Assist",
+        "event": "Fires this event in Home Assistant"
+      }
+    },
+    "path": {
+      "chooseApp": "Choose an app",
+      "chooseFile": "Choose a file",
+      "chooseFolder": "Choose a folder",
+      "apps": "Apps",
+      "closeHint": "Choose the app to close.",
+      "openHint": "Choose what opens when the key is pressed.",
+      "changeApp": "Change app",
+      "app": "App",
+      "file": "File",
+      "folder": "Folder"
+    },
+    "pluginInspector": {
+      "notInstalled": "The plugin of this action is not installed. Install it to set it up.",
+      "notRunning": "The plugin is not running right now: its settings may not load until it starts.",
+      "noSettings": "This action has no settings: the plugin handles it on its own.",
+      "settingsOf": "{name} settings"
+    },
+    "sound": {
+      "modes": {
+        "restart": {
+          "name": "Start over",
+          "hint": "Each press starts it again"
+        },
+        "overlap": {
+          "name": "Overlap",
+          "hint": "Each press plays over the previous one"
+        },
+        "toggle": {
+          "name": "Press to stop",
+          "hint": "If it is playing, the key stops it"
+        },
+        "loop": {
+          "name": "Loop",
+          "hint": "Plays nonstop until pressed again"
+        }
+      },
+      "uploadFailed": "That file could not be used. Formats: MP3, WAV, M4A, FLAC or OGG up to 30 MB.",
+      "none": "No sound",
+      "change": "Change",
+      "choose": "Choose",
+      "file": "Sound file",
+      "volume": "Volume",
+      "again": "When pressed again",
+      "output": "Audio output",
+      "defaultOutput": "System default output",
+      "disconnected": "{device} (not connected)"
+    }
+  },
+  "common": {
+    "toasts": {
+      "close": "Close notice"
+    },
+    "colorPicker": {
+      "saturation": "Saturation and brightness",
+      "hue": "Hue",
+      "hex": "Color code",
+      "recent": "Recently used",
+      "recentSwatch": "Recent {color}"
+    }
+  },
+  "dock": {
+    "key": {
+      "label": "Key {n}",
+      "empty": "Empty",
+      "remove": "Delete key"
+    }
+  },
+  "editor": {
+    "inspector": {
+      "resize": "Resize the inspector",
+      "noKey": "Select a key on any page to see and edit its settings.",
+      "wideKey": "Wide key",
+      "key": "Key {number}",
+      "empty": "This key is empty.",
+      "setUp": "Set up key",
+      "preview": "Real preview · {size}",
+      "states": "Key states",
+      "state": "State {number}",
+      "look": "Look",
+      "lookOfState": "Look of state {number}",
+      "live": "Live info",
+      "liveOfState": "Live info of state {number}",
+      "actions": "Actions",
+      "actionsOfState": "Actions of state {number}",
+      "actionsHint": "Each press runs the actions of the state the key is in and switches to the other.",
+      "statesSection": "States",
+      "twoStates": "Two states",
+      "twoStatesHint": "Switches look and actions on each press, like a toggle",
+      "twoStatesBlocked": "Remove the double press and long press from its actions to give it two states.",
+      "twoStatesUnavailable": "This key has double press or long press actions: remove them to give it two states",
+      "unsaved": "Not saved: {problem}",
+      "saved": "Saved",
+      "saving": "Saving…",
+      "tryKey": "Try key",
+      "tryGesture": "Try a gesture of the key",
+      "tryWait": "Wait until it is saved to try it",
+      "tryHint": "Does the same as pressing it on the dock",
+      "clearKey": "Clear key"
+    },
+    "gestures": {
+      "press": "Press",
+      "doublePress": "Double press",
+      "longPress": "Long press"
+    },
+    "errors": {
+      "save": "Could not save the key.",
+      "try": "Could not try the key.",
+      "upload": "Could not upload the image. Formats: PNG, JPG, WebP, GIF or SVG up to 10 MB.",
+      "icon": "Could not download the icon. Try again in a few seconds."
+    },
+    "validation": {
+      "urlMissing": "Enter an address",
+      "urlScheme": "Only http:// or https:// addresses",
+      "oneNavigation": "A key can only move the dock once",
+      "pageOnlyOnPress": "Only the normal press can lead to a page of the canvas",
+      "open": "Choose what opens",
+      "closeApp": "Choose which app closes",
+      "typeText": "Enter the text",
+      "hotkey": "Record or choose the shortcut",
+      "openPage": "Choose the target page",
+      "switchProfile": "Choose the profile",
+      "delay": "A wait can last one minute at most",
+      "playSound": "Choose the sound",
+      "random": "Add actions to the random action"
+    },
+    "newKey": {
+      "text": "New",
+      "page": "Page"
+    },
+    "background": {
+      "title": "Background",
+      "solid": "Color",
+      "gradient": "Gradient",
+      "color": "Background color",
+      "from": "Gradient start color",
+      "to": "Gradient end color",
+      "angle": "Angle"
+    },
+    "image": {
+      "title": "Image",
+      "searchIcon": "Search icon",
+      "upload": "Upload image",
+      "editedIcon": "{icon} (edited)",
+      "edited": "Edited image",
+      "own": "Own image",
+      "edit": "Edit",
+      "original": "Back to the original",
+      "remove": "Remove image",
+      "color": "Color",
+      "iconColor": "Icon color",
+      "fit": "Fit",
+      "cover": "Fill",
+      "inset": "Margin"
+    },
+    "text": {
+      "title": "Text",
+      "default": "Text",
+      "show": "Show text",
+      "content": "Key text",
+      "insert": "Insert page data",
+      "variables": {
+        "page": "Page name",
+        "pageNumber": "Page number",
+        "pageCount": "Total pages"
+      },
+      "size": "Size",
+      "color": "Text color",
+      "top": "Top",
+      "middle": "Middle",
+      "bottom": "Bottom"
+    },
+    "timeZone": {
+      "label": "Time zone",
+      "mac": "Computer time",
+      "search": "Search city or zone…",
+      "searchLabel": "Search time zone",
+      "noMatch": "No zone with that name."
+    },
+    "canvas": {
+      "newPage": "New page",
+      "newPageHere": "New page here",
+      "fitAll": "Show all",
+      "undo": "Undo",
+      "undoTitle": "Undo ({shortcut})",
+      "redo": "Redo",
+      "redoTitle": "Redo ({shortcut})",
+      "rename": "Rename page",
+      "pageName": "Page name",
+      "cancel": "Cancel",
+      "save": "Save",
+      "errors": {
+        "link": "Could not link the key.",
+        "removeKey": "Could not delete the key.",
+        "create": "Could not create the page.",
+        "move": "Could not move the page.",
+        "rename": "Could not rename the page.",
+        "remove": "Could not delete the page.",
+        "show": "Could not show the page.",
+        "duplicate": "Could not duplicate the page.",
+        "home": "Could not change the home page."
+      }
+    },
+    "page": {
+      "show": "Show on the dock",
+      "rename": "Rename",
+      "duplicate": "Duplicate",
+      "home": "Use as home",
+      "remove": "Delete",
+      "homePage": "Home page",
+      "onDock": "On the dock",
+      "options": "Options of {name}",
+      "linkKey": "Drag to link key {number}"
+    },
+    "link": {
+      "remove": "Delete key and link",
+      "removeHint": "Deletes the key this line comes from",
+      "bend": "Point {number} of the line",
+      "bendHint": "Drag to move · double-click to delete"
+    },
+    "imageEditor": {
+      "title": "Edit image",
+      "frameScreen": "Frame the image on the dock screen.",
+      "frameKey": "Frame the image on the key.",
+      "originalKept": "The original is kept apart, so you can edit it again whenever you want.",
+      "stage": "Image framing",
+      "loading": "Loading image…",
+      "hint": "Drag to move · scroll or pinch to zoom · double-click to fill",
+      "gapsScreen": "The dark bands are the gaps between keys",
+      "gapsKey": "The gaps show the key background",
+      "zoom": "Zoom",
+      "zoomOut": "Zoom out",
+      "zoomIn": "Zoom in",
+      "straighten": "Straighten",
+      "rotateLeft": "Rotate left",
+      "rotateLeftTitle": "Rotate left (Shift+R)",
+      "rotateRight": "Rotate right",
+      "rotateRightTitle": "Rotate right (R)",
+      "flipX": "Flip horizontally",
+      "flipY": "Flip vertically",
+      "fill": "Fill",
+      "fillScreen": "Make the image fill the screen, cropping what is left over",
+      "fillKey": "Make the image fill the key, cropping what is left over",
+      "fit": "Fit",
+      "fitTitle": "Show the whole image",
+      "reset": "Reset",
+      "loadError": "Could not load the original image.",
+      "saveError": "Could not save the image. Try again.",
+      "copyScreen": "A {width}×{height} px copy is saved for the screensaver.",
+      "copyKey": "A {width}×{height} px copy is saved for the key.",
+      "cancel": "Cancel",
+      "apply": "Apply"
+    },
+    "scenes": {
+      "sunset": "Retro sunset",
+      "aurora": "Aurora",
+      "ocean": "Ocean",
+      "neon": "Neon",
+      "mountains": "Mountains",
+      "graphite": "Graphite"
+    },
+    "fontWeights": {
+      "regular": "Regular",
+      "medium": "Medium",
+      "semibold": "Semibold",
+      "bold": "Bold",
+      "black": "Black"
+    }
+  },
+  "icons": {
+    "categories": {
+      "ui24": "Interface 24 px",
+      "ui16And32": "Interface 16 and 32 px",
+      "uiOther": "Interface, other sizes",
+      "uiMulticolor": "Multicolor interface",
+      "material": "Material",
+      "logos": "Logos and brands",
+      "emoji": "Emoji",
+      "flags": "Flags and maps",
+      "programming": "Programming",
+      "thematic": "Thematic",
+      "archived": "Archived",
+      "other": "Other"
+    },
+    "collections": {
+      "label": "Collection",
+      "all": "All collections",
+      "search": "Search collection…",
+      "searchLabel": "Search collections",
+      "multicolor": "Multicolor",
+      "noMatch": "No collection with that name."
+    },
+    "details": {
+      "multicolor": "multicolor"
+    },
+    "picker": {
+      "title": "Search icon",
+      "description": "Search in English ({home}, {play}), paste a key ({key}) or an icones.js.org link, or pick a collection to browse it.",
+      "search": "Search icon",
+      "clear": "Clear search",
+      "kind": "Collection type",
+      "anyKind": "Any type",
+      "style": "Style",
+      "anyStyle": "Any style",
+      "fill": "Fill",
+      "stroke": "Stroke",
+      "color": "Color",
+      "anyColor": "Any color",
+      "mono": "One color",
+      "monoHint": "They take the color you choose for the key",
+      "multicolor": "Multicolor",
+      "multicolorHint": "They have their own colors",
+      "clearFilters": "Clear filters",
+      "category": "Collection category",
+      "allIcons": "All icons",
+      "count": "{total} icon | {total} icons",
+      "openIcones": "View on Icones",
+      "searching": "Searching…",
+      "error": "Could not search. Is there an internet connection?",
+      "recent": "Recently used",
+      "ideas": "Ideas to start with",
+      "noResults": "No results.",
+      "truncated": "Only the first {shown} are shown. Refine the search or filter by collection.",
+      "loadMore": "Load more ({left} left)",
+      "credit": "Icons from {iconify}, over 200 free collections.",
+      "explore": "Browse them on {site}"
+    }
+  },
+  "plugins": {
+    "list": {
+      "title": "Plugins",
+      "add": "Add plugin",
+      "community": "Community plugins…",
+      "fromZip": "Install from a ZIP…",
+      "fromFolder": "Install from a folder…",
+      "reload": "Look for new plugins",
+      "openFolder": "Open the plugins folder",
+      "failed": "The plugins could not start.",
+      "none": "None installed",
+      "zipFilter": "Ulanzi plugin"
+    },
+    "status": {
+      "running": "Running",
+      "starting": "Starting",
+      "restarting": "It stopped; starting again",
+      "passive": "Images only",
+      "stopped": "Stopped"
+    },
+    "version": "version {version}",
+    "updateAvailable": "A new version is available",
+    "updateTo": "Update to {version}",
+    "updated": "Plugin updated",
+    "installed": "Plugin installed",
+    "installFailed": "The plugin could not be installed",
+    "dialog": {
+      "updatedTo": "{name} is now on version {version}.",
+      "updatedLatest": "{name} is now on the new version.",
+      "updateFailed": "The plugin could not be updated",
+      "removeFailed": "The plugin could not be removed",
+      "actions": "Actions",
+      "otherModels": "For dials or other models",
+      "updating": "Updating…",
+      "restart": "Restart",
+      "folder": "Folder",
+      "confirmRemove": "Remove the plugin?",
+      "remove": "Remove"
+    },
+    "community": {
+      "title": "Community plugins",
+      "description": "From the Ulanzi Community Store catalog, only those that work on this computer. They are made by other authors and run on your computer: install the ones you trust.",
+      "search": "Search",
+      "searchLabel": "Search plugins",
+      "reload": "Read the catalog again",
+      "loadFailed": "The catalog could not be read. Check the connection and try again.",
+      "loading": "Reading the catalog…",
+      "noMatch": "No plugin matches.",
+      "installed": "Installed",
+      "ready": "{name} is now in the app.",
+      "downloads": "1 download | {downloads} downloads",
+      "installing": "Installing…",
+      "install": "Install",
+      "source": "Source",
+      "warning": "The catalog's automatic scan found warnings in this plugin ({findings}). Review its code before installing it.",
+      "critical": "{n} critical",
+      "high": "{n} high",
+      "secrets": "{n} secrets",
+      "noDetail": "no details",
+      "dials": "It also has actions for dials, which do not work in the app yet.",
+      "choose": "Choose a plugin"
+    }
+  },
+  "settings": {
+    "tabs": {
+      "general": "General",
+      "dock": "Dock",
+      "presses": "Presses",
+      "new-keys": "New keys",
+      "idle": "Lock and idle",
+      "profiles": "Profiles",
+      "integrations": "Integrations"
+    },
+    "general": {
+      "language": "Language",
+      "languageHint": "For the app and the texts it draws on the keys.",
+      "system": "The system's"
+    },
+    "title": "Settings",
+    "saveFailed": "The settings could not be saved.",
+    "minutes": {
+      "never": "Never"
+    },
+    "dock": {
+      "brightness": "Brightness",
+      "brightnessLabel": "Dock brightness",
+      "sleep": "Sleep",
+      "sleepHint": "The dock turns its screen off after this long without key presses.",
+      "sleepLabel": "Dock sleep"
+    },
+    "presses": {
+      "long": "Long press",
+      "longHint": "How long a key must be held to count as a long press.",
+      "longLabel": "Long press duration",
+      "double": "Double press",
+      "doubleHint": "Time allowed for the second press. Keys with a double press wait this long before acting.",
+      "doubleLabel": "Double press window"
+    },
+    "newKeys": {
+      "description": "How a key is born: from the inspector, when drawing a line on the canvas, or the Back key of a new page.",
+      "background": "Background",
+      "backgroundLabel": "Background of new keys",
+      "textColor": "Text color",
+      "textColorLabel": "Text color of new keys",
+      "font": "Font",
+      "fontLabel": "Font of new keys",
+      "weightLabel": "Font weight of new keys",
+      "textSize": "Text size",
+      "textSizeLabel": "Text size of new keys",
+      "position": "Text position",
+      "positionLabel": "Text position of new keys",
+      "top": "Top",
+      "middle": "Middle",
+      "bottom": "Bottom",
+      "preview": "How a new key looks"
+    },
+    "idle": {
+      "onLock": "When the computer is locked",
+      "onLockLabel": "What the dock does when the computer is locked",
+      "screensaver": "Screensaver",
+      "off": "Screen off",
+      "keep": "Keep as is",
+      "idle": "Screensaver when idle",
+      "idleHint": "After this long without touching the dock. The first press dismisses it without doing anything else.",
+      "idleLabel": "Screensaver after a while without touching the dock",
+      "offAfter": "Turn the screen off",
+      "offAfterHint": "After this long on the screensaver.",
+      "offAfterLabel": "Turn the screen off after a while on the screensaver",
+      "brightness": "Screensaver brightness",
+      "image": "Image",
+      "imageHint": "The dock keeps a copy and shows it by itself when the app is not open.",
+      "editImage": "Edit image",
+      "uploadImage": "Upload image",
+      "connectToTry": "Connect the dock to try it",
+      "stopTrial": "Stop trying",
+      "tryOnDock": "Try on the dock",
+      "imageLabel": "Screensaver image",
+      "images": "Screensaver images",
+      "yourImage": "Your image"
+    },
+    "profiles": {
+      "follow": "Switch profile with the active app",
+      "followHint": "When an app linked to a profile comes to the front, the dock switches to that profile. Leaving it goes back to the one you had chosen.",
+      "linkedApps": "Linked apps",
+      "linkedAppsHint": "Each app can be linked to a single profile. They can also be edited from each profile's menu (right click or ⋯ in the sidebar).",
+      "noApps": "No apps",
+      "edit": "Edit"
+    }
+  },
+  "shell": {
+    "header": {
+      "search": "Search keys, actions, profiles…"
+    },
+    "sidebar": {
+      "devices": "Devices",
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "account": "Account",
+      "accountHint": "Sign in to keep your setup in the cloud. Coming soon.",
+      "soon": "Soon",
+      "settings": "Settings"
+    },
+    "statusBar": {
+      "starting": "Starting…",
+      "engineDown": "The engine is not responding",
+      "device": "{model} · firmware {firmware}",
+      "disconnected": "Dock disconnected",
+      "paused": "Dock paused",
+      "brightness": "Brightness {value} %",
+      "sleep": "Sleep: {value}",
+      "never": "never",
+      "minutes": "{value} min",
+      "grantDock": "Allow the app to use the dock"
+    },
+    "update": {
+      "title": "Version {version} available",
+      "body": "Installing it restarts the app. Leave it for later and you will be reminded in a week.",
+      "installing": "Installing and restarting…",
+      "later": "Remind me later",
+      "install": "Install now"
+    },
+    "profiles": {
+      "list": "Profiles",
+      "defaultName": "Profile {n}",
+      "new": "New profile",
+      "rename": "Rename profile",
+      "newHint": "It starts with an empty home page and becomes the dock's profile.",
+      "nameLabel": "Profile name",
+      "cancel": "Cancel",
+      "save": "Save",
+      "create": "Create",
+      "use": "Use {name}",
+      "chosenBy": "Chosen when {app} came to the front",
+      "linkedApps": "Linked apps: {apps}",
+      "options": "Options for {name}",
+      "menu": {
+        "keep": "Keep this profile",
+        "use": "Use this profile",
+        "rename": "Rename",
+        "duplicate": "Duplicate",
+        "apps": "Linked apps…",
+        "delete": "Delete"
+      },
+      "errors": {
+        "rename": "The profile could not be renamed.",
+        "create": "The profile could not be created.",
+        "pin": "The profile could not be pinned.",
+        "switch": "Could not switch profiles.",
+        "duplicate": "The profile could not be duplicated.",
+        "delete": "The profile could not be deleted.",
+        "move": "The profile could not be moved."
+      }
+    },
+    "linkedApps": {
+      "title": "Apps for “{name}”",
+      "description": "When one of these apps comes to the front, the dock switches to this profile. Leaving it goes back to the profile you had chosen.",
+      "followOff": "Automatic profile switching is off.",
+      "enableInSettings": "Turn it on in Settings",
+      "linked": "Linked apps",
+      "remove": "Remove {name}",
+      "none": "No linked apps.",
+      "add": "Add",
+      "refresh": "Refresh the open apps",
+      "link": "Link {name}",
+      "elsewhere": "in “{name}”",
+      "lastUsed": "the last one you used",
+      "running": "Open apps",
+      "linkedHere": "Linked",
+      "pickOther": "Choose another app…",
+      "pickTitle": "Choose an app",
+      "appsFilter": "Apps",
+      "notAnApp": "That is not an app.",
+      "saveFailed": "The change could not be saved.",
+      "alreadyLinked": "{app} is already linked to “{profile}”. Remove it from there first.",
+      "linkedElsewhere": "{app} is already linked to another profile.",
+      "linkFailed": "Could not link {app}.",
+      "detection": {
+        "needs_extension": "On GNOME the app needs a small extension of its own to know which app is in front.",
+        "needs_relogin": "The extension is in place. Log out and back in for GNOME to load it.",
+        "unavailable": "This desktop does not tell which app is in front, so profiles will not switch by themselves.",
+        "install": "Install the extension"
+      }
+    }
+  },
+  "widgets": {
+    "kinds": {
+      "digitalClock": "Digital clock",
+      "analogClock": "Analog clock",
+      "systemMonitor": "System monitor",
+      "network": "Network",
+      "countdown": "Countdown",
+      "worldClocks": "World clocks",
+      "calendar": "Calendar",
+      "timer": "Timer",
+      "battery": "Battery",
+      "nowPlaying": "Now playing",
+      "temperatures": "Temperatures",
+      "topProcesses": "Top consumers",
+      "latency": "Latency",
+      "volume": "Volume",
+      "moon": "Moon phase",
+      "progress": "Time progress",
+      "stopwatch": "Stopwatch",
+      "counter": "Counter",
+      "wordClock": "Word clock",
+      "phrases": "Phrases",
+      "hassEntity": "Entity",
+      "hassGraph": "Graph of an entity",
+      "hassEntities": "Several entities",
+      "hassPicture": "Camera or image",
+      "hassWeather": "Weather",
+      "hassTemplate": "Template"
+    },
+    "periods": {
+      "day": "Day",
+      "week": "Week",
+      "month": "Month",
+      "year": "Year"
+    },
+    "metrics": {
+      "cpu": "CPU",
+      "ram": "RAM",
+      "gpu": "GPU",
+      "disk": "Disk"
+    },
+    "lines": {
+      "none": "Nothing",
+      "date": "Date",
+      "weekday": "Day of the week",
+      "weekdayDate": "Day of the week and date"
+    },
+    "defaultPhrases": {
+      "first": "One step at a time",
+      "second": "Today is going to go well"
+    },
+    "fields": {
+      "show": "Show",
+      "live": "Live info",
+      "none": "None",
+      "hint": "Updates by itself on the dock. The key keeps its background, image, text and actions; the text stays on top.",
+      "seconds": "Seconds",
+      "showSeconds": "Show the seconds",
+      "format": "Format",
+      "secondLine": "Below the time",
+      "secondHand": "Second hand",
+      "showSecondHand": "Show the second hand",
+      "dateBeside": "Date beside",
+      "dateBesideHint": "Day of the week and date next to the face",
+      "showDate": "Show the date",
+      "timeZone": "Time zone",
+      "label": "Label",
+      "clockPlaceholder": "For example, Tokyo",
+      "clockLabel": "Clock label",
+      "metrics": "Data",
+      "diskHint": "Disk is how full the startup disk is.",
+      "networkHint": "Download and upload speed of all the computer's connections.",
+      "view": "View",
+      "bars": "Bars",
+      "figures": "Figures",
+      "graph": "Graph",
+      "period": "Period",
+      "graphMinutes": "Graph minutes",
+      "minutesUnit": "minutes",
+      "graphNetworkHint": "Download in color and upload in white, scaled to the fastest of the period.",
+      "graphHint": "The app takes readings every 2 seconds while any key has a graph, so it fills up from when you turn it on, up to 24 hours (1440 minutes). Closing the app starts it over.",
+      "until": "Until",
+      "countdownTarget": "Countdown date and time",
+      "countdownPlaceholder": "For example, Holidays",
+      "countdownLabel": "Countdown label",
+      "whenReached": "When reached",
+      "donePlaceholder": "Done!",
+      "whenReachedLabel": "Text when reached",
+      "cities": "Cities",
+      "removeCity": "Remove {city}",
+      "cityName": "Name of {city}",
+      "addCity": "Add city",
+      "citiesHint": "The wide key shows all {max}, side by side; a normal key, the first two. A filled dot is day and a hollow one, night.",
+      "calendarHint": "Today's date and, on the wide key, the whole month with today marked.",
+      "duration": "Duration",
+      "timerMinutes": "Timer minutes",
+      "timerSeconds": "Timer seconds",
+      "timerPlaceholder": "For example, Pomodoro",
+      "timerLabel": "Timer label",
+      "whenDone": "When done",
+      "timeUpPlaceholder": "Time's up!",
+      "whenDoneLabel": "Text when done",
+      "timerHint": "Press the key to start or pause, and hold it to start over. The key's actions still run.",
+      "batteryHint": "The computer's battery charge, whether it is charging and the time left. Turns red below 20 % when unplugged.",
+      "nowPlayingHint": {
+        "macos": "The song in Music or Spotify. The first time, macOS asks permission for the app to check each one.",
+        "windows": "The song of the app playing, if it shows it in Windows' media controls, as Spotify or the browser do.",
+        "linux": "The song of the player playing, if it shares it with the desktop, as Spotify, Rhythmbox or the browser do."
+      },
+      "temperaturesHint": "Of the processor, disk and battery, in degrees. The bar goes from 20 to 100 °C.",
+      "by": "By",
+      "sortBy": "Sort by",
+      "memory": "Memory",
+      "processesHint": "The three apps that use the most, adding up their processes with the same name.",
+      "host": "Host",
+      "hostPlaceholder": "The router",
+      "hostLabel": "Host to ping",
+      "latencyHint": "Pings every 2 seconds and draws the last 2 minutes. Empty, it measures the router; a name or an address such as 1.1.1.1 also works.",
+      "volumeHint": "The computer's output and microphone volume, and whether it is muted.",
+      "moonHint": "The moon phase, how much of it is lit and how long until the full or new moon.",
+      "periods": "Periods",
+      "progressHint": "How much of each has gone by. The week starts on Monday.",
+      "stopwatchPlaceholder": "For example, Meeting",
+      "stopwatchLabel": "Stopwatch label",
+      "stopwatchHint": "Press the key to start or pause, and hold it to reset it.",
+      "counterPlaceholder": "For example, Coffees",
+      "counterLabel": "Counter label",
+      "step": "Each press adds",
+      "stepLabel": "What each press adds",
+      "counterHint": "Hold the key to reset it. It is kept when the app closes; with a negative number, it subtracts.",
+      "wordClockHint": "The time as people say it, in five-minute steps: “It's quarter past three”.",
+      "phrases": "Phrases, one per line",
+      "phrasesLabel": "Phrases",
+      "changeEvery": "Change every",
+      "phraseSeconds": "Seconds between phrases",
+      "secondsUnit": "seconds",
+      "phrasesHint": "Pressing the key moves to the next one. With 0 it only changes when pressed.",
+      "style": "Style",
+      "font": "Font",
+      "textColor": "Text color",
+      "accentColor": "Accent color"
+    },
+    "hass": {
+      "labelPlaceholder": "The entity's name",
+      "entity": "Entity",
+      "shows": "What it shows",
+      "state": "Its state",
+      "iconFailed": "Could not fetch the icon.",
+      "period": "Last",
+      "hours": "Hours of the graph",
+      "hoursUnit": "hours",
+      "label": "Label",
+      "entities": "Entities",
+      "removeEntity": "Remove the entity",
+      "itemLabel": "Label of the entity",
+      "addEntity": "Add entity",
+      "entitiesHint": "Up to {max} side by side on the wide key; square keys show the first two.",
+      "every": "Every",
+      "seconds": "Seconds between pictures",
+      "pictureHint": "Cameras are only asked while their page is on the dock.",
+      "forecast": "With the forecast",
+      "forecastHint": "The next days, on the wide key.",
+      "template": "Template",
+      "templateHint": "A Home Assistant template: it works it out whenever something it reads changes."
+    }
+  },
+  "integrations": {
+    "kinds": {
+      "obs": "OBS Studio",
+      "hass": "Home Assistant"
+    },
+    "about": {
+      "obs": "The app talks to OBS Studio through obs-websocket, which comes with OBS since version 28: nothing to install in OBS.",
+      "hass": "The app talks to Home Assistant through its WebSocket API, with a long-lived access token. It connects as soon as it has an address and follows changes right away."
+    },
+    "new": {
+      "obs": "New OBS server",
+      "hass": "New Home Assistant server"
+    },
+    "edit": {
+      "obs": "OBS server",
+      "hass": "Home Assistant server"
+    },
+    "connect": "Connect",
+    "name": "Name",
+    "nameHint": "To tell it apart in the actions if you have more than one.",
+    "obs": {
+      "host": "Server",
+      "port": "Port",
+      "hostHint": "The computer running OBS: 127.0.0.1 if it is this one.",
+      "password": "Password",
+      "noPassword": "No password",
+      "passwordHint": "Only if OBS has authentication turned on.",
+      "howTo": "In OBS, open Tools → WebSocket Server Settings, turn the server on and copy the port and password here (with “Show Connect Info”)."
+    },
+    "hass": {
+      "url": "Address",
+      "urlHint": "The one you open in the browser: http://homeassistant.local:8123, an IP or your Nabu Casa address.",
+      "insecure": "Accept unverified certificates",
+      "insecureHint": "For a Home Assistant with https and a certificate of its own.",
+      "token": "Access token",
+      "noToken": "Paste the token",
+      "tokenHint": "A long-lived token from your Home Assistant profile.",
+      "howTo": "In Home Assistant, open your profile → Security → Long-lived access tokens, create one and paste it here. It is only shown once.",
+      "openTokens": "Open the tokens page",
+      "remote": "Home Assistant can also move the dock: fire the “taurilanzi” event from an automation with page (a page of the active profile), profile, brightness (0–100) or wake: true to wake it up."
+    },
+    "removeSecret": "Remove from the keychain",
+    "secretSaved": {
+      "macos": "Saved in the macOS keychain.",
+      "windows": "Saved in the Windows Credential Manager.",
+      "linux": "Saved in the desktop keyring."
+    },
+    "remove": "Remove server",
+    "confirmRemove": "Remove “{name}”? Press again",
+    "close": "Close",
+    "save": "Save",
+    "errors": {
+      "name": "Give it a name",
+      "url": "Write the address of Home Assistant",
+      "choose": "Choose the server"
+    },
+    "none": "You have no {kind} server",
+    "noneHint": "Add one for the action to talk to. You will also find it in Settings → Integrations.",
+    "add": "Add {kind} server",
+    "server": "Server",
+    "addAnother": "Add another server…",
+    "editServer": "Edit {name}",
+    "editButton": "Edit",
+    "empty": "No {kind} server yet."
+  }
+}
