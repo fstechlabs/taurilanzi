@@ -228,6 +228,29 @@ describe('the key editor', () => {
     await shot('5-edited')
   })
 
+  it('paints any image in one color, or leaves its own', async () => {
+    const colors = $('[aria-label="Colores de la imagen"]')
+    await expect(text('Original', colors)).toHaveAttribute('data-state', 'on')
+    await expect($('[data-color-picker][aria-label="Color del icono"]')).not.toBeExisting()
+    let src = await previewSrc()
+
+    await browser.pause(1100)
+    await text('Un color', colors).click()
+    await setColor('Color del icono', '#ff0066')
+    src = await previewChange(src)
+    await saved()
+    const painted = (await storedKey(index))!.appearance.layers[0]!
+    expect(painted).toMatchObject({ type: 'image', tint: { r: 255, g: 0, b: 102 } })
+    await shot('5b-one-color')
+
+    await browser.pause(1100)
+    await text('Original', colors).click()
+    await expect($('[data-color-picker][aria-label="Color del icono"]')).not.toBeExisting()
+    await previewChange(src)
+    await saved()
+    expect((await storedKey(index))!.appearance.layers[0]).toMatchObject({ type: 'image', tint: null })
+  })
+
   it('undoes and redoes edits, and clears the key', async () => {
     await browser.pause(1100)
     await named('Texto de la tecla').setValue('Cambio')

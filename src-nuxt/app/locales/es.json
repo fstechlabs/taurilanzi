@@ -1072,7 +1072,10 @@
       "iconColor": "Color del icono",
       "fit": "Encajar",
       "cover": "Rellenar",
-      "inset": "Margen"
+      "inset": "Margen",
+      "originalColors": "Original",
+      "oneColor": "Un color",
+      "colors": "Colores de la imagen"
     },
     "text": {
       "title": "Texto",

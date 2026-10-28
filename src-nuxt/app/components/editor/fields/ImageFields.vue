@@ -54,6 +54,13 @@ function pick(event: Event) {
   ;(event.target as HTMLInputElement).value = ''
 }
 
+/** Any image can take one color over its shape; icons of the search start with the text's. */
+function setTint(on: boolean) {
+  if (draft.value.image) {
+    draft.value.image.tint = on ? (draft.value.image.tint ?? draft.value.text?.color ?? '#ffffff') : null
+  }
+}
+
 function useOriginal() {
   if (draft.value.image) {
     draft.value.image = { ...draft.value.image, asset: draft.value.image.source, crop: null }
@@ -102,9 +109,25 @@ function useOriginal() {
           <Trash2 />
         </Button>
       </div>
-      <div v-if="draft.image.icon && draft.image.tint !== null" class="flex items-center gap-3">
+      <div class="flex items-center gap-3">
         <span class="w-14 text-xs text-muted-foreground">{{ t('editor.image.color') }}</span>
-        <ColorPicker v-model="draft.image.tint" :label="t('editor.image.iconColor')" />
+        <ToggleGroup
+          :model-value="draft.image.tint === null ? 'original' : 'tint'"
+          type="single"
+          variant="outline"
+          size="sm"
+          class="flex-1"
+          :aria-label="t('editor.image.colors')"
+          @update:model-value="v => v && setTint(v === 'tint')"
+        >
+          <ToggleGroupItem value="original" class="flex-1">
+            {{ t('editor.image.originalColors') }}
+          </ToggleGroupItem>
+          <ToggleGroupItem value="tint" class="flex-1">
+            {{ t('editor.image.oneColor') }}
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <ColorPicker v-if="draft.image.tint !== null" v-model="draft.image.tint" :label="t('editor.image.iconColor')" />
       </div>
       <ToggleGroup
         v-if="!draft.image.crop"

@@ -1072,7 +1072,10 @@
       "iconColor": "Icon color",
       "fit": "Fit",
       "cover": "Fill",
-      "inset": "Margin"
+      "inset": "Margin",
+      "originalColors": "Original",
+      "oneColor": "One color",
+      "colors": "Image colors"
     },
     "text": {
       "title": "Text",

@@ -23,7 +23,7 @@ pub fn build(design: &KeyDesign, (width, height): (u32, u32)) -> String {
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">"#
     );
     write_background(&mut svg, &design.background, w, h);
-    for layer in &design.layers {
+    for (index, layer) in design.layers.iter().enumerate() {
         match layer {
             Layer::Image {
                 image,
@@ -37,9 +37,16 @@ pub fn build(design: &KeyDesign, (width, height): (u32, u32)) -> String {
                     Fit::Contain => "xMidYMid meet",
                     Fit::Cover => "xMidYMid slice",
                 };
+                let filter = match tint.filter(|_| !paints_with_current_color(image)) {
+                    Some(color) => {
+                        let _ = write!(svg, "{}", silhouette(index, color));
+                        format!(r#" filter="url(#tint{index})""#)
+                    }
+                    None => String::new(),
+                };
                 let _ = write!(
                     svg,
-                    r#"<image x="{dx}" y="{dy}" width="{}" height="{}" preserveAspectRatio="{aspect}" href="data:{};base64,{}"/>"#,
+                    r#"<image x="{dx}" y="{dy}" width="{}" height="{}" preserveAspectRatio="{aspect}"{filter} href="data:{};base64,{}"/>"#,
                     w - 2.0 * dx,
                     h - 2.0 * dy,
                     image.format.mime(),
@@ -167,6 +174,22 @@ fn first_baseline(position: VerticalPosition, lines: usize, size: f32, h: f32) -
         VerticalPosition::Middle => (h - block + size * CAP_HEIGHT) / 2.0,
         VerticalPosition::Bottom => h - SAFE_MARGIN - block - size * (1.0 - ASCENT),
     }
+}
+
+/// Icons of the icon search paint with `currentColor`, which a tint replaces: they keep their
+/// lines and see-through parts exactly.
+fn paints_with_current_color(image: &ImageData) -> bool {
+    image.format == ImageFormat::Svg
+        && std::str::from_utf8(&image.bytes).is_ok_and(|text| text.contains("currentColor"))
+}
+
+/// Any other image, an uploaded icon or a picture, takes the tint as a single color over its
+/// shape: whatever is not transparent.
+fn silhouette(index: usize, color: Color) -> String {
+    format!(
+        r#"<filter id="tint{index}" color-interpolation-filters="sRGB"><feFlood flood-color="{}"/><feComposite in2="SourceAlpha" operator="in"/></filter>"#,
+        color.hex()
+    )
 }
 
 pub(super) fn tinted(image: &ImageData, tint: Option<Color>) -> Vec<u8> {

@@ -134,4 +134,36 @@ mod tests {
         let center = (98 * 196 + 98) * 4;
         assert_eq!(&pixels[center..center + 3], &[0, 255, 0]);
     }
+
+    fn tinted_icon(icon: &str, tint: Color) -> Vec<u8> {
+        let design = KeyDesign {
+            background: Background::Solid {
+                color: Color::BLACK,
+            },
+            layers: vec![Layer::Image {
+                image: crate::render::design::ImageData {
+                    format: crate::render::design::ImageFormat::Svg,
+                    bytes: Arc::from(icon.as_bytes()),
+                },
+                fit: crate::render::design::Fit::Contain,
+                inset: 0.25,
+                tint: Some(tint),
+            }],
+        };
+        decode(&renderer().render(&design, (196, 196)).unwrap()).2
+    }
+
+    #[test]
+    fn tints_icons_of_any_color_and_leaves_their_background_alone() {
+        let blue = Color::rgb(0, 102, 255);
+        let white = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="white"/></svg>"##;
+        let current = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="currentColor"/></svg>"##;
+        for icon in [white, current] {
+            let pixels = tinted_icon(icon, blue);
+            let center = (98 * 196 + 98) * 4;
+            assert_eq!(&pixels[center..center + 3], &[0, 102, 255]);
+            let corner = (4 * 196 + 4) * 4;
+            assert_eq!(&pixels[corner..corner + 3], &[0, 0, 0], "outside the icon");
+        }
+    }
 }
