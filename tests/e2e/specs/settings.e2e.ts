@@ -30,10 +30,11 @@ async function until(check: () => Promise<boolean>, timeoutMsg: string) {
 }
 
 describe('the settings', () => {
-  it('shows the account in the sidebar, not available yet', async () => {
-    const account = $('//aside//*[@aria-disabled="true"][contains(., "Cuenta")]')
+  it('shows the account in the sidebar, which leads to the cloud', async () => {
+    const account = $('[data-sidebar-account]')
     await expect(account).toBeDisplayed()
-    await expect(account).toHaveText(expect.stringContaining('Pronto'))
+    await expect(account).toHaveText(expect.stringContaining('Cuenta'))
+    await expect(account).toHaveText(expect.stringContaining('Conectar'))
   })
 
   it('opens from the sidebar with every section', async () => {

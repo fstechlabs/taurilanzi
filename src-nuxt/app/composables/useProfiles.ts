@@ -46,8 +46,14 @@ export function useProfiles() {
     return copy
   }
 
-  async function remove(id: string) {
-    await call(commands.deleteProfile(id))
+  /** A synced profile goes from every computer and the cloud, or, without `everywhere`, from this one only. */
+  async function remove(id: string, everywhere = true) {
+    await call(commands.deleteProfile(id, everywhere))
+  }
+
+  /** Kept here only, the other computers keep their copy with `keepInCloud` and lose it without. */
+  async function setLocal(id: string, local: boolean, keepInCloud = false) {
+    await call(commands.setProfileLocal(id, local, keepInCloud))
   }
 
   async function moveTo(id: string, index: number) {
@@ -109,6 +115,7 @@ export function useProfiles() {
     rename,
     duplicate,
     remove,
+    setLocal,
     moveTo,
     link,
     unlink,

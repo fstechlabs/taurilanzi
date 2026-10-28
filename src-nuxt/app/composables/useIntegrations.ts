@@ -51,7 +51,7 @@ export function useIntegrations() {
     await call(commands.deleteIntegration(id))
   }
 
-  /** Saves the password of an OBS or the token of a Home Assistant in the keychain; null removes it. */
+  /** Saves the password of an OBS or the token of a Home Assistant with the secrets; null removes it. */
   async function saveSecret(integration: Integration, secret: string | null) {
     if (integration.kind === 'obs') {
       await call(commands.obsSetPassword(integration.id, secret))

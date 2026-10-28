@@ -4,6 +4,7 @@ mod actions;
 #[cfg(target_os = "macos")]
 mod app_menu;
 mod clients;
+mod cloud;
 mod config;
 mod driver;
 mod engine;
@@ -84,6 +85,12 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(|app, event| {
+        // What changed in the last minutes reaches the other computers before this one is off.
+        if let RunEvent::Exit = event
+            && let Some(cloud) = app.try_state::<cloud::Cloud>()
+        {
+            cloud.flush(std::time::Duration::from_secs(5));
+        }
         if let RunEvent::Exit = event
             && let Some(plugins) = app.try_state::<Option<std::sync::Arc<plugins::Plugins>>>()
             && let Some(plugins) = plugins.inner()

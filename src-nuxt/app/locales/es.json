@@ -856,12 +856,8 @@
       "saveCode": "Guardar",
       "removeCode": "Quitar el código",
       "codeFailed": "No se pudo guardar el código.",
-      "codeSaved": {
-        "macos": "Código guardado en el llavero de macOS.",
-        "windows": "Código guardado en el Administrador de credenciales de Windows.",
-        "linux": "Código guardado en el llavero del escritorio."
-      },
-      "codeHint": "Si Home Assistant pide un código para esta entidad, guárdalo aquí: va al llavero, no a la configuración.",
+      "codeSaved": "Código guardado.",
+      "codeHint": "Si Home Assistant pide un código para esta entidad, guárdalo aquí: se guarda aparte de las teclas y no se vuelve a mostrar.",
       "call": {
         "choose": "Elige",
         "remove": "Quitar {name}",
@@ -1322,7 +1318,8 @@
       "new-keys": "Teclas nuevas",
       "idle": "Bloqueo y reposo",
       "profiles": "Perfiles",
-      "integrations": "Integraciones"
+      "integrations": "Integraciones",
+      "cloud": "Cloud"
     },
     "general": {
       "language": "Idioma",
@@ -1398,6 +1395,36 @@
       "linkedAppsHint": "Cada app puede estar vinculada a un solo perfil. También se editan desde el menú de cada perfil (clic derecho o ⋯ en la barra lateral).",
       "noApps": "Ninguna app",
       "edit": "Editar"
+    },
+    "cloud": {
+      "title": "Cloud",
+      "about": "Sincroniza tus perfiles y ajustes entre tus equipos con tu cuenta de Taurilanzi Cloud. Se guardan cifrados, con todas sus versiones.",
+      "aboutSignedIn": "Los perfiles y los ajustes se sincronizan cada 5 minutos y al salir de la app. Los perfiles marcados como «solo en este equipo» se quedan aquí.",
+      "connect": "Conectar este equipo",
+      "connectHint": "Se abre el navegador para entrar con tu cuenta.",
+      "waiting": "Esperando al navegador… Entra con tu cuenta y acepta conectar este equipo.",
+      "signIn": "Conectar",
+      "cancel": "Cancelar",
+      "syncing": "Sincronizando…",
+      "paused": "Sincronización parada",
+      "lastSync": "Sincronizado: {when}",
+      "neverSynced": "Aún no se ha sincronizado",
+      "syncNow": "Sincronizar ahora",
+      "running": "Sincronización automática",
+      "runningHint": "Los cambios suben y bajan solos cada 5 minutos.",
+      "stopped": "Sincronización parada",
+      "stoppedHint": "Ni se suben los cambios de este equipo ni llegan los de los demás hasta que la reanudes.",
+      "stop": "Parar la sincronización",
+      "resume": "Reanudar",
+      "versions": "Versiones",
+      "versionsHint": "En la web ves todas las versiones de cada perfil y puedes volver a cualquiera.",
+      "openWeb": "Abrir en la web",
+      "signOut": "Desconectar este equipo",
+      "signOutHint": "Los perfiles se quedan aquí como están y en el cloud para tus otros equipos.",
+      "signOutButton": "Desconectar",
+      "elsewhere": "En el cloud, no en este equipo",
+      "elsewhereHint": "Perfiles que borraste solo aquí. Siguen en el cloud y en tus otros equipos.",
+      "bringBack": "Traer a este equipo"
     }
   },
   "shell": {
@@ -1409,9 +1436,14 @@
       "connected": "Conectado",
       "disconnected": "Desconectado",
       "account": "Cuenta",
-      "accountHint": "Inicia sesión para guardar tu configuración en la nube. Disponible pronto.",
-      "soon": "Pronto",
-      "settings": "Ajustes"
+      "accountHint": "Conecta este equipo a tu cuenta para sincronizar tus perfiles con el cloud.",
+      "settings": "Ajustes",
+      "connect": "Conectar",
+      "syncing": "Sincronizando…",
+      "sync": "Sincronizar",
+      "syncOutgoing": "Hay cambios de este equipo sin subir al cloud",
+      "syncIncoming": "Hay cambios de otros equipos en el cloud",
+      "accountConnected": "Este equipo está conectado al cloud"
     },
     "statusBar": {
       "starting": "Arrancando…",
@@ -1452,7 +1484,9 @@
         "rename": "Renombrar",
         "duplicate": "Duplicar",
         "apps": "Apps vinculadas…",
-        "delete": "Eliminar"
+        "delete": "Eliminar",
+        "sync": "Sincronizar con el cloud",
+        "local": "Solo en este equipo…"
       },
       "errors": {
         "rename": "No se pudo renombrar el perfil.",
@@ -1461,8 +1495,20 @@
         "switch": "No se pudo cambiar de perfil.",
         "duplicate": "No se pudo duplicar el perfil.",
         "delete": "No se pudo eliminar el perfil.",
-        "move": "No se pudo mover el perfil."
-      }
+        "move": "No se pudo mover el perfil.",
+        "sync": "No se pudo cambiar la sincronización del perfil."
+      },
+      "localOnly": "Solo en este equipo",
+      "deleteTitle": "¿Eliminar «{name}»?",
+      "deleteBody": "Este perfil se sincroniza con el cloud. Si lo eliminas en todos los equipos, desaparece también del cloud y de tus otros equipos, aunque puedes recuperarlo desde las versiones en la web. Si lo eliminas solo aquí, sigue en el cloud y en los demás.",
+      "deleteHere": "Solo en este equipo",
+      "deleteEverywhere": "En todos los equipos",
+      "localTitle": "¿Dejar «{name}» solo en este equipo?",
+      "localBody": "Dejará de sincronizarse. ¿Lo quitamos también del cloud y de tus otros equipos, o se quedan con su copia?",
+      "localKeepCloud": "Que se queden su copia",
+      "localRemoveCloud": "Quitarlo de los demás",
+      "notSynced": "Con cambios sin subir al cloud",
+      "synced": "Sincronizado con el cloud"
     },
     "linkedApps": {
       "title": "Apps de «{name}»",
@@ -1702,12 +1748,8 @@
       "openTokens": "Abrir la página de tokens",
       "remote": "Home Assistant también puede mover el dock: lanza desde una automatización el evento «taurilanzi» con page (una página del perfil activo), profile, brightness (0–100) o wake: true para despertarlo."
     },
-    "removeSecret": "Quitar del llavero",
-    "secretSaved": {
-      "macos": "Guardado en el llavero de macOS.",
-      "windows": "Guardado en el Administrador de credenciales de Windows.",
-      "linux": "Guardado en el llavero del escritorio."
-    },
+    "removeSecret": "Borrar la contraseña o el token",
+    "secretSaved": "Guardado.",
     "remove": "Quitar servidor",
     "confirmRemove": "¿Quitar «{name}»? Pulsa otra vez",
     "close": "Cerrar",
@@ -1725,5 +1767,13 @@
     "editServer": "Editar {name}",
     "editButton": "Editar",
     "empty": "Todavía no hay ningún servidor de {kind}."
+  },
+  "cloudJoin": {
+    "title": "Tu cuenta ya tiene perfiles",
+    "body": "Hay {count} perfiles en el cloud. ¿Qué hacemos con los de este equipo?",
+    "merge": "Juntar los dos",
+    "mergeHint": "Juntar: los perfiles de este equipo se suben y los del cloud llegan aquí. Todos los equipos ven todos.",
+    "replace": "Usar solo los del cloud",
+    "replaceHint": "Usar solo los del cloud: los perfiles de este equipo se borran y se quedan los del cloud."
   }
 }

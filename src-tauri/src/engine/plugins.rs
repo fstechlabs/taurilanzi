@@ -664,6 +664,7 @@ mod tests {
             profiles: vec![profile],
             plugin_settings: Default::default(),
             integrations: Vec::new(),
+            local_profiles: Default::default(),
         };
         let (dock, _) = D200::detached();
         let (events, _) = broadcast::channel(16);

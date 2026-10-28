@@ -326,5 +326,29 @@
   },
   "integrations": {
     "missing": "That server is no longer in the integrations"
+  },
+  "cloud": {
+    "unnamedComputer": "Unnamed computer",
+    "problems": {
+      "newer": "The cloud has profiles saved by a newer version of the app. Update it to get them.",
+      "signedOut": "This computer was disconnected from the cloud on the web. Connect it again to sync.",
+      "offline": "Could not reach the cloud. It will try again in a few minutes.",
+      "failed": "The last sync failed: {error}",
+      "full": "Your cloud space is full: the current profiles do not fit even after deleting old versions. Remove images or profiles you do not use to keep syncing."
+    },
+    "browser": {
+      "doneTitle": "Computer connected",
+      "done": "You can close this tab and go back to {name}.",
+      "deniedTitle": "Not connected",
+      "denied": "Go back to {name} to try again."
+    },
+    "errors": {
+      "busy": "This computer is already connecting.",
+      "cancelled": "Connection cancelled.",
+      "denied": "The account did not allow this computer.",
+      "timedOut": "The browser did not come back in time. Try again.",
+      "offline": "Could not reach the cloud.",
+      "failed": "Could not reach the cloud: {error}"
+    }
   }
 }

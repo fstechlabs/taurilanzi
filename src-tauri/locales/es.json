@@ -326,5 +326,29 @@
   },
   "integrations": {
     "missing": "Ese servidor ya no está en las integraciones"
+  },
+  "cloud": {
+    "unnamedComputer": "Equipo sin nombre",
+    "problems": {
+      "newer": "El cloud tiene perfiles guardados con una versión más nueva de la app. Actualízala para recibirlos.",
+      "signedOut": "Este equipo se desconectó del cloud desde la web. Vuelve a conectarlo para sincronizar.",
+      "offline": "No se pudo conectar con el cloud. Se volverá a intentar en unos minutos.",
+      "failed": "La última sincronización falló: {error}",
+      "full": "Tu espacio en el cloud está lleno: los perfiles actuales no caben aunque se borren las versiones antiguas. Quita imágenes o perfiles que no uses para seguir sincronizando."
+    },
+    "browser": {
+      "doneTitle": "Equipo conectado",
+      "done": "Ya puedes cerrar esta pestaña y volver a {name}.",
+      "deniedTitle": "No se ha conectado",
+      "denied": "Vuelve a {name} para intentarlo otra vez."
+    },
+    "errors": {
+      "busy": "Este equipo ya se está conectando.",
+      "cancelled": "Conexión cancelada.",
+      "denied": "La cuenta no ha dado permiso a este equipo.",
+      "timedOut": "El navegador no volvió a tiempo. Inténtalo otra vez.",
+      "offline": "No se pudo conectar con el cloud.",
+      "failed": "No se pudo conectar con el cloud: {error}"
+    }
   }
 }

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -29,6 +29,9 @@ pub struct Config {
     /// The OBS Studios and Home Assistants keys talk to.
     #[serde(default)]
     pub integrations: Vec<Integration>,
+    /// Profiles kept on this computer only, out of the cloud. The others are synced.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub local_profiles: BTreeSet<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
@@ -393,6 +396,7 @@ mod tests {
             profiles: vec![profile],
             plugin_settings: Default::default(),
             integrations: Vec::new(),
+            local_profiles: Default::default(),
         };
         let json = serde_json::to_string(&config).unwrap();
         assert_eq!(serde_json::from_str::<Config>(&json).unwrap(), config);

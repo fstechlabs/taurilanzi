@@ -42,7 +42,7 @@ pub enum HassCommand {
         entity: String,
         color: Color,
     },
-    /// The code, if the panel needs one, lives in the keychain.
+    /// The code, if the panel needs one, lives with the secrets.
     Alarm {
         entity: String,
         mode: HassAlarm,

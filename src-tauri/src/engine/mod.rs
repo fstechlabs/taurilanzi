@@ -25,6 +25,7 @@ mod results;
 mod runtime;
 mod screen;
 mod snapshot;
+mod sync;
 mod widgets;
 
 pub use commands::{CommandError, KeySlot, PageChanges};

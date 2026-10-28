@@ -9,6 +9,7 @@ use tokio::sync::broadcast;
 
 use super::commands::Input;
 use super::handle::{Activity, EngineHandle};
+use super::integrations::secret_accounts;
 use super::plugins::PluginKeys;
 use super::runtime::{Engine, Links};
 use crate::actions;
@@ -26,7 +27,7 @@ const LOCK_FILE: &str = "engine.lock";
 
 pub struct Launch {
     pub data_dir: PathBuf,
-    /// The app's, which keeps its keychain entries apart from other builds'.
+    /// The app's, under which earlier versions kept their secrets in the keychain.
     pub identifier: String,
     /// Off in tests, so they never take the dock from the app the user is running.
     pub dock: bool,
@@ -142,13 +143,15 @@ pub fn start(launch: Launch) -> Result<Running, LaunchError> {
             }
         })?;
 
+    let secrets = Secrets::new(&launch.data_dir, &launch.identifier);
+    secrets.migrate_from_keychain(&secret_accounts(&config));
     let assets = store.assets.clone();
     let context = actions::Context {
         assets: assets.clone(),
         sounds: actions::SoundPlayer::start(),
         obs,
         hass,
-        secrets: Secrets::new(&launch.data_dir, &launch.identifier),
+        secrets,
     };
     thread::Builder::new()
         .name("engine".into())

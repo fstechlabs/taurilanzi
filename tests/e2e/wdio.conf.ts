@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { APP_BINARY } from './build'
-import { COMMUNITY_PORT, shot } from './helpers'
+import { CLOUD_PORT, COMMUNITY_PORT, shot } from './helpers'
 
 // The launcher and each worker load this file; they share the folder through the environment.
 const data = (process.env.TAURILANZI_E2E_DATA ??= mkdtempSync(join(tmpdir(), 'taurilanzi-e2e-')))
@@ -15,6 +15,7 @@ const appOptions = {
     // The specs read the Spanish texts.
     TAURILANZI_LANGUAGE: 'es',
     TAURILANZI_COMMUNITY_CATALOG: `http://127.0.0.1:${COMMUNITY_PORT}/catalog.json`,
+    TAURILANZI_CLOUD: `http://127.0.0.1:${CLOUD_PORT}`,
   },
   captureBackendLogs: true,
   backendLogLevel: 'warn' as const,

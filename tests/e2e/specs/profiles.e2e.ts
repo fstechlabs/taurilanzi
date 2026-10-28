@@ -127,7 +127,7 @@ describe('the profiles', () => {
 
   it('never deletes the last profile', async () => {
     for (const name of ['Oficina (copia)', 'Oficina']) {
-      await engine('delete_profile', { profile: (await profileNamed(name)).id })
+      await engine('delete_profile', { profile: (await profileNamed(name)).id, everywhere: true })
     }
     await until(async () => (await names()).length === 1, 'the profiles were not deleted')
     await openMenu('Predeterminado')

@@ -67,6 +67,9 @@ for Ulanzi Studio, so you can switch without losing what you already use.
 ### Profiles that follow you
 - Several profiles, each linked to the apps you use: switch to an app and the dock switches with
   it.
+- Optional sync with a Taurilanzi Cloud account: your profiles and settings, passwords included,
+  stay the same on all your computers. They are stored encrypted, with their versions, so you can
+  go back to an earlier one, and any profile can stay on one computer only.
 
 ### Live content on the wide key
 Twenty widgets that keep themselves up to date on the dock:

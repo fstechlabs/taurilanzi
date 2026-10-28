@@ -56,6 +56,8 @@ pub struct ProfileSummary {
     pub id: Uuid,
     pub name: String,
     pub apps: Vec<AppRef>,
+    /// Kept on this computer only, out of the cloud.
+    pub local: bool,
 }
 
 #[derive(Debug, Clone)]

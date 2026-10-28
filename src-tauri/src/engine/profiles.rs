@@ -80,6 +80,9 @@ impl Engine {
             .unwrap_or(copy.home_page);
         let copy_id = copy.id;
         self.config.profiles.insert(at + 1, copy);
+        if self.config.local_profiles.contains(&id) {
+            self.config.local_profiles.insert(copy_id);
+        }
         self.save()?;
         Ok(copy_id)
     }
@@ -368,6 +371,7 @@ mod tests {
             profiles,
             plugin_settings: Default::default(),
             integrations: Vec::new(),
+            local_profiles: Default::default(),
         };
         let (dock, _) = D200::detached();
         let (events, _) = broadcast::channel(16);

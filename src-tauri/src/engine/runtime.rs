@@ -24,6 +24,7 @@ use super::plugins::{PluginKeys, plugin_action};
 use super::results::Results;
 use super::screen::Screen;
 use super::snapshot::{EngineEvent, ProfileSummary, Snapshot};
+use super::sync::Saved;
 use super::widgets::Feeds;
 use crate::actions;
 use crate::config::{
@@ -82,6 +83,9 @@ pub struct Engine {
     /// Each Home Assistant server as its client last reported it.
     pub(super) hass: BTreeMap<Uuid, HassReport>,
     pub(super) hass_wants: BTreeMap<Uuid, HassWants>,
+    /// When each profile, and the settings, were last edited since the app started.
+    pub(super) edited: BTreeMap<Uuid, jiff::Timestamp>,
+    pub(super) saved: Saved,
 }
 
 /// How the engine talks to the rest of the app.
@@ -110,6 +114,10 @@ impl Engine {
         let navigation = store.load_navigation();
         let key_widgets = KeyWidgets::with_counters(store.load_counters());
         let app_profiles = AppProfiles::new(config.active_profile);
+        let mut config = config;
+        let exists: HashSet<Uuid> = config.profiles.iter().map(|p| p.id).collect();
+        config.local_profiles.retain(|id| exists.contains(id));
+        let saved = Saved::of(&config);
         Self {
             store,
             config,
@@ -141,6 +149,8 @@ impl Engine {
             obs_wants: BTreeMap::new(),
             hass: BTreeMap::new(),
             hass_wants: BTreeMap::new(),
+            edited: BTreeMap::new(),
+            saved,
         }
     }
 
@@ -404,6 +414,17 @@ impl Engine {
                 let result = self.delete_integration(id);
                 self.respond(reply, result);
             }
+            Command::SyncExport(reply) => {
+                let _ = reply.send(self.sync_export());
+            }
+            Command::ApplySync { changes, reply } => {
+                let result = self.apply_sync(changes);
+                self.respond(reply, result);
+            }
+            Command::SetProfileLocal { id, local, reply } => {
+                let result = self.set_profile_local(id, local);
+                self.respond(reply, result);
+            }
         }
     }
 
@@ -426,6 +447,7 @@ impl Engine {
                     id: p.id,
                     name: p.name.clone(),
                     apps: p.apps.clone(),
+                    local: self.config.local_profiles.contains(&p.id),
                 })
                 .collect(),
             active_profile: self.config.active_profile,
@@ -557,6 +579,7 @@ impl Engine {
 
     pub(super) fn save(&mut self) -> Result<(), CommandError> {
         self.store.save(&mut self.config)?;
+        self.note_edits();
         self.changed = true;
         self.prune_assets();
         self.update_sampling();

@@ -302,6 +302,7 @@ mod tests {
             profiles: vec![profile],
             plugin_settings: Default::default(),
             integrations: Vec::new(),
+            local_profiles: Default::default(),
         }
     }
 

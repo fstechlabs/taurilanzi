@@ -92,11 +92,11 @@ bun scripts/serve-updates.ts     # http://127.0.0.1:8787/latest.json
 ```
 
 Development builds are another app: `tauri.conf.json` names them "Taurilanzi Local Dev"
-(`com.taurilanzi.dev`), with their own data folder, keychain entries, single-instance lock and
-login item, so they run next to the released app without touching it. Only `scripts/build-app.ts`
-gives the released name and identifier, from `src-tauri/tauri.bundle.json`. Texts that name the
-app read it from the build (`package_info().name` in Rust, `name` of `useEngine()` in the UI);
-never write "Taurilanzi" in them.
+(`com.taurilanzi.dev`), with their own data folder, single-instance lock and login item, so they
+run next to the released app without touching it. Only `scripts/build-app.ts` gives the released
+name and identifier, from `src-tauri/tauri.bundle.json`. Texts that name the app read it from the
+build (`package_info().name` in Rust, `name` of `useEngine()` in the UI); never write
+"Taurilanzi" in them.
 
 `tauri dev` watches `src-tauri`: every Rust change rebuilds and relaunches the app, and the window
 jumps to the front. So it is stopped before starting work (see workflow) and launched again at the
@@ -123,6 +123,9 @@ App environment variables:
 - `TAURILANZI_COMMUNITY_CATALOG=<url>` reads another community plugin catalog (the e2e tests serve
   their own).
 - `TAURILANZI_LANGUAGE=es|en` stands in for the system's language.
+- `TAURILANZI_CLOUD=<url>` syncs with another cloud. Without it the released app syncs with
+  `https://taurilanzi.com` and development builds with `taurilanzi-cloud` running locally
+  (`http://localhost:3000`).
 
 Python always through `uv` (`uv run`, scripts with PEP 723 dependencies), never `python`/`pip`
 directly.
@@ -206,6 +209,15 @@ Commits, versions and releases:
 - The UI only talks to the engine (Tauri IPC) and to `api.iconify.design` (icon search). Any
   other third party needs the CSP in `tauri.conf.json` opened and a discussion first. External
   links open in the browser with `openExternal` (`opener` plugin, limited to `https://`).
+- Passwords, tokens and codes live in `secrets.json` in the data folder (readable by the user
+  only), never in the configuration nor in the system keychain, which asked for the user's
+  password again after every update of an unsigned build. What earlier versions left in the
+  keychain is moved once (`src/secrets`).
+- Sync with Taurilanzi Cloud lives in `src/cloud` (the server is the `taurilanzi-cloud` repo). Each
+  profile, and the settings every computer shares (secrets included), is a document whose versions
+  the cloud keeps forever: the most recent edit wins and the other stays as a branch. Profiles in
+  `local_profiles` stay on this computer. Only the engine talks to the cloud, never the UI, and
+  its API is a contract with installed versions: change it only in ways they still understand.
 - Right click never shows the browser menu (blocked in the layout); custom context menus open
   with `useContextMenu().open(event, items)`.
 - In development Nuxt does not register new shadcn components and Tailwind does not see new files

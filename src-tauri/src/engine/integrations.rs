@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 use super::commands::{CommandError, Input};
 use super::runtime::Engine;
-use crate::config::Integration;
-use crate::hass::{Hass, token_account};
+use crate::config::{Action, Config, Integration};
+use crate::hass::{Hass, code_account, token_account};
 use crate::obs::{Obs, password_account};
 
 impl Engine {
@@ -93,5 +93,110 @@ impl Engine {
             warn!("could not delete the secret of a removed server: {err}");
         }
         Ok(())
+    }
+}
+
+/// Where the secrets of the configuration are kept: passwords and tokens of its servers, and the
+/// codes its keys use.
+pub(super) fn secret_accounts(config: &Config) -> Vec<String> {
+    let servers = config.integrations.iter().map(|i| match i {
+        Integration::Obs { id, .. } => password_account(*id),
+        Integration::HomeAssistant { id, .. } => token_account(*id),
+    });
+    let codes = config
+        .profiles
+        .iter()
+        .flat_map(|p| &p.pages)
+        .flat_map(|page| page.keys.values())
+        .flat_map(|key| key.all_actions())
+        .filter_map(|action| match action {
+            Action::HomeAssistant { server, command } => {
+                command.entity().map(|entity| code_account(*server, entity))
+            }
+            _ => None,
+        });
+    let mut accounts: Vec<String> = servers.chain(codes).collect();
+    accounts.sort();
+    accounts.dedup();
+    accounts
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use uuid::Uuid;
+
+    use super::*;
+    use crate::config::{Appearance, DeviceSettings, HassCommand, Key, Page, Position, Profile};
+    use crate::render::{Background, Color};
+
+    #[test]
+    fn lists_the_secrets_of_the_servers_and_of_the_keys_codes() {
+        let (obs, hass) = (Uuid::from_u128(1), Uuid::from_u128(2));
+        let key = Key {
+            appearance: Appearance {
+                background: Background::Solid {
+                    color: Color::BLACK,
+                },
+                layers: Vec::new(),
+            },
+            actions: vec![Action::HomeAssistant {
+                server: hass,
+                command: HassCommand::Run {
+                    entity: "lock.door".into(),
+                },
+            }],
+            double_press: Vec::new(),
+            long_press: Vec::new(),
+            second_state: None,
+        };
+        let page = Page {
+            id: Uuid::new_v4(),
+            name: "Inicio".into(),
+            keys: BTreeMap::from([(0, key)]),
+            position: Position::default(),
+        };
+        let config = Config {
+            schema: 2,
+            revision: 0,
+            device: DeviceSettings {
+                brightness: 50,
+                sleep_minutes: 0,
+            },
+            preferences: Default::default(),
+            active_profile: Uuid::nil(),
+            profiles: vec![Profile {
+                id: Uuid::nil(),
+                name: "P".into(),
+                home_page: page.id,
+                pages: vec![page],
+                apps: Vec::new(),
+            }],
+            plugin_settings: Default::default(),
+            integrations: vec![
+                Integration::Obs {
+                    id: obs,
+                    name: "OBS".into(),
+                    host: "127.0.0.1".into(),
+                    port: 4455,
+                },
+                Integration::HomeAssistant {
+                    id: hass,
+                    name: "Casa".into(),
+                    url: "http://casa.local:8123".into(),
+                    insecure: false,
+                },
+            ],
+            local_profiles: Default::default(),
+        };
+        assert_eq!(
+            secret_accounts(&config),
+            [
+                code_account(hass, "lock.door"),
+                token_account(hass),
+                password_account(obs),
+            ]
+        );
     }
 }

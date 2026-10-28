@@ -856,12 +856,8 @@
       "saveCode": "Save",
       "removeCode": "Remove the code",
       "codeFailed": "Could not save the code.",
-      "codeSaved": {
-        "macos": "Code saved in the macOS keychain.",
-        "windows": "Code saved in the Windows Credential Manager.",
-        "linux": "Code saved in the desktop keyring."
-      },
-      "codeHint": "If Home Assistant asks for a code for this entity, save it here: it goes to the keychain, not the configuration.",
+      "codeSaved": "Code saved.",
+      "codeHint": "If Home Assistant asks for a code for this entity, save it here: it is kept apart from the keys and never shown again.",
       "call": {
         "choose": "Choose",
         "remove": "Remove {name}",
@@ -1322,7 +1318,8 @@
       "new-keys": "New keys",
       "idle": "Lock and idle",
       "profiles": "Profiles",
-      "integrations": "Integrations"
+      "integrations": "Integrations",
+      "cloud": "Cloud"
     },
     "general": {
       "language": "Language",
@@ -1398,6 +1395,36 @@
       "linkedAppsHint": "Each app can be linked to a single profile. They can also be edited from each profile's menu (right click or ⋯ in the sidebar).",
       "noApps": "No apps",
       "edit": "Edit"
+    },
+    "cloud": {
+      "title": "Cloud",
+      "about": "Sync your profiles and settings between your computers with your Taurilanzi Cloud account. They are stored encrypted, with every version.",
+      "aboutSignedIn": "Profiles and settings sync every 5 minutes and when you quit the app. Profiles marked “this computer only” stay here.",
+      "connect": "Connect this computer",
+      "connectHint": "The browser opens so you can sign in with your account.",
+      "waiting": "Waiting for the browser… Sign in with your account and allow this computer.",
+      "signIn": "Connect",
+      "cancel": "Cancel",
+      "syncing": "Syncing…",
+      "paused": "Sync stopped",
+      "lastSync": "Synced: {when}",
+      "neverSynced": "Not synced yet",
+      "syncNow": "Sync now",
+      "running": "Automatic sync",
+      "runningHint": "Changes go up and come down by themselves every 5 minutes.",
+      "stopped": "Sync stopped",
+      "stoppedHint": "This computer's changes do not go up and the others' do not come until you resume it.",
+      "stop": "Stop syncing",
+      "resume": "Resume",
+      "versions": "Versions",
+      "versionsHint": "On the web you see every version of each profile and can go back to any of them.",
+      "openWeb": "Open on the web",
+      "signOut": "Disconnect this computer",
+      "signOutHint": "Profiles stay here as they are, and in the cloud for your other computers.",
+      "signOutButton": "Disconnect",
+      "elsewhere": "In the cloud, not on this computer",
+      "elsewhereHint": "Profiles you deleted here only. They are still in the cloud and on your other computers.",
+      "bringBack": "Bring to this computer"
     }
   },
   "shell": {
@@ -1409,9 +1436,14 @@
       "connected": "Connected",
       "disconnected": "Disconnected",
       "account": "Account",
-      "accountHint": "Sign in to keep your setup in the cloud. Coming soon.",
-      "soon": "Soon",
-      "settings": "Settings"
+      "accountHint": "Connect this computer to your account to sync your profiles with the cloud.",
+      "settings": "Settings",
+      "connect": "Connect",
+      "syncing": "Syncing…",
+      "sync": "Sync",
+      "syncOutgoing": "This computer has changes not in the cloud yet",
+      "syncIncoming": "Other computers have changes in the cloud",
+      "accountConnected": "This computer is connected to the cloud"
     },
     "statusBar": {
       "starting": "Starting…",
@@ -1452,7 +1484,9 @@
         "rename": "Rename",
         "duplicate": "Duplicate",
         "apps": "Linked apps…",
-        "delete": "Delete"
+        "delete": "Delete",
+        "sync": "Sync with the cloud",
+        "local": "This computer only…"
       },
       "errors": {
         "rename": "The profile could not be renamed.",
@@ -1461,8 +1495,20 @@
         "switch": "Could not switch profiles.",
         "duplicate": "The profile could not be duplicated.",
         "delete": "The profile could not be deleted.",
-        "move": "The profile could not be moved."
-      }
+        "move": "The profile could not be moved.",
+        "sync": "Could not change how the profile syncs."
+      },
+      "localOnly": "This computer only",
+      "deleteTitle": "Delete “{name}”?",
+      "deleteBody": "This profile syncs with the cloud. Deleted on every computer, it also goes from the cloud and your other computers, though you can get it back from its versions on the web. Deleted here only, it stays in the cloud and on the others.",
+      "deleteHere": "This computer only",
+      "deleteEverywhere": "On every computer",
+      "localTitle": "Keep “{name}” on this computer only?",
+      "localBody": "It will stop syncing. Should it also go from the cloud and your other computers, or should they keep their copy?",
+      "localKeepCloud": "They keep their copy",
+      "localRemoveCloud": "Remove it from the others",
+      "notSynced": "Changes not in the cloud yet",
+      "synced": "Synced with the cloud"
     },
     "linkedApps": {
       "title": "Apps for “{name}”",
@@ -1702,12 +1748,8 @@
       "openTokens": "Open the tokens page",
       "remote": "Home Assistant can also move the dock: fire the “taurilanzi” event from an automation with page (a page of the active profile), profile, brightness (0–100) or wake: true to wake it up."
     },
-    "removeSecret": "Remove from the keychain",
-    "secretSaved": {
-      "macos": "Saved in the macOS keychain.",
-      "windows": "Saved in the Windows Credential Manager.",
-      "linux": "Saved in the desktop keyring."
-    },
+    "removeSecret": "Delete the password or token",
+    "secretSaved": "Saved.",
     "remove": "Remove server",
     "confirmRemove": "Remove “{name}”? Press again",
     "close": "Close",
@@ -1725,5 +1767,13 @@
     "editServer": "Edit {name}",
     "editButton": "Edit",
     "empty": "No {kind} server yet."
+  },
+  "cloudJoin": {
+    "title": "Your account already has profiles",
+    "body": "There are {count} profiles in the cloud. What should happen to this computer's?",
+    "merge": "Keep both",
+    "mergeHint": "Keep both: this computer's profiles go up and the cloud's come here. Every computer sees all of them.",
+    "replace": "Use only the cloud's",
+    "replaceHint": "Use only the cloud's: this computer's profiles are deleted and the cloud's stay."
   }
 }

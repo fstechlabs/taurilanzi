@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ExternalLink, Plug, Trash2 } from '@lucide/vue'
 import { openExternal } from '~/lib/external'
-import { os } from '~/lib/os'
 import type { Integration } from '~/types/engine'
 import type { IntegrationKind } from '~/composables/useIntegrations'
 
@@ -231,7 +230,7 @@ async function remove() {
             </Button>
           </div>
           <p class="text-[11px] text-muted-foreground">
-            {{ status?.secretSet ? t(`integrations.secretSaved.${os}`) : t(draft.kind === 'obs' ? 'integrations.obs.passwordHint' : 'integrations.hass.tokenHint') }}
+            {{ status?.secretSet ? t('integrations.secretSaved') : t(draft.kind === 'obs' ? 'integrations.obs.passwordHint' : 'integrations.hass.tokenHint') }}
           </p>
         </div>
 

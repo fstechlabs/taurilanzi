@@ -1,5 +1,5 @@
 //! The servers the app talks to: OBS Studios and Home Assistants, each with a name of its own.
-//! Passwords and tokens live in the keychain, never here.
+//! Passwords and tokens live in the secrets file, never here.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

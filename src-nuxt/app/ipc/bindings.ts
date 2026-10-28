@@ -54,9 +54,17 @@ export const commands = {
 	renameProfile: (profile: string, name: string) => typedError<null, IpcError>(__TAURI_INVOKE("rename_profile", { profile, name })),
 	/**  A copy with its own pages, without the linked apps. */
 	duplicateProfile: (profile: string) => typedError<string, IpcError>(__TAURI_INVOKE("duplicate_profile", { profile })),
-	/**  Never the last one. Keys that switched to it stop doing so. */
-	deleteProfile: (profile: string) => typedError<null, IpcError>(__TAURI_INVOKE("delete_profile", { profile })),
+	/**
+	 *  Never the last one. Keys that switched to it stop doing so. A synced profile goes from every
+	 *  computer and the cloud, or, without `everywhere`, from this computer only.
+	 */
+	deleteProfile: (profile: string, everywhere: boolean) => typedError<null, IpcError>(__TAURI_INVOKE("delete_profile", { profile, everywhere })),
 	moveProfile: (profile: string, index: number) => typedError<null, IpcError>(__TAURI_INVOKE("move_profile", { profile, index })),
+	/**
+	 *  Keeps a profile on this computer only, or syncs it again. Kept here, the cloud and the other
+	 *  computers keep their copy with `keep_in_cloud`, and lose it without.
+	 */
+	setProfileLocal: (profile: string, local: boolean, keepInCloud: boolean) => typedError<null, IpcError>(__TAURI_INVOKE("set_profile_local", { profile, local, keepInCloud })),
 	/**  Fails with `conflict` if the app is linked to another profile. */
 	linkApp: (profile: string, app: AppRef) => typedError<null, IpcError>(__TAURI_INVOKE("link_app", { profile, app })),
 	unlinkApp: (profile: string, app: string) => typedError<null, IpcError>(__TAURI_INVOKE("unlink_app", { profile, app })),
@@ -78,7 +86,7 @@ export const commands = {
 	/**  Tries to connect now, and keeps trying for a while even if no key uses the server yet. */
 	obsConnect: (server: string) => __TAURI_INVOKE<void>("obs_connect", { server }),
 	/**
-	 *  Saves the password in the keychain and connects again with it; empty or `null` removes it.
+	 *  Saves the password with the secrets and connects again with it; empty or `null` removes it.
 	 *  It is never sent back.
 	 */
 	obsSetPassword: (server: string, password: string | null) => typedError<null, IpcError>(__TAURI_INVOKE("obs_set_password", { server, password })),
@@ -87,13 +95,13 @@ export const commands = {
 	/**  Tries to connect now, and keeps trying for a while even if no key uses the server yet. */
 	hassConnect: (server: string) => __TAURI_INVOKE<void>("hass_connect", { server }),
 	/**
-	 *  Saves the token in the keychain and connects again with it; empty or `null` removes it. It
+	 *  Saves the token with the secrets and connects again with it; empty or `null` removes it. It
 	 *  is never sent back.
 	 */
 	hassSetToken: (server: string, token: string | null) => typedError<null, IpcError>(__TAURI_INVOKE("hass_set_token", { server, token })),
 	/**  Entities, areas, devices and actions of Home Assistant, with its texts and icons. */
 	hassCatalog: (server: string) => typedError<HassCatalog, IpcError>(__TAURI_INVOKE("hass_catalog", { server })),
-	/**  Saves the code of an alarm panel or a lock in the keychain; empty or `null` removes it. */
+	/**  Saves the code of an alarm panel or a lock with the secrets; empty or `null` removes it. */
 	hassSetCode: (server: string, entity: string, code: string | null) => typedError<null, IpcError>(__TAURI_INVOKE("hass_set_code", { server, entity, code })),
 	/**  Whether a code is saved for an alarm panel or a lock. The code itself is never sent back. */
 	hassCodeSaved: (server: string, entity: string) => typedError<boolean, IpcError>(__TAURI_INVOKE("hass_code_saved", { server, entity })),
@@ -118,10 +126,26 @@ export const commands = {
 	updateOffer: () => __TAURI_INVOKE<UpdateOffer | null>("update_offer"),
 	installUpdate: () => __TAURI_INVOKE<void>("install_update"),
 	remindUpdateLater: () => __TAURI_INVOKE<void>("remind_update_later"),
+	cloudStatus: () => __TAURI_INVOKE<CloudStatus>("cloud_status"),
+	/**  Opens the browser to sign in, and answers once this computer is connected. */
+	cloudSignIn: () => typedError<null, IpcError>(__TAURI_INVOKE("cloud_sign_in")),
+	/**  The account's page of the cloud, in the browser: its versions and computers. */
+	cloudOpenWeb: () => typedError<null, IpcError>(__TAURI_INVOKE("cloud_open_web")),
+	cloudCancelSignIn: () => __TAURI_INVOKE<void>("cloud_cancel_sign_in"),
+	/**  The profiles stay here as they are, and in the cloud for the other computers. */
+	cloudSignOut: () => typedError<null, IpcError>(__TAURI_INVOKE("cloud_sign_out")),
+	/**  Syncs now instead of waiting for the next round. */
+	cloudSyncNow: () => __TAURI_INVOKE<void>("cloud_sync_now"),
+	cloudSetPaused: (paused: boolean) => typedError<null, IpcError>(__TAURI_INVOKE("cloud_set_paused", { paused })),
+	/**  What to do with this computer's profiles, the first time, when the account has some already. */
+	cloudJoin: (mode: JoinMode) => __TAURI_INVOKE<void>("cloud_join", { mode }),
+	/**  Brings back a profile of the cloud that was deleted on this computer only. */
+	cloudBringBack: (profile: string) => typedError<null, IpcError>(__TAURI_INVOKE("cloud_bring_back", { profile })),
 };
 
 /** Events */
 export const events = {
+	cloudChanged: makeEvent<CloudChanged, CloudChanged>("cloud-changed"),
 	historyShortcut: makeEvent<HistoryShortcut, HistoryShortcut>("history-shortcut"),
 	keyChanged: makeEvent<KeyChanged, KeyChanged>("key-changed"),
 	keyImageChanged: makeEvent<KeyImageChanged, KeyImageChanged>("key-image-changed"),
@@ -212,6 +236,40 @@ export type Background = { type: "solid"; color: Color } |
 
 /**  What a digital clock shows under the time. */
 export type ClockLine = "none" | "date" | "weekday" | "weekday_date";
+
+/**  How this computer is doing with the cloud, after any change. */
+export type CloudChanged = CloudStatus;
+
+export type CloudProfile = {
+	id: string,
+	name: string,
+};
+
+/**  How this computer is doing with the cloud, as the window shows it. */
+export type CloudStatus = {
+	/**  The web of the cloud, where the account and the versions are. */
+	url: string,
+	signed_in: boolean,
+	/**  Waiting for the user to sign in in the browser. */
+	signing_in: boolean,
+	device_name: string,
+	paused: boolean,
+	syncing: boolean,
+	/**  When the last sync ended well, in RFC 3339. */
+	last_sync: string | null,
+	/**  What went wrong the last time, for the user. */
+	problem: string | null,
+	/**  The account already has profiles: the user chooses what to do with this computer's. */
+	join: JoinOffer | null,
+	/**  Synced profiles with changes the cloud does not have yet. */
+	pending: string[],
+	/**  This computer has changes to upload, in profiles or settings. */
+	outgoing: boolean,
+	/**  The cloud has changes of other computers to download. */
+	incoming: boolean,
+	/**  Profiles of the cloud deleted on this computer only. */
+	elsewhere: CloudProfile[],
+};
 
 export type Color = {
 	r: number,
@@ -338,7 +396,7 @@ export type HassCommand =
 { kind: "choose"; entity: string; option: HassOption; choice: HassChoice } | { kind: "media"; entity: string; control: HassMedia } | 
 /**  A light to a color. */
 { kind: "color"; entity: string; color: Color } | 
-/**  The code, if the panel needs one, lives in the keychain. */
+/**  The code, if the panel needs one, lives with the secrets. */
 { kind: "alarm"; entity: string; mode: HassAlarm } | 
 /**  Any action of any integration, as `domain.action`. */
 { kind: "call"; action: string; target?: HassTarget; 
@@ -528,6 +586,17 @@ insecure?: boolean };
 export type IpcError = {
 	kind: ErrorKind,
 	message: string,
+};
+
+/**  What to do with this computer's profiles when it joins an account that has some already. */
+export type JoinMode = 
+/**  Keeps them too: both sets end up everywhere. */
+"merge" | 
+/**  Leaves only the cloud's. */
+"replace";
+
+export type JoinOffer = {
+	cloud_profiles: number,
 };
 
 export type Key = {
@@ -758,6 +827,8 @@ export type ProfileSummary = {
 	id: string,
 	name: string,
 	apps: AppRef[],
+	/**  Kept on this computer only, out of the cloud. */
+	local: boolean,
 };
 
 export type ProfileSwitching = {

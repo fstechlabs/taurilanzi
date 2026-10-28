@@ -13,7 +13,7 @@ mod stream;
 mod watch;
 
 pub use catalog::HassCatalog;
-pub use connection::{Hass, token_account};
+pub use connection::{Hass, code_account, token_account};
 pub use domains::is_on;
 pub use entities::{Entity, domain};
 pub use error::HassError;

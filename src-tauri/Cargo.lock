@@ -5653,6 +5653,7 @@ dependencies = [
  "arboard",
  "base64 0.23.1",
  "evdev",
+ "getrandom 0.4.3",
  "hex",
  "hidapi",
  "jiff",

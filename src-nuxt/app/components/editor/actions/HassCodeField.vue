@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { KeyRound, Trash2 } from '@lucide/vue'
 import { commands } from '~/ipc/bindings'
-import { os } from '~/lib/os'
 
-/** The code of an alarm panel or a lock: kept in the keychain, never shown again. */
+/** The code of an alarm panel or a lock: kept with the secrets, never shown again. */
 const props = defineProps<{ entity: string }>()
 
 const { t } = useI18n()
@@ -68,7 +67,7 @@ async function save(value: string | null) {
       </Button>
     </div>
     <p class="text-[11px]" :class="failed ? 'text-destructive' : 'text-muted-foreground'">
-      {{ failed ? t('actions.hass.codeFailed') : saved ? t(`actions.hass.codeSaved.${os}`) : t('actions.hass.codeHint') }}
+      {{ failed ? t('actions.hass.codeFailed') : saved ? t('actions.hass.codeSaved') : t('actions.hass.codeHint') }}
     </p>
   </div>
 </template>

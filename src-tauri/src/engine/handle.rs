@@ -9,6 +9,7 @@ use super::commands::{Command, CommandError, Input, KeySlot, PageChanges, Reply}
 use super::gestures::Gesture;
 use super::snapshot::{EngineEvent, Snapshot};
 use crate::clients::Clients;
+use crate::cloud::{SyncChanges, SyncExport};
 use crate::config::Integration;
 use crate::config::{AppRef, Appearance, DeviceSettings, Key, Position, Preferences};
 use crate::hass::Hass;
@@ -252,6 +253,33 @@ impl EngineHandle {
             reply,
         })
         .await?
+    }
+
+    pub async fn set_profile_local(&self, id: Uuid, local: bool) -> Result<(), CommandError> {
+        self.ask(|reply| Command::SetProfileLocal { id, local, reply })
+            .await?
+    }
+
+    /// For sync, which runs on a thread of its own.
+    pub fn sync_export_blocking(&self) -> Result<SyncExport, CommandError> {
+        self.ask_blocking(Command::SyncExport)
+    }
+
+    pub fn apply_sync_blocking(&self, changes: SyncChanges) -> Result<SyncExport, CommandError> {
+        self.ask_blocking(|reply| Command::ApplySync { changes, reply })?
+    }
+
+    fn ask_blocking<T>(
+        &self,
+        command: impl FnOnce(Reply<T>) -> Command,
+    ) -> Result<T, CommandError> {
+        let (reply, response) = oneshot::channel();
+        self.inputs
+            .send(Input::Command(command(reply)))
+            .map_err(|_| CommandError::EngineStopped)?;
+        response
+            .blocking_recv()
+            .map_err(|_| CommandError::EngineStopped)
     }
 
     async fn ask<T>(&self, command: impl FnOnce(Reply<T>) -> Command) -> Result<T, CommandError> {

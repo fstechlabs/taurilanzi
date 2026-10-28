@@ -39,7 +39,7 @@ enum Request {
     Password(Option<String>, Reply<()>),
 }
 
-/// Where the password of a server is kept in the keychain. The one OBS of before servers had
+/// Where the password of a server is kept among the secrets. The one OBS of before servers had
 /// names, whose id is nil, keeps the account it had.
 pub fn password_account(server: Uuid) -> String {
     if server.is_nil() {
@@ -56,7 +56,7 @@ pub struct Obs {
 }
 
 impl Obs {
-    /// `account` is where its password is kept in the keychain. `report` gets every change of
+    /// `account` is where its password is kept among the secrets. `report` gets every change of
     /// the connection or of OBS's states; it returns false once nobody listens.
     pub fn start(
         secrets: Secrets,
@@ -93,7 +93,7 @@ impl Obs {
         response.await.map_err(|_| ObsError::Stopped)?
     }
 
-    /// Stores it in the keychain and connects again with it; `None` or empty removes it.
+    /// Stores it with the secrets and connects again with it; `None` or empty removes it.
     pub async fn set_password(&self, password: Option<String>) -> Result<(), ObsError> {
         let (reply, response) = oneshot::channel();
         self.send(Request::Password(password, reply));
@@ -120,7 +120,7 @@ struct Worker {
     account: String,
     wants: Wants,
     asked_until: Option<Instant>,
-    /// Read from the keychain the first time OBS asks for it, then kept.
+    /// Read from the secrets the first time OBS asks for it, then kept.
     password: Option<Option<String>>,
     current: ObsReport,
     reported: Option<ObsReport>,
@@ -355,7 +355,6 @@ impl Worker {
     fn password(&mut self) -> Option<String> {
         self.password
             .get_or_insert_with(|| {
-                // A failure is kept too, so a refused keychain prompt is not shown again and again.
                 self.secrets.get(&self.account).unwrap_or_else(|err| {
                     warn!("could not read the OBS password: {err}");
                     None

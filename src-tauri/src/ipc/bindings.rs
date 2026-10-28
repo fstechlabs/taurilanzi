@@ -2,7 +2,8 @@ use tauri::Wry;
 use tauri::ipc::Invoke;
 
 use super::{
-    assets, commands, events, hass, http, integrations, obs, plugins, profiles, system, updates,
+    assets, cloud, commands, events, hass, http, integrations, obs, plugins, profiles, system,
+    updates,
 };
 
 /// Typed commands and events, shared by the app and the TypeScript export.
@@ -37,6 +38,7 @@ pub fn builder() -> tauri_specta::Builder<Wry> {
             profiles::duplicate_profile,
             profiles::delete_profile,
             profiles::move_profile,
+            profiles::set_profile_local,
             profiles::link_app,
             profiles::unlink_app,
             profiles::app_at_path,
@@ -65,6 +67,15 @@ pub fn builder() -> tauri_specta::Builder<Wry> {
             updates::update_offer,
             updates::install_update,
             updates::remind_update_later,
+            cloud::cloud_status,
+            cloud::cloud_sign_in,
+            cloud::cloud_open_web,
+            cloud::cloud_cancel_sign_in,
+            cloud::cloud_sign_out,
+            cloud::cloud_sync_now,
+            cloud::cloud_set_paused,
+            cloud::cloud_join,
+            cloud::cloud_bring_back,
         ])
         .events(tauri_specta::collect_events![
             events::StateChanged,
@@ -72,7 +83,8 @@ pub fn builder() -> tauri_specta::Builder<Wry> {
             events::KeyImageChanged,
             events::PluginToast,
             events::HistoryShortcut,
-            events::UpdateOffered
+            events::UpdateOffered,
+            events::CloudChanged
         ])
 }
 

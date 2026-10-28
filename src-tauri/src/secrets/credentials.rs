@@ -1,15 +1,12 @@
-//! Generic credentials in the Windows Credential Manager, one per service and account.
+//! Generic credentials in the Windows Credential Manager, where earlier versions kept the secrets.
 
 use std::io;
 
 use windows::Win32::Foundation::{ERROR_NOT_FOUND, WIN32_ERROR};
 use windows::Win32::Security::Credentials::{
-    CRED_FLAGS, CRED_PERSIST_LOCAL_MACHINE, CRED_TYPE_GENERIC, CREDENTIALW, CredDeleteW, CredFree,
-    CredReadW, CredWriteW,
+    CRED_TYPE_GENERIC, CREDENTIALW, CredDeleteW, CredFree, CredReadW,
 };
-use windows::core::{HSTRING, PWSTR};
-
-use crate::os::windows::to_wide;
+use windows::core::HSTRING;
 
 fn target(service: &str, account: &str) -> HSTRING {
     HSTRING::from(format!("{service}/{account}"))
@@ -49,30 +46,10 @@ pub fn exists(service: &str, account: &str) -> io::Result<bool> {
     get(service, account).map(|value| value.is_some())
 }
 
-pub fn set(service: &str, account: &str, value: Option<&str>) -> io::Result<()> {
-    let target = target(service, account);
-    match value {
-        Some(value) => {
-            let mut name = to_wide(format!("{service}/{account}"));
-            let mut user = to_wide(account);
-            let mut blob = value.as_bytes().to_vec();
-            let credential = CREDENTIALW {
-                Flags: CRED_FLAGS(0),
-                Type: CRED_TYPE_GENERIC,
-                TargetName: PWSTR(name.as_mut_ptr()),
-                CredentialBlobSize: blob.len() as u32,
-                CredentialBlob: blob.as_mut_ptr(),
-                Persist: CRED_PERSIST_LOCAL_MACHINE,
-                UserName: PWSTR(user.as_mut_ptr()),
-                ..Default::default()
-            };
-            // SAFETY: every pointer in the credential outlives the call.
-            unsafe { CredWriteW(&credential, 0) }.map_err(io::Error::other)
-        }
-        // SAFETY: a plain call with a string that outlives it.
-        None => match unsafe { CredDeleteW(&target, CRED_TYPE_GENERIC, None) } {
-            Err(err) if not_found(&err) => Ok(()),
-            other => other.map_err(io::Error::other),
-        },
+pub fn delete(service: &str, account: &str) -> io::Result<()> {
+    // SAFETY: a plain call with a string that outlives it.
+    match unsafe { CredDeleteW(&target(service, account), CRED_TYPE_GENERIC, None) } {
+        Err(err) if not_found(&err) => Ok(()),
+        other => other.map_err(io::Error::other),
     }
 }

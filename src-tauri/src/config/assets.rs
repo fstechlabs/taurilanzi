@@ -68,6 +68,36 @@ impl AssetStore {
         self.store(format.extension(), bytes)
     }
 
+    pub fn has(&self, id: &str) -> bool {
+        parse_id(id).is_some() && self.dir.join(id).exists()
+    }
+
+    /// The stored bytes of an image or a sound, as they were uploaded.
+    pub fn bytes(&self, id: &str) -> io::Result<Vec<u8>> {
+        match parse_id(id) {
+            Some(_) => fs::read(self.dir.join(id)),
+            None => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "not an asset id",
+            )),
+        }
+    }
+
+    /// Stores what another computer had under `id`, only if the content matches it.
+    pub fn insert(&self, id: &str, bytes: &[u8]) -> io::Result<()> {
+        match (parse_id(id), id.split_once('.')) {
+            (Some(_), Some((hash, extension)))
+                if hash.eq_ignore_ascii_case(&hex::encode(Sha256::digest(bytes))) =>
+            {
+                self.store(extension, bytes).map(drop)
+            }
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "the asset does not match its id",
+            )),
+        }
+    }
+
     /// Where a stored sound is, for the player to read it.
     pub fn sound_path(&self, id: &str) -> io::Result<PathBuf> {
         match parse_id(id) {
@@ -205,6 +235,28 @@ mod tests {
         assert!(store.get(&sound).is_err(), "a sound is not an image");
         let image = store.put(ImageFormat::Svg, b"<svg/>").unwrap();
         assert!(store.sound_path(&image).is_err());
+    }
+
+    #[test]
+    fn takes_what_another_computer_had_only_if_it_matches_its_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = AssetStore::open(dir.path().to_path_buf()).unwrap();
+        let id = format!("{}.svg", hex::encode(Sha256::digest(b"<svg/>")));
+        assert!(!store.has(&id));
+        store.insert(&id, b"<svg/>").unwrap();
+        assert!(store.has(&id));
+        assert_eq!(store.bytes(&id).unwrap(), b"<svg/>");
+
+        let other = format!("{}.svg", hex::encode(Sha256::digest(b"<svg id=\"x\"/>")));
+        assert!(store.insert(&other, b"<svg/>").is_err());
+        assert!(!store.has(&other));
+        assert_eq!(
+            fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "nothing else stored"
+        );
+        assert!(store.insert("../config.json", b"{}").is_err());
+        assert!(store.bytes("../config.json").is_err());
     }
 
     #[test]

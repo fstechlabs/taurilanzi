@@ -1,38 +1,61 @@
-//! Secrets as a JSON file, only for tests: a data folder of their own, never the real keychain.
+//! Secrets as a JSON file that only the user can read.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::sync::{Mutex, PoisonError};
 
 type Entries = BTreeMap<String, String>;
 
+/// The clients of OBS and Home Assistant, the engine and sync each write from their own thread.
+static WRITING: Mutex<()> = Mutex::new(());
+
 pub fn get(path: &Path, account: &str) -> io::Result<Option<String>> {
-    Ok(read(path)?.remove(account))
+    Ok(read_all(path)?.remove(account))
 }
 
 pub fn set(path: &Path, account: &str, value: Option<&str>) -> io::Result<()> {
-    let mut entries = read(path)?;
-    match value {
-        Some(value) => entries.insert(account.to_string(), value.to_string()),
-        None => entries.remove(account),
-    };
-    let json = serde_json::to_vec_pretty(&entries).map_err(io::Error::other)?;
-    fs::write(path, json)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
-    }
-    Ok(())
+    update(path, |entries| {
+        match value {
+            Some(value) => entries.insert(account.to_string(), value.to_string()),
+            None => entries.remove(account),
+        };
+    })
 }
 
-fn read(path: &Path) -> io::Result<Entries> {
+pub fn read_all(path: &Path) -> io::Result<Entries> {
     match fs::read(path) {
         Ok(bytes) => serde_json::from_slice(&bytes).map_err(io::Error::other),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(Entries::new()),
         Err(err) => Err(err),
     }
+}
+
+/// Reads, changes and writes the file under one lock, so writers never undo each other.
+pub fn update<T>(path: &Path, change: impl FnOnce(&mut Entries) -> T) -> io::Result<T> {
+    let _writing = WRITING.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut entries = read_all(path)?;
+    let result = change(&mut entries);
+    write(path, &entries)?;
+    Ok(result)
+}
+
+/// Through a temporary file, so a reader never finds half of it.
+fn write(path: &Path, entries: &Entries) -> io::Result<()> {
+    let json = serde_json::to_vec_pretty(entries).map_err(io::Error::other)?;
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("secrets.json");
+    let tmp = path.with_file_name(format!(".{name}.tmp"));
+    fs::write(&tmp, json)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
+    }
+    fs::rename(tmp, path)
 }
 
 #[cfg(test)]

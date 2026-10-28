@@ -41,7 +41,7 @@ pub fn hass_connect(engine: State<'_, EngineHandle>, server: Uuid) {
     }
 }
 
-/// Saves the token in the keychain and connects again with it; empty or `null` removes it. It
+/// Saves the token with the secrets and connects again with it; empty or `null` removes it. It
 /// is never sent back.
 #[tauri::command]
 #[specta::specta]
@@ -60,7 +60,7 @@ pub async fn hass_catalog(engine: State<'_, EngineHandle>, server: Uuid) -> Resu
     Ok(client(&engine, server)?.catalog().await?)
 }
 
-/// Saves the code of an alarm panel or a lock in the keychain; empty or `null` removes it.
+/// Saves the code of an alarm panel or a lock with the secrets; empty or `null` removes it.
 #[tauri::command]
 #[specta::specta]
 pub async fn hass_set_code(

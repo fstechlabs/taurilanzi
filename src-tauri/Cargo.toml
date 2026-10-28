@@ -23,6 +23,7 @@ tauri-build = { version = "2.7.4", features = [] }
 [dependencies]
 anyhow = "1.0.104"
 base64 = "0.23.1"
+getrandom = "0.4.3"
 hex = "0.4.3"
 hidapi = "2.6.7"
 jiff = "0.2.38"

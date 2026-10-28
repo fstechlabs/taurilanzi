@@ -1,4 +1,4 @@
-//! Generic passwords in the macOS keychain.
+//! Generic passwords in the macOS keychain, where earlier versions kept the secrets.
 
 use std::io;
 
@@ -18,6 +18,7 @@ pub fn get(service: &str, account: &str) -> io::Result<Option<String>> {
     }
 }
 
+/// Without reading the secret, so the keychain does not ask for permission.
 pub fn exists(service: &str, account: &str) -> io::Result<bool> {
     let found = ItemSearchOptions::new()
         .class(ItemClass::generic_password())
@@ -32,13 +33,9 @@ pub fn exists(service: &str, account: &str) -> io::Result<bool> {
     }
 }
 
-pub fn set(service: &str, account: &str, value: Option<&str>) -> io::Result<()> {
-    let result = match value {
-        Some(value) => passwords::set_generic_password(service, account, value.as_bytes()),
-        None => match passwords::delete_generic_password(service, account) {
-            Err(err) if err.code() == NOT_FOUND => Ok(()),
-            other => other,
-        },
-    };
-    result.map_err(io::Error::other)
+pub fn delete(service: &str, account: &str) -> io::Result<()> {
+    match passwords::delete_generic_password(service, account) {
+        Err(err) if err.code() == NOT_FOUND => Ok(()),
+        other => other.map_err(io::Error::other),
+    }
 }

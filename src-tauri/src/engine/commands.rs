@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use super::gestures::Gesture;
 use super::snapshot::Snapshot;
+use crate::cloud::{SyncChanges, SyncExport};
 use crate::config::{
     Action, AppRef, Appearance, DeviceSettings, Integration, Key, Position, Preferences,
 };
@@ -179,6 +180,18 @@ pub enum Command {
     },
     DeleteIntegration {
         id: Uuid,
+        reply: Done,
+    },
+    /// What there is to sync with the cloud.
+    SyncExport(Reply<SyncExport>),
+    /// What other computers changed, from the cloud; answers what there is to sync after it.
+    ApplySync {
+        changes: SyncChanges,
+        reply: Reply<Result<SyncExport, CommandError>>,
+    },
+    SetProfileLocal {
+        id: Uuid,
+        local: bool,
         reply: Done,
     },
 }

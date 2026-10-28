@@ -113,14 +113,14 @@ impl Hass {
         response.await.map_err(|_| HassError::Stopped)?
     }
 
-    /// Stores it in the keychain and connects again with it; `None` or empty removes it.
+    /// Stores it with the secrets and connects again with it; `None` or empty removes it.
     pub async fn set_token(&self, token: Option<String>) -> Result<(), HassError> {
         let (reply, response) = oneshot::channel();
         self.send(Request::Token(token, reply));
         response.await.map_err(|_| HassError::Stopped)?
     }
 
-    /// The code of an alarm panel or a lock, kept in the keychain; `None` or empty removes it.
+    /// The code of an alarm panel or a lock, kept with the secrets; `None` or empty removes it.
     pub async fn set_code(&self, entity: String, code: Option<String>) -> Result<(), HassError> {
         let (reply, response) = oneshot::channel();
         self.send(Request::Code {
@@ -174,7 +174,7 @@ struct Worker {
     server: Uuid,
     wants: Wants,
     asked_until: Option<Instant>,
-    /// Read from the keychain the first time it is needed, then kept.
+    /// Read from the secrets the first time it is needed, then kept.
     token: Option<Option<String>>,
     current: HassReport,
     reported: Option<HassReport>,
@@ -880,14 +880,13 @@ impl Worker {
     }
 
     fn code_account(&self, entity: &str) -> String {
-        format!("home-assistant-code:{}:{entity}", self.server)
+        code_account(self.server, entity)
     }
 
     fn token(&mut self) -> Option<String> {
         let account = self.token_account();
         self.token
             .get_or_insert_with(|| {
-                // A failure is kept too, so a refused keychain prompt is not shown again and again.
                 self.secrets.get(&account).unwrap_or_else(|err| {
                     warn!("could not read the Home Assistant token: {err}");
                     None
@@ -956,9 +955,14 @@ impl Worker {
     }
 }
 
-/// Where the token of a server is kept in the keychain.
+/// Where the token of a server is kept among the secrets.
 pub fn token_account(server: Uuid) -> String {
     format!("home-assistant:{server}")
+}
+
+/// Where the code of an alarm panel or a lock of a server is kept among the secrets.
+pub fn code_account(server: Uuid, entity: &str) -> String {
+    format!("home-assistant-code:{server}:{entity}")
 }
 
 fn now_seconds() -> f64 {

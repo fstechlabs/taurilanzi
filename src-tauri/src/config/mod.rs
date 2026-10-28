@@ -26,7 +26,7 @@ pub use linked_apps::AppRef;
 #[cfg_attr(not(test), allow(unused_imports))]
 pub use model::{
     Appearance, Config, DeviceSettings, Key, KeyState, LayerConfig, Page, Position, Profile,
-    assets_in,
+    SCHEMA_VERSION, assets_in,
 };
 pub use navigation::Navigation;
 pub use obs::{ObsCommand, ObsMediaControl, ObsSwitch, ObsVolume};

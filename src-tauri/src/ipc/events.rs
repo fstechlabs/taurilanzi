@@ -5,6 +5,7 @@ use tauri::AppHandle;
 use tauri_specta::Event;
 use tokio::sync::broadcast::error::RecvError;
 
+use crate::cloud::CloudStatus;
 use crate::engine::{EngineEvent, EngineHandle, Snapshot};
 use crate::updates::UpdateOffer;
 
@@ -28,6 +29,10 @@ pub struct PluginToast {
 /// The update the window offers, after any change in it; none when there is nothing to offer.
 #[derive(Debug, Clone, Serialize, specta::Type, tauri_specta::Event)]
 pub struct UpdateOffered(pub Option<UpdateOffer>);
+
+/// How this computer is doing with the cloud, after any change.
+#[derive(Debug, Clone, Serialize, specta::Type, tauri_specta::Event)]
+pub struct CloudChanged(pub CloudStatus);
 
 /// A plugin redrew a key: its image is to be loaded again.
 #[derive(Debug, Clone, Serialize, specta::Type, tauri_specta::Event)]

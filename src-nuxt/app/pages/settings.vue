@@ -12,7 +12,7 @@ const router = useRouter()
 
 const { t } = useI18n()
 
-const TABS = ['general', 'dock', 'presses', 'new-keys', 'idle', 'profiles', 'integrations'] as const
+const TABS = ['general', 'dock', 'presses', 'new-keys', 'idle', 'profiles', 'integrations', 'cloud'] as const
 const LANGUAGES: { value: LanguageChoice, label: string | null }[] = [
   { value: 'system', label: null },
   { value: 'es', label: 'Español' },
@@ -267,6 +267,10 @@ async function uploadImage(event: Event) {
 
         <TabsContent value="integrations">
           <IntegrationsSettings />
+        </TabsContent>
+
+        <TabsContent value="cloud">
+          <CloudSettings />
         </TabsContent>
       </Tabs>
     </div>

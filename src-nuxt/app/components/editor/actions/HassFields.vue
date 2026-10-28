@@ -200,7 +200,7 @@ function setEventData(text: string) {
   }
 }
 
-/** Alarm panels and locks with a code take it from the keychain. */
+/** Alarm panels and locks with a code take it from the secrets. */
 const needsCode = computed(() => {
   const domain = domainOf(entityId.value)
   return (domain === 'alarm_control_panel' || domain === 'lock') && ['switch', 'run', 'alarm'].includes(command.value.kind)

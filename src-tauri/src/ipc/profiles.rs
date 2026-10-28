@@ -6,6 +6,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use super::error::{ErrorKind, IpcError};
+use crate::cloud::Cloud;
 use crate::config::AppRef;
 use crate::engine::EngineHandle;
 use crate::foreground::{self, AppDetection};
@@ -36,11 +37,57 @@ pub async fn duplicate_profile(engine: State<'_, EngineHandle>, profile: Uuid) -
     Ok(engine.duplicate_profile(profile).await?)
 }
 
-/// Never the last one. Keys that switched to it stop doing so.
+/// Never the last one. Keys that switched to it stop doing so. A synced profile goes from every
+/// computer and the cloud, or, without `everywhere`, from this computer only.
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_profile(engine: State<'_, EngineHandle>, profile: Uuid) -> Result<()> {
+pub async fn delete_profile(
+    engine: State<'_, EngineHandle>,
+    cloud: State<'_, Cloud>,
+    profile: Uuid,
+    everywhere: bool,
+) -> Result<()> {
+    if !everywhere {
+        cloud.leave_out(profile, &profile_name(&engine, profile).await?)?;
+    }
     Ok(engine.delete_profile(profile).await?)
+}
+
+/// Keeps a profile on this computer only, or syncs it again. Kept here, the cloud and the other
+/// computers keep their copy with `keep_in_cloud`, and lose it without.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_profile_local(
+    engine: State<'_, EngineHandle>,
+    cloud: State<'_, Cloud>,
+    profile: Uuid,
+    local: bool,
+    keep_in_cloud: bool,
+) -> Result<()> {
+    if local && keep_in_cloud {
+        cloud.leave_out(profile, &profile_name(&engine, profile).await?)?;
+    }
+    engine.set_profile_local(profile, local).await?;
+    if !local {
+        cloud.bring_back(profile)?;
+    }
+    Ok(())
+}
+
+async fn profile_name(engine: &EngineHandle, profile: Uuid) -> Result<String> {
+    engine
+        .snapshot()
+        .await?
+        .profiles
+        .into_iter()
+        .find(|p| p.id == profile)
+        .map(|p| p.name)
+        .ok_or_else(|| {
+            IpcError::new(
+                ErrorKind::NotFound,
+                format!("profile {profile} does not exist"),
+            )
+        })
 }
 
 #[tauri::command]

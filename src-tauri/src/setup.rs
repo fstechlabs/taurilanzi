@@ -2,10 +2,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use tauri::{App, Manager};
+use tauri_specta::Event;
 
+use crate::cloud::{Cloud, CloudSetup, Open};
 use crate::engine::{self, Launch, LaunchError, PluginsLaunch};
+use crate::ipc::CloudChanged;
 use crate::login::Placement;
 use crate::plugin_desktop::TauriDesktop;
+use crate::secrets::Secrets;
 use crate::state::AppState;
 use crate::updates::Updates;
 use crate::{ipc, tray, updates, window};
@@ -14,6 +18,12 @@ use crate::{ipc, tray, updates, window};
 pub const DATA_DIR_ENV: &str = "TAURILANZI_DATA_DIR";
 /// Leaves the dock alone, so tests can run next to the app that owns it.
 const NO_DOCK_ENV: &str = "TAURILANZI_NO_DOCK";
+/// Another cloud than the one of this build.
+const CLOUD_ENV: &str = "TAURILANZI_CLOUD";
+const RELEASED_IDENTIFIER: &str = "com.taurilanzi.desktop";
+const CLOUD_URL: &str = "https://taurilanzi.com";
+/// `taurilanzi-cloud` running locally: development builds never touch real accounts.
+const LOCAL_CLOUD_URL: &str = "http://localhost:3000";
 
 pub fn setup(
     app: &mut App,
@@ -50,6 +60,24 @@ pub fn setup(
         }
         Err(err) => return Err(err.into()),
     };
+    let cloud = Cloud::start(CloudSetup {
+        data_dir: data_dir.clone(),
+        url: cloud_url(&app.config().identifier),
+        app_name: app.package_info().name.clone(),
+        engine: running.engine.clone(),
+        secrets: Secrets::new(&data_dir, &app.config().identifier),
+        assets: running.assets.clone(),
+        notify: {
+            let handle = app.handle().clone();
+            Box::new(move |status| {
+                if let Err(err) = CloudChanged(status).emit(&handle) {
+                    log::warn!("could not send the cloud status to the UI: {err}");
+                }
+            })
+        },
+        open: browser(app),
+    })?;
+    app.manage(cloud);
     app.manage(running.engine.clone());
     app.manage(running.assets);
     app.manage(running.plugins);
@@ -69,6 +97,44 @@ pub fn setup(
     }
     updates::schedule(handle.clone());
     Ok(())
+}
+
+#[cfg(not(feature = "e2e"))]
+fn browser(app: &App) -> Open {
+    use tauri_plugin_opener::OpenerExt;
+
+    let handle = app.handle().clone();
+    Box::new(move |url| {
+        handle
+            .opener()
+            .open_url(url, None::<&str>)
+            .map_err(std::io::Error::other)
+    })
+}
+
+/// The end-to-end tests have no browser and must not open the user's: following the cloud's
+/// redirects is what the browser would do.
+#[cfg(feature = "e2e")]
+fn browser(_app: &App) -> Open {
+    Box::new(|url| {
+        let url = url.to_owned();
+        std::thread::spawn(move || {
+            if let Err(err) = ureq::get(&url).call() {
+                log::warn!("the tests' browser could not open {url}: {err}");
+            }
+        });
+        Ok(())
+    })
+}
+
+fn cloud_url(identifier: &str) -> String {
+    std::env::var(CLOUD_ENV)
+        .ok()
+        .filter(|url| !url.trim().is_empty())
+        .unwrap_or_else(|| match identifier {
+            RELEASED_IDENTIFIER => CLOUD_URL.into(),
+            _ => LOCAL_CLOUD_URL.into(),
+        })
 }
 
 fn data_dir(app: &App) -> tauri::Result<PathBuf> {

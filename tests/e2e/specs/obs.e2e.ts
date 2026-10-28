@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { $, $$, browser, expect } from '@wdio/globals'
 import { Key } from 'webdriverio'
@@ -107,10 +107,13 @@ describe('OBS', () => {
     await until(async () => Boolean((await state()).obs[server]?.password_set), 'the password was not stored')
     const data = process.env.TAURILANZI_E2E_DATA!
     expect(readFileSync(join(data, 'secrets.json'), 'utf8')).toContain(PASSWORD)
+    if (process.platform !== 'win32') {
+      expect(statSync(join(data, 'secrets.json')).mode & 0o777).toBe(0o600)
+    }
     expect(readFileSync(join(data, 'config.json'), 'utf8')).not.toContain(PASSWORD)
     await shot('obs-settings')
 
-    await button('Quitar del llavero', edit).click()
+    await button('Borrar la contraseña o el token', edit).click()
     await until(async () => !(await state()).obs[server]?.password_set, 'the password was not removed')
     await button('Cerrar', edit).click()
   })

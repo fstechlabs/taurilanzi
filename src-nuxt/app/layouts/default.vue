@@ -30,6 +30,7 @@ onBeforeUnmount(() => window.removeEventListener('contextmenu', blockNativeMenu)
     </div>
     <AppStatusBar />
     <ContextMenu />
+    <CloudJoinDialog />
     <AppToasts>
       <UpdateOffer />
     </AppToasts>

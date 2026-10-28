@@ -56,6 +56,16 @@ const COMMANDS: &[&str] = &[
     "update_offer",
     "install_update",
     "remind_update_later",
+    "set_profile_local",
+    "cloud_status",
+    "cloud_sign_in",
+    "cloud_open_web",
+    "cloud_cancel_sign_in",
+    "cloud_sign_out",
+    "cloud_sync_now",
+    "cloud_set_paused",
+    "cloud_join",
+    "cloud_bring_back",
 ];
 
 fn main() {

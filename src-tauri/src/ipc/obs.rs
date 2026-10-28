@@ -36,7 +36,7 @@ pub fn obs_connect(engine: State<'_, EngineHandle>, server: Uuid) {
     }
 }
 
-/// Saves the password in the keychain and connects again with it; empty or `null` removes it.
+/// Saves the password with the secrets and connects again with it; empty or `null` removes it.
 /// It is never sent back.
 #[tauri::command]
 #[specta::specta]
