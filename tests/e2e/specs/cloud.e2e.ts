@@ -1,10 +1,37 @@
+import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { createServer } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { $, browser, expect } from '@wdio/globals'
-import type { CloudStatus } from '../../../src-nuxt/app/ipc/bindings'
+import type { CloudStatus, PluginCatalog } from '../../../src-nuxt/app/ipc/bindings'
 import { FakeCloud, SETTINGS_ID } from '../fake-cloud'
-import { CLOUD_PORT, button, clickOn, dialog, engine, menuItem, shot, state } from '../helpers'
+import { CLOUD_PORT, COMMUNITY_PORT, button, clickOn, dialog, engine, menuItem, shot, state } from '../helpers'
 
 const cloud = new FakeCloud(CLOUD_PORT)
+const PLUGIN = 'com.taurilanzi.e2e.counter'
+const PACKAGE = 'com.taurilanzi.e2e.ulanziPlugin'
+
+/** The community catalog, with the test plugin, as a store serves it: a ZIP with its folder. */
+function catalogServer() {
+  const work = mkdtempSync(join(tmpdir(), 'taurilanzi-cloud-catalog-'))
+  cpSync(join(import.meta.dirname, '..', 'fixtures', PACKAGE), join(work, PACKAGE), { recursive: true })
+  execFileSync('/usr/bin/zip', ['-qr', join(work, 'package.zip'), PACKAGE], { cwd: work })
+  const zip = readFileSync(join(work, 'package.zip'))
+  rmSync(work, { recursive: true, force: true })
+  const base = `http://127.0.0.1:${COMMUNITY_PORT}`
+  const catalog = { plugins: [{ id: PACKAGE, name: 'Counter', version: '1.0.0', platforms: [], downloadUrl: `${base}/package.zip` }] }
+  return createServer((req, res) => {
+    const body = req.url === '/catalog.json' ? JSON.stringify(catalog) : req.url === '/package.zip' ? zip : null
+    res.writeHead(body ? 200 : 404)
+    res.end(body ?? '')
+  })
+}
+
+async function pluginHere() {
+  return (await engine<PluginCatalog>('plugin_catalog')).plugins.some(p => p.id === PLUGIN)
+}
 const SYNC_WAIT = 20_000
 /** The app asks the cloud for other computers' changes once a minute. */
 const CHECK_WAIT = 75_000
@@ -77,12 +104,19 @@ function profileFromElsewhere(id: string, name: string) {
 }
 
 describe('the cloud', () => {
+  const catalog = catalogServer()
+
   before(async () => {
     await cloud.start()
+    await new Promise<void>(resolve => catalog.listen(COMMUNITY_PORT, '127.0.0.1', resolve))
   })
 
   after(async () => {
+    if (await pluginHere()) {
+      await engine('uninstall_plugin', { id: PLUGIN })
+    }
     await cloud.stop()
+    catalog.close()
   })
 
   it('offers to connect from the account in the sidebar', async () => {
@@ -218,6 +252,26 @@ describe('the cloud', () => {
     await syncNow()
     expect((await status()).problem).toBeNull()
     await expect($('[data-sidebar-cloud="problem"]')).not.toBeExisting()
+  })
+
+  it('installs the plugins of the other computers, and not again those uninstalled here', async () => {
+    const head = cloud.head(SETTINGS_ID)!
+    const plugins = { ...head.content.plugins, [PLUGIN]: { name: 'Test counter', catalog: PACKAGE }, 'com.someone.from.file': { name: 'Desde un fichero' } }
+    cloud.push(SETTINGS_ID, 'settings', { parent: head.id, editedAt: new Date().toISOString(), deleted: false, content: { ...head.content, plugins } })
+
+    await syncNow()
+    expect(await pluginHere()).toBe(true)
+    expect((await status()).missing_plugins).toEqual([{ id: 'com.someone.from.file', name: 'Desde un fichero', reason: 'from_file' }])
+    await expect($('[data-missing-plugin="com.someone.from.file"]')).toHaveText(expect.stringContaining('instálalo aquí a mano'))
+    await shot('cloud-missing-plugin')
+
+    await engine('uninstall_plugin', { id: PLUGIN })
+    await syncNow()
+    expect(await pluginHere()).toBe(false)
+    expect(cloud.head(SETTINGS_ID)!.content.plugins[PLUGIN]).toEqual({ name: 'Test counter', catalog: PACKAGE })
+
+    await engine('install_community_plugin', { id: PACKAGE })
+    expect(await pluginHere()).toBe(true)
   })
 
   it('stops and resumes syncing', async () => {

@@ -216,7 +216,10 @@ Commits, versions and releases:
 - Sync with Taurilanzi Cloud lives in `src/cloud` (the server is the `taurilanzi-cloud` repo). Each
   profile, and the settings every computer shares (secrets included), is a document whose versions
   the cloud keeps forever: the most recent edit wins and the other stays as a branch. Profiles in
-  `local_profiles` stay on this computer. Only the engine talks to the cloud, never the UI, and
+  `local_profiles` stay on this computer. The settings also list the plugins each computer has
+  (`plugins`): the others install those of the community catalog by themselves, never code from
+  the cloud, and only name those installed from a file. Uninstalling stays on that computer
+  (`declined_plugins`). Only the engine talks to the cloud, never the UI, and
   its API is a contract with installed versions: change it only in ways they still understand.
 - Right click never shows the browser menu (blocked in the layout); custom context menus open
   with `useContextMenu().open(event, items)`.

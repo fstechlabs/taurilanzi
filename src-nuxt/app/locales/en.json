@@ -1424,7 +1424,14 @@
       "signOutButton": "Disconnect",
       "elsewhere": "In the cloud, not on this computer",
       "elsewhereHint": "Profiles you deleted here only. They are still in the cloud and on your other computers.",
-      "bringBack": "Bring to this computer"
+      "bringBack": "Bring to this computer",
+      "missingPlugins": "Plugins of your other computers missing here",
+      "missingPluginsHint": "Those of the community catalog install by themselves when syncing. These could not be installed:",
+      "missingReasons": {
+        "from_file": "It was installed from a file on another computer: install it here by hand.",
+        "not_here": "It is not available for this system.",
+        "failed": "It could not be installed. Sync will try again next time."
+      }
     }
   },
   "shell": {

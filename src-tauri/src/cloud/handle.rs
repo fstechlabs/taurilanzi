@@ -15,10 +15,11 @@ use uuid::Uuid;
 
 use super::api::{Api, ApiError};
 use super::documents::{Kind, SETTINGS_ID, TOKEN_ACCOUNT, is_synced_account, local_docs};
+use super::plugins::{MissingPlugin, PluginInstaller, reconcile};
 use super::sign_in::{self, SignInError};
 use super::state::{StateFile, SyncState};
 use super::status::{CloudProfile, CloudStatus, JoinMode, JoinOffer};
-use super::worker::SyncError;
+use super::worker::{Outcome, SyncError};
 use crate::config::AssetStore;
 use crate::engine::{EngineEvent, EngineHandle};
 use crate::secrets::Secrets;
@@ -61,6 +62,8 @@ pub struct CloudSetup {
     pub notify: Notify,
     /// Opens a page in the user's browser.
     pub open: Open,
+    /// None when plugins cannot run in this build.
+    pub plugins: Option<Arc<dyn PluginInstaller>>,
 }
 
 enum Message {
@@ -83,6 +86,8 @@ pub(super) struct Shared {
     local_only: BTreeSet<Uuid>,
     /// The cloud has changes of other computers this one has not downloaded.
     incoming: bool,
+    /// Plugins of the other computers this one could not install.
+    missing_plugins: Vec<MissingPlugin>,
 }
 
 pub(super) struct Inner {
@@ -97,6 +102,9 @@ pub(super) struct Inner {
     open: Open,
     shared: Mutex<Shared>,
     cancel: AtomicBool,
+    plugins: Option<Arc<dyn PluginInstaller>>,
+    /// Plugins already looked up in the catalog without finding them, this run.
+    checked_plugins: Mutex<BTreeSet<String>>,
 }
 
 #[derive(Clone)]
@@ -132,8 +140,11 @@ impl Cloud {
                 settings_pending: false,
                 local_only: BTreeSet::new(),
                 incoming: false,
+                missing_plugins: Vec::new(),
             }),
             cancel: AtomicBool::new(false),
+            plugins: setup.plugins,
+            checked_plugins: Mutex::default(),
         });
         let (messages, receiver) = mpsc::channel();
         let worker = Arc::clone(&inner);
@@ -261,6 +272,28 @@ impl Inner {
                 Err(broadcast::error::RecvError::Closed) => break,
             }
         }
+    }
+
+    /// Tells the account which plugins this computer has and installs the others'. Answers
+    /// whether the account learned of new ones, which have to go up.
+    fn reconcile_plugins(&self) -> Result<bool, SyncError> {
+        let Some(installer) = &self.plugins else {
+            return Ok(false);
+        };
+        let export = self.engine.sync_export_blocking()?;
+        let reconciled = {
+            let mut checked = self
+                .checked_plugins
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            reconcile(installer.as_ref(), &export, &mut checked)
+        };
+        let learned = !reconciled.learned.is_empty();
+        if learned {
+            self.engine.plugins_installed_blocking(reconciled.learned)?;
+        }
+        self.lock().missing_plugins = reconciled.missing;
+        Ok(learned)
     }
 
     /// What this computer has changed since its last sync.
@@ -399,7 +432,13 @@ impl Inner {
         }
         self.lock().syncing = true;
         self.changed();
-        let result = self.tick(join);
+        let result = self.tick(join).and_then(|outcome| {
+            let learned = self.reconcile_plugins()?;
+            Ok(Outcome {
+                again: outcome.again || learned,
+                ..outcome
+            })
+        });
         let again = {
             let mut shared = self.lock();
             shared.syncing = false;
@@ -517,6 +556,11 @@ impl Inner {
                 Vec::new()
             },
             outgoing: signed_in && (!shared.pending.is_empty() || shared.settings_pending),
+            missing_plugins: if signed_in {
+                shared.missing_plugins.clone()
+            } else {
+                Vec::new()
+            },
             incoming: signed_in && shared.incoming,
             // Kept here only while the others keep their copy: it is here, not elsewhere.
             elsewhere: shared

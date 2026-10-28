@@ -10,7 +10,7 @@ use super::commands::CommandError;
 use super::history::History;
 use super::runtime::Engine;
 use crate::cloud::{SETTINGS_ID, SharedSettings, SyncChanges, SyncExport, is_synced_account};
-use crate::config::{Config, Integration, Profile};
+use crate::config::{Config, Integration, KnownPlugin, Profile};
 use crate::hass::token_account;
 use crate::obs::password_account;
 
@@ -70,6 +70,7 @@ impl Engine {
                 .collect(),
             settings: SharedSettings::of(&self.config),
             edited: self.edited.clone(),
+            declined_plugins: self.config.declined_plugins.clone(),
         }
     }
 
@@ -109,6 +110,7 @@ impl Engine {
             );
             self.config.plugin_settings = settings.plugin_settings;
             self.config.integrations = settings.integrations;
+            self.config.plugins = settings.plugins;
             self.set_device(settings.device)?;
             let preferences = crate::config::Preferences {
                 language: self.config.preferences.language,
@@ -153,6 +155,37 @@ impl Engine {
             self.edited.insert(id, Timestamp::now());
         }
         Ok(())
+    }
+
+    /// Plugins installed on this computer, by the user or brought from another: the account
+    /// learns of them, and they are no longer kept out of here. A known package in the
+    /// community catalog is kept when the install did not tell one.
+    pub(super) fn plugins_installed(
+        &mut self,
+        plugins: BTreeMap<String, KnownPlugin>,
+    ) -> Result<(), CommandError> {
+        let mut changed = false;
+        for (id, plugin) in plugins {
+            changed |= self.config.declined_plugins.remove(&id);
+            let catalog = plugin
+                .catalog
+                .or_else(|| self.config.plugins.get(&id).and_then(|p| p.catalog.clone()));
+            let plugin = KnownPlugin { catalog, ..plugin };
+            if self.config.plugins.get(&id) != Some(&plugin) {
+                self.config.plugins.insert(id, plugin);
+                changed = true;
+            }
+        }
+        if changed { self.save() } else { Ok(()) }
+    }
+
+    /// A plugin uninstalled here stays out of this computer; the others keep theirs.
+    pub(super) fn plugin_uninstalled(&mut self, id: String) -> Result<(), CommandError> {
+        if self.config.declined_plugins.insert(id) {
+            self.save()
+        } else {
+            Ok(())
+        }
     }
 
     /// Clients keep the password or token they read: those whose secret changed start again.
@@ -248,6 +281,8 @@ mod tests {
             plugin_settings: Default::default(),
             integrations: Vec::new(),
             local_profiles: Default::default(),
+            plugins: Default::default(),
+            declined_plugins: Default::default(),
         };
         let (dock, _) = D200::detached();
         let (events, _) = broadcast::channel(16);
@@ -451,6 +486,79 @@ mod tests {
         assert_eq!(all.get(TOKEN_ACCOUNT).map(String::as_str), Some("token"));
         assert_eq!(all.get("obs:new").map(String::as_str), Some("y"));
         assert!(!all.contains_key("obs:old"));
+    }
+
+    fn known(name: &str, catalog: Option<&str>) -> KnownPlugin {
+        KnownPlugin {
+            name: name.into(),
+            catalog: catalog.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn notes_plugins_installed_and_uninstalled_here() {
+        let mut setup = engine(vec![profile("A")]);
+        let engine = &mut setup.engine;
+        let catalog = Some("a.b.c.d.ulanziPlugin");
+        engine
+            .plugins_installed(BTreeMap::from([(
+                "a.b.c.d".into(),
+                known("Contador", catalog),
+            )]))
+            .unwrap();
+        assert!(
+            engine.edited.contains_key(&SETTINGS_ID),
+            "the account learns of it"
+        );
+        assert_eq!(
+            engine.sync_export().settings.plugins["a.b.c.d"],
+            known("Contador", catalog)
+        );
+
+        engine.plugin_uninstalled("a.b.c.d".into()).unwrap();
+        let export = engine.sync_export();
+        assert!(export.declined_plugins.contains("a.b.c.d"));
+        assert!(
+            export.settings.plugins.contains_key("a.b.c.d"),
+            "the other computers keep theirs"
+        );
+
+        // Installed again from a file, it keeps the package the catalog has it in.
+        engine
+            .plugins_installed(BTreeMap::from([(
+                "a.b.c.d".into(),
+                known("Contador", None),
+            )]))
+            .unwrap();
+        let export = engine.sync_export();
+        assert!(export.declined_plugins.is_empty());
+        assert_eq!(
+            export.settings.plugins["a.b.c.d"],
+            known("Contador", catalog)
+        );
+    }
+
+    #[test]
+    fn takes_in_the_plugins_of_the_other_computers_but_keeps_what_was_uninstalled_here() {
+        let mut setup = engine(vec![profile("A")]);
+        let engine = &mut setup.engine;
+        engine.plugin_uninstalled("gone.here.x.y".into()).unwrap();
+        let mut settings = SharedSettings::of(&engine.config);
+        settings.plugins = BTreeMap::from([
+            (
+                "gone.here.x.y".into(),
+                known("Quitado", Some("gone.ulanziPlugin")),
+            ),
+            ("a.b.c.d".into(), known("Contador", Some("a.ulanziPlugin"))),
+        ]);
+        let export = engine
+            .apply_sync(SyncChanges {
+                settings: Some(settings.clone()),
+                ..SyncChanges::default()
+            })
+            .unwrap();
+        assert_eq!(export.settings.plugins, settings.plugins);
+        assert!(export.declined_plugins.contains("gone.here.x.y"));
     }
 
     #[test]

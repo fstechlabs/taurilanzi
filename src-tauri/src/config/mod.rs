@@ -4,6 +4,7 @@ mod defaults;
 mod hass;
 mod http;
 mod integrations;
+mod known_plugins;
 mod linked_apps;
 mod model;
 mod navigation;
@@ -22,6 +23,7 @@ pub use hass::{
 #[cfg_attr(not(test), allow(unused_imports))]
 pub use http::{HttpBody, HttpMethod, HttpPair, HttpRequest};
 pub use integrations::{Integration, obs_address};
+pub use known_plugins::KnownPlugin;
 pub use linked_apps::AppRef;
 #[cfg_attr(not(test), allow(unused_imports))]
 pub use model::{

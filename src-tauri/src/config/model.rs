@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use super::actions::Action;
 use super::integrations::Integration;
+use super::known_plugins::KnownPlugin;
 use super::linked_apps::AppRef;
 use super::preferences::Preferences;
 use super::widgets::Widget;
@@ -32,6 +33,13 @@ pub struct Config {
     /// Profiles kept on this computer only, out of the cloud. The others are synced.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub local_profiles: BTreeSet<Uuid>,
+    /// The plugins installed on any computer of the account, by plugin id. Synced, so each
+    /// computer installs what the others have.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub plugins: BTreeMap<String, KnownPlugin>,
+    /// Plugins uninstalled on this computer, which the others do not install here again.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub declined_plugins: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
@@ -397,6 +405,8 @@ mod tests {
             plugin_settings: Default::default(),
             integrations: Vec::new(),
             local_profiles: Default::default(),
+            plugins: Default::default(),
+            declined_plugins: Default::default(),
         };
         let json = serde_json::to_string(&config).unwrap();
         assert_eq!(serde_json::from_str::<Config>(&json).unwrap(), config);

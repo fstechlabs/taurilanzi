@@ -10,8 +10,8 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::config::{
-    Config, DeviceSettings, Integration, Preferences, Profile, SCHEMA_VERSION, ScreensaverImage,
-    assets_in,
+    Config, DeviceSettings, Integration, KnownPlugin, Preferences, Profile, SCHEMA_VERSION,
+    ScreensaverImage, assets_in,
 };
 use crate::i18n::LanguageChoice;
 
@@ -42,6 +42,9 @@ pub struct SharedSettings {
     pub plugin_settings: BTreeMap<String, Value>,
     #[serde(default)]
     pub integrations: Vec<Integration>,
+    /// What the computers have installed, so each installs the others' plugins.
+    #[serde(default)]
+    pub plugins: BTreeMap<String, KnownPlugin>,
 }
 
 impl SharedSettings {
@@ -60,6 +63,7 @@ impl SharedSettings {
                 .collect(),
             plugin_settings: config.plugin_settings.clone(),
             integrations: config.integrations.clone(),
+            plugins: config.plugins.clone(),
         }
     }
 }
@@ -87,6 +91,8 @@ pub struct SyncExport {
     pub settings: SharedSettings,
     /// By document; missing when it has not changed since the app started.
     pub edited: BTreeMap<Uuid, Timestamp>,
+    /// Plugins uninstalled here, which stay out of this computer.
+    pub declined_plugins: BTreeSet<String>,
 }
 
 /// What came from the cloud, for the engine to apply.
@@ -193,6 +199,12 @@ pub fn merge_settings(
             remote.integrations.push(integration.clone());
         }
     }
+    for (id, plugin) in &local.plugins {
+        remote
+            .plugins
+            .entry(id.clone())
+            .or_insert_with(|| plugin.clone());
+    }
     for (plugin, settings) in &local.plugin_settings {
         remote
             .plugin_settings
@@ -229,6 +241,7 @@ mod tests {
             local: config.local_profiles.clone(),
             settings: SharedSettings::of(config),
             edited: BTreeMap::new(),
+            declined_plugins: BTreeSet::new(),
         }
     }
 
@@ -331,6 +344,15 @@ mod tests {
             port: 4455,
         };
         local.integrations.push(server.clone());
+        let plugin = |name: &str| KnownPlugin {
+            name: name.into(),
+            catalog: None,
+        };
+        local
+            .plugins
+            .insert("only.here.x.y".into(), plugin("Local"));
+        local.plugins.insert("both.x.y.z".into(), plugin("Aquí"));
+        remote.plugins.insert("both.x.y.z".into(), plugin("Allí"));
         let local_secrets = BTreeMap::from([
             ("obs:here".to_string(), "mine".to_string()),
             ("obs:both".to_string(), "local".to_string()),
@@ -342,6 +364,8 @@ mod tests {
         assert_eq!(merged.plugin_settings["both"], serde_json::json!("remote"));
         assert_eq!(merged.plugin_settings["here"], serde_json::json!({"a": 1}));
         assert_eq!(merged.integrations, vec![server]);
+        assert_eq!(merged.plugins["only.here.x.y"].name, "Local");
+        assert_eq!(merged.plugins["both.x.y.z"].name, "Allí");
         assert_eq!(secrets["obs:both"], "remote");
         assert_eq!(secrets["obs:here"], "mine");
     }

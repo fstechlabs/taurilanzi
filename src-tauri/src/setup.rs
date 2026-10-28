@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tauri::{App, Manager};
 use tauri_specta::Event;
 
-use crate::cloud::{Cloud, CloudSetup, Open};
+use crate::cloud::{Cloud, CloudSetup, Open, PluginInstaller};
 use crate::engine::{self, Launch, LaunchError, PluginsLaunch};
 use crate::ipc::CloudChanged;
 use crate::login::Placement;
@@ -76,6 +76,10 @@ pub fn setup(
             })
         },
         open: browser(app),
+        plugins: running
+            .plugins
+            .clone()
+            .map(|plugins| plugins as Arc<dyn PluginInstaller>),
     })?;
     app.manage(cloud);
     app.manage(running.engine.clone());

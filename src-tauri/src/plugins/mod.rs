@@ -13,6 +13,7 @@ mod protocol;
 mod registry;
 mod server;
 mod service;
+mod synced;
 
 pub use community::CommunityPlugin;
 pub use desktop::Desktop;

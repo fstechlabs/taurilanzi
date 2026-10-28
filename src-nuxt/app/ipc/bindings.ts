@@ -110,6 +110,7 @@ export const commands = {
 	pluginCatalog: () => typedError<PluginCatalog, IpcError>(__TAURI_INVOKE("plugin_catalog")),
 	/**  Installs a plugin from its ZIP or its `.ulanziPlugin` folder, and returns its id. */
 	installPlugin: (path: string) => typedError<string, IpcError>(__TAURI_INVOKE("install_plugin", { path })),
+	/**  Kept out of this computer from then on, even if other computers of the account have it. */
 	uninstallPlugin: (id: string) => typedError<null, IpcError>(__TAURI_INVOKE("uninstall_plugin", { id })),
 	/**  Reads the plugin folder again, starting what is new. */
 	reloadPlugins: () => typedError<null, IpcError>(__TAURI_INVOKE("reload_plugins")),
@@ -267,6 +268,8 @@ export type CloudStatus = {
 	outgoing: boolean,
 	/**  The cloud has changes of other computers to download. */
 	incoming: boolean,
+	/**  Plugins of the other computers this one could not install by itself. */
+	missing_plugins: MissingPlugin[],
 	/**  Profiles of the cloud deleted on this computer only. */
 	elsewhere: CloudProfile[],
 };
@@ -673,6 +676,21 @@ export type MediaKey = "play_pause" | "next" | "previous" | "volume_up" | "volum
 export type Metric = "cpu" | "ram" | "gpu" | 
 /**  How full the startup volume is. */
 "disk";
+
+/**  A plugin of another computer this one does not have. */
+export type MissingPlugin = {
+	id: string,
+	name: string,
+	reason: MissingReason,
+};
+
+export type MissingReason = 
+/**  Installed from a file on another computer: it has to be installed here by hand. */
+"from_file" | 
+/**  Its package in the catalog does not run on this system. */
+"not_here" | 
+/**  Installing it failed; sync tries again next time. */
+"failed";
 
 /**  How a key looks when it is created, from the inspector, a line on the canvas or a new page. */
 export type NewKeyStyle = {

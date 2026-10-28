@@ -1424,7 +1424,14 @@
       "signOutButton": "Desconectar",
       "elsewhere": "En el cloud, no en este equipo",
       "elsewhereHint": "Perfiles que borraste solo aquí. Siguen en el cloud y en tus otros equipos.",
-      "bringBack": "Traer a este equipo"
+      "bringBack": "Traer a este equipo",
+      "missingPlugins": "Plugins de tus otros equipos que faltan aquí",
+      "missingPluginsHint": "Los del catálogo de la comunidad se instalan solos al sincronizar. Estos no se han podido instalar:",
+      "missingReasons": {
+        "from_file": "Se instaló desde un fichero en otro equipo: instálalo aquí a mano.",
+        "not_here": "No está disponible para este sistema.",
+        "failed": "No se pudo instalar. Se volverá a intentar en la próxima sincronización."
+      }
     }
   },
   "shell": {

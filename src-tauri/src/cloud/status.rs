@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+
+use super::plugins::MissingPlugin;
 use uuid::Uuid;
 
 /// How this computer is doing with the cloud, as the window shows it.
@@ -24,6 +26,8 @@ pub struct CloudStatus {
     pub outgoing: bool,
     /// The cloud has changes of other computers to download.
     pub incoming: bool,
+    /// Plugins of the other computers this one could not install by itself.
+    pub missing_plugins: Vec<MissingPlugin>,
     /// Profiles of the cloud deleted on this computer only.
     pub elsewhere: Vec<CloudProfile>,
 }

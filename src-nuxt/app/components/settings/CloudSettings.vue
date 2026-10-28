@@ -101,6 +101,17 @@ const state = computed(() => {
         </div>
       </SettingsSection>
 
+      <SettingsSection v-if="status.missing_plugins.length" :title="t('settings.cloud.missingPlugins')" :description="t('settings.cloud.missingPluginsHint')">
+        <div v-for="plugin in status.missing_plugins" :key="plugin.id" class="flex flex-col gap-0.5 border-b py-3 last:border-b-0" :data-missing-plugin="plugin.id">
+          <p class="truncate text-sm">
+            {{ plugin.name }}
+          </p>
+          <p class="text-xs text-muted-foreground">
+            {{ t(`settings.cloud.missingReasons.${plugin.reason}`) }}
+          </p>
+        </div>
+      </SettingsSection>
+
       <SettingsSection v-if="status.elsewhere.length" :title="t('settings.cloud.elsewhere')" :description="t('settings.cloud.elsewhereHint')">
         <div v-for="profile in status.elsewhere" :key="profile.id" class="flex items-center gap-3 border-b py-3 last:border-b-0">
           <p class="min-w-0 flex-1 truncate text-sm">

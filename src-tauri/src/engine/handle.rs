@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -11,7 +12,7 @@ use super::snapshot::{EngineEvent, Snapshot};
 use crate::clients::Clients;
 use crate::cloud::{SyncChanges, SyncExport};
 use crate::config::Integration;
-use crate::config::{AppRef, Appearance, DeviceSettings, Key, Position, Preferences};
+use crate::config::{AppRef, Appearance, DeviceSettings, Key, KnownPlugin, Position, Preferences};
 use crate::hass::Hass;
 use crate::obs::Obs;
 
@@ -258,6 +259,26 @@ impl EngineHandle {
     pub async fn set_profile_local(&self, id: Uuid, local: bool) -> Result<(), CommandError> {
         self.ask(|reply| Command::SetProfileLocal { id, local, reply })
             .await?
+    }
+
+    pub async fn plugins_installed(
+        &self,
+        plugins: BTreeMap<String, KnownPlugin>,
+    ) -> Result<(), CommandError> {
+        self.ask(|reply| Command::PluginsInstalled { plugins, reply })
+            .await?
+    }
+
+    pub async fn plugin_uninstalled(&self, id: String) -> Result<(), CommandError> {
+        self.ask(|reply| Command::PluginUninstalled { id, reply })
+            .await?
+    }
+
+    pub fn plugins_installed_blocking(
+        &self,
+        plugins: BTreeMap<String, KnownPlugin>,
+    ) -> Result<(), CommandError> {
+        self.ask_blocking(|reply| Command::PluginsInstalled { plugins, reply })?
     }
 
     /// For sync, which runs on a thread of its own.

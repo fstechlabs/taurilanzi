@@ -425,6 +425,14 @@ impl Engine {
                 let result = self.set_profile_local(id, local);
                 self.respond(reply, result);
             }
+            Command::PluginsInstalled { plugins, reply } => {
+                let result = self.plugins_installed(plugins);
+                self.respond(reply, result);
+            }
+            Command::PluginUninstalled { id, reply } => {
+                let result = self.plugin_uninstalled(id);
+                self.respond(reply, result);
+            }
         }
     }
 

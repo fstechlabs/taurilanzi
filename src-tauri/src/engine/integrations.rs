@@ -189,6 +189,8 @@ mod tests {
                 },
             ],
             local_profiles: Default::default(),
+            plugins: Default::default(),
+            declined_plugins: Default::default(),
         };
         assert_eq!(
             secret_accounts(&config),

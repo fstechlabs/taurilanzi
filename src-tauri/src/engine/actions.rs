@@ -303,6 +303,8 @@ mod tests {
             plugin_settings: Default::default(),
             integrations: Vec::new(),
             local_profiles: Default::default(),
+            plugins: Default::default(),
+            declined_plugins: Default::default(),
         }
     }
 

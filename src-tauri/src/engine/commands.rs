@@ -5,7 +5,8 @@ use super::gestures::Gesture;
 use super::snapshot::Snapshot;
 use crate::cloud::{SyncChanges, SyncExport};
 use crate::config::{
-    Action, AppRef, Appearance, DeviceSettings, Integration, Key, Position, Preferences,
+    Action, AppRef, Appearance, DeviceSettings, Integration, Key, KnownPlugin, Position,
+    Preferences,
 };
 use crate::driver::d200::Event as DockEvent;
 use crate::hass::HassReport;
@@ -192,6 +193,14 @@ pub enum Command {
     SetProfileLocal {
         id: Uuid,
         local: bool,
+        reply: Done,
+    },
+    PluginsInstalled {
+        plugins: std::collections::BTreeMap<String, KnownPlugin>,
+        reply: Done,
+    },
+    PluginUninstalled {
+        id: String,
         reply: Done,
     },
 }
