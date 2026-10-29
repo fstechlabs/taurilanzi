@@ -181,6 +181,75 @@ pub enum Widget {
         label: String,
         style: WidgetStyle,
     },
+    /// An entity of Home Assistant drawn as what it is: a curtain as open as it is, the dial of
+    /// a thermostat, a lamp lit in its color, a plug with what it draws…
+    HassTile {
+        #[serde(default)]
+        server: Uuid,
+        entity: String,
+        /// Empty is the entity's name.
+        #[serde(default)]
+        label: String,
+        #[serde(default)]
+        drawing: TileDrawing,
+        /// Another entity whose value shows too: what a plug draws, the humidity of a room…
+        #[serde(default)]
+        extra: Option<String>,
+        /// Where a gauge or a thermometer starts and ends, when the entity does not say.
+        #[serde(default)]
+        #[specta(type = Option<specta_typescript::Number>)]
+        min: Option<f64>,
+        #[serde(default)]
+        #[specta(type = Option<specta_typescript::Number>)]
+        max: Option<f64>,
+        /// How far back a graph goes.
+        #[serde(default = "graph_hours")]
+        hours: u32,
+        /// Same as those of an entity's card, for the drawings that are its icon.
+        #[serde(default)]
+        icon: Option<String>,
+        #[serde(default)]
+        icons: BTreeMap<String, String>,
+        style: WidgetStyle,
+    },
+}
+
+/// How a tile draws its entity. Each kind of entity offers the ones that suit it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum TileDrawing {
+    /// The one that suits its domain and device class best.
+    #[default]
+    Auto,
+    /// Its icon of Home Assistant, in the color of its state.
+    Icon,
+    /// Only its value, as large as it goes.
+    Value,
+    /// An arc from its least to its most, with the target of a thermostat on it.
+    Gauge,
+    /// How it went in the last hours.
+    Graph,
+    Bulb,
+    Plug,
+    Switch,
+    Fan,
+    Curtain,
+    /// Slats that tilt.
+    Blind,
+    /// A roller shutter, the Spanish persiana.
+    Shutter,
+    /// A roller blind of fabric.
+    Shade,
+    Garage,
+    Awning,
+    Gate,
+    Door,
+    Window,
+    Valve,
+    Lock,
+    Thermometer,
+    Droplet,
+    Battery,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
@@ -287,7 +356,8 @@ impl Widget {
             | Self::HassEntities { style, .. }
             | Self::HassPicture { style, .. }
             | Self::HassWeather { style, .. }
-            | Self::HassTemplate { style, .. } => style,
+            | Self::HassTemplate { style, .. }
+            | Self::HassTile { style, .. } => style,
         }
     }
 
@@ -299,7 +369,8 @@ impl Widget {
             | Self::HassEntities { server, .. }
             | Self::HassPicture { server, .. }
             | Self::HassWeather { server, .. }
-            | Self::HassTemplate { server, .. } => Some(*server),
+            | Self::HassTemplate { server, .. }
+            | Self::HassTile { server, .. } => Some(*server),
             _ => None,
         }
     }
@@ -307,7 +378,7 @@ impl Widget {
     /// Images of the asset store it draws.
     pub fn assets(&self) -> Vec<&str> {
         match self {
-            Self::HassEntity { icon, icons, .. } => icon
+            Self::HassEntity { icon, icons, .. } | Self::HassTile { icon, icons, .. } => icon
                 .iter()
                 .chain(icons.values())
                 .map(String::as_str)
@@ -445,6 +516,46 @@ mod tests {
         .unwrap();
         assert_eq!(json["kind"], "digital_clock");
         assert_eq!(json["second_line"], "weekday_date");
+    }
+
+    #[test]
+    fn a_tile_round_trips_and_starts_with_what_suits_its_entity() {
+        let tile = Widget::HassTile {
+            server: Uuid::from_u128(7),
+            entity: "cover.salon".into(),
+            label: "Persiana".into(),
+            drawing: TileDrawing::Curtain,
+            extra: Some("sensor.salon_power".into()),
+            min: Some(10.0),
+            max: Some(30.0),
+            hours: 12,
+            icon: None,
+            icons: BTreeMap::from([(String::new(), "icon".to_string())]),
+            style: style(),
+        };
+        let json = serde_json::to_value(&tile).unwrap();
+        assert_eq!(json["kind"], "hass_tile");
+        assert_eq!(json["drawing"], "curtain");
+        assert_eq!(serde_json::from_value::<Widget>(json).unwrap(), tile);
+        assert_eq!(tile.assets(), vec!["icon"]);
+        assert_eq!(tile.hass_server(), Some(Uuid::from_u128(7)));
+
+        let style = r#""style":{"color":{"r":255,"g":255,"b":255},"accent":{"r":0,"g":0,"b":0},"font_family":"Inter"}"#;
+        let bare: Widget = serde_json::from_str(&format!(
+            r#"{{"kind":"hass_tile","entity":"light.a",{style}}}"#
+        ))
+        .unwrap();
+        assert!(matches!(
+            bare,
+            Widget::HassTile {
+                drawing: TileDrawing::Auto,
+                extra: None,
+                min: None,
+                max: None,
+                hours: 24,
+                ..
+            }
+        ));
     }
 
     #[test]

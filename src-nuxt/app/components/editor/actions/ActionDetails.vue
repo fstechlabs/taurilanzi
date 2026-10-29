@@ -3,7 +3,7 @@ import type { DeepReadonly } from 'vue'
 import { ShieldAlert } from '@lucide/vue'
 import { urlError } from '~/composables/useKeyEditor'
 import { entryFor } from '~/lib/actions/catalog'
-import { hassError, switchLabels } from '~/lib/actions/hass'
+import { hassError, switchLabels, tileAction } from '~/lib/actions/hass'
 import { obsError } from '~/lib/actions/obs'
 import { NO_SERVER } from '~/lib/integrations'
 import { httpError, httpSummary } from '~/lib/actions/http'
@@ -143,6 +143,10 @@ function hassDoes(command: HassCommand): string {
       return t(`actions.hass.alarm.${camel(command.mode)}`)
     case 'color':
       return t('actions.hass.color')
+    case 'show':
+      return t('actions.catalog.entries.homeAssistant.show.name')
+    case 'tile':
+      return (command.press !== 'nothing' && tileAction(command.entity)) || t('actions.hass.tile.nothing')
     default:
       return entryFor(action.value)?.name ?? ''
   }

@@ -170,7 +170,7 @@ impl Action {
     /// Whether the key shows for a moment that it failed, when it says nothing on success.
     pub fn shows_failure(&self) -> bool {
         match self {
-            Self::HomeAssistant { .. } => true,
+            Self::HomeAssistant { command, .. } => !command.does_nothing(),
             Self::Random { actions } => actions.iter().any(Self::shows_failure),
             _ => self.shows_result(),
         }
@@ -183,5 +183,42 @@ impl Action {
             Self::Random { actions } => actions.iter().flat_map(Self::sounds).collect(),
             _ => Vec::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::HassPress;
+
+    fn hass(command: HassCommand) -> Action {
+        Action::HomeAssistant {
+            server: Uuid::nil(),
+            command,
+        }
+    }
+
+    #[test]
+    fn keys_that_only_show_an_entity_never_show_a_failure() {
+        let show = hass(HassCommand::Show {
+            entity: "sensor.temp".into(),
+        });
+        let still = hass(HassCommand::Tile {
+            entity: "light.a".into(),
+            press: HassPress::Nothing,
+        });
+        let tile = hass(HassCommand::Tile {
+            entity: "light.a".into(),
+            press: HassPress::Auto,
+        });
+        assert!(!show.shows_failure());
+        assert!(!still.shows_failure());
+        assert!(tile.shows_failure());
+        assert!(
+            Action::Random {
+                actions: vec![show, tile]
+            }
+            .shows_failure()
+        );
     }
 }

@@ -270,6 +270,11 @@
           }
         },
         "homeAssistant": {
+          "tile": {
+            "name": "Tile inteligente",
+            "description": "Dibuja la entidad según lo que es (persiana, termostato, luz, enchufe…) y al pulsar hace lo que le va",
+            "keywords": "tile, tarjeta, mosaico, dispositivo, persiana, cortina, termostato, gauge, lámpara, enchufe, consumo, automático, mágico"
+          },
           "switch": {
             "name": "Encender o apagar",
             "description": "Enciende, apaga, abre, cierra o bloquea una entidad",
@@ -319,6 +324,11 @@
             "name": "Lanzar un evento",
             "description": "Lanza un evento para que lo recojan tus automatizaciones",
             "keywords": "evento, automatización, disparador"
+          },
+          "show": {
+            "name": "Solo visualización",
+            "description": "Muestra una entidad en la tecla; al pulsarla no hace nada",
+            "keywords": "visualización, mostrar, ver, nada, no hacer nada, sensor, indicador, pantalla"
           }
         },
         "lights": {
@@ -899,8 +909,6 @@
         "offColor": "Apagado",
         "onColor": "Encendido",
         "failed": "No se pudo traer el icono de Home Assistant.",
-        "card": "Mostrar como tarjeta",
-        "cardHint": "Icono, nombre y estado de la entidad, siempre al día, con los datos que importan según su tipo.",
         "icon": "Icono",
         "ownIcon": "Elegido por ti",
         "haIconLive": "El de Home Assistant, cambia con su estado",
@@ -912,11 +920,35 @@
         "resetName": "Volver al de Home Assistant",
         "nameHint": "Vacío usa el nombre que tiene en Home Assistant.",
         "textHint": "El texto que se dibuja en la tecla.",
-        "background": "Cambiar de fondo con su estado"
+        "background": "Cambiar de fondo con su estado",
+        "mode": "Aspecto",
+        "modes": {
+          "tile": "Tile",
+          "card": "Tarjeta",
+          "image": "Icono y texto"
+        },
+        "hints": {
+          "tile": "La entidad dibujada según lo que es, con sus datos al día: una persiana tan abierta como está, el dial de un termostato…",
+          "card": "Icono, nombre y estado de la entidad, siempre al día, con los datos que importan según su tipo.",
+          "image": "Un icono y un texto fijos, que puedes cambiar."
+        }
       },
       "summary": {
         "assist": "Se lo dice a Assist",
         "event": "Lanza este evento en Home Assistant"
+      },
+      "showHint": "Al pulsar no hace nada: la tecla solo muestra la entidad. Si quieres que la tecla haga otra cosa, añádele otra acción.",
+      "tile": {
+        "press": "Al pulsar",
+        "nothing": "Nada",
+        "pressHint": "«Nada» deja la tecla solo para ver la entidad; otra acción de la tecla puede hacer lo que quieras.",
+        "onlyShows": "Esta entidad solo mide: al pulsar no hace nada.",
+        "does": {
+          "switch": "{on} / {off}",
+          "run": "Activar",
+          "increment": "Sumar uno",
+          "nextOption": "Siguiente opción"
+        }
       }
     },
     "path": {
@@ -1578,7 +1610,8 @@
       "hassEntities": "Varias entidades",
       "hassPicture": "Cámara o imagen",
       "hassWeather": "El tiempo",
-      "hassTemplate": "Plantilla"
+      "hassTemplate": "Plantilla",
+      "hassTile": "Tile inteligente"
     },
     "periods": {
       "day": "Día",
@@ -1714,7 +1747,42 @@
       "forecast": "Con la previsión",
       "forecastHint": "Los próximos días, en la tecla ancha.",
       "template": "Plantilla",
-      "templateHint": "Una plantilla de Home Assistant: la calcula él cada vez que cambia algo de lo que lee."
+      "templateHint": "Una plantilla de Home Assistant: la calcula él cada vez que cambia algo de lo que lee.",
+      "drawing": "Dibujo",
+      "autoDrawing": "Automático: {drawing}",
+      "drawings": {
+        "auto": "Automático",
+        "icon": "Icono",
+        "value": "Solo el valor",
+        "gauge": "Dial",
+        "graph": "Gráfica",
+        "bulb": "Bombilla",
+        "plug": "Enchufe",
+        "switch": "Interruptor",
+        "fan": "Ventilador",
+        "curtain": "Cortina",
+        "blind": "Veneciana",
+        "shutter": "Persiana",
+        "shade": "Estor",
+        "garage": "Puerta de garaje",
+        "awning": "Toldo",
+        "gate": "Cancela",
+        "door": "Puerta",
+        "window": "Ventana",
+        "valve": "Válvula",
+        "lock": "Cerradura",
+        "thermometer": "Termómetro",
+        "droplet": "Gota",
+        "battery": "Batería"
+      },
+      "range": "Escala",
+      "rangeAuto": "auto",
+      "min": "Mínimo",
+      "max": "Máximo",
+      "extra": "Otro dato",
+      "extraRemove": "Quitar",
+      "extraHint": "Se muestra junto a la entidad: el consumo de un enchufe, la humedad de una habitación…",
+      "extraSuggest": "Usar {name}"
     }
   },
   "integrations": {

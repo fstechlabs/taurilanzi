@@ -8,7 +8,9 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use super::runtime::Engine;
-use crate::config::{Action, Appearance, DeviceSettings, Integration, LayerConfig, Widget};
+use crate::config::{
+    Action, Appearance, DeviceSettings, Integration, LayerConfig, TileDrawing, Widget,
+};
 use crate::hass::{HassReport, Topic, Wants, domain};
 
 /// How often a card of a camera or an image fetches its picture while it is on screen.
@@ -193,6 +195,14 @@ impl Engine {
                         {
                             (server, entity, CARD_PICTURE_SECONDS)
                         }
+                        Widget::HassTile { server, entity, .. }
+                            if matches!(
+                                domain(entity),
+                                "camera" | "image" | "media_player" | "person" | "device_tracker"
+                            ) =>
+                        {
+                            (server, entity, CARD_PICTURE_SECONDS)
+                        }
                         _ => continue,
                     };
                     if let Some(wants) = all.get_mut(server) {
@@ -247,12 +257,7 @@ fn add_widget(wants: &mut Wants, widget: &Widget) {
         }
         Widget::HassGraph { entity, hours, .. } => {
             wants.entities.insert(entity.clone());
-            let hours = (*hours).clamp(1, 24 * 7);
-            let longest = wants
-                .histories
-                .get(entity)
-                .map_or(hours, |h| (*h).max(hours));
-            wants.histories.insert(entity.clone(), longest);
+            add_history(wants, entity, *hours);
         }
         Widget::HassEntities { entities, .. } => {
             wants
@@ -273,8 +278,33 @@ fn add_widget(wants: &mut Wants, widget: &Widget) {
         Widget::HassTemplate { template, .. } if !template.trim().is_empty() => {
             wants.templates.insert(template.clone());
         }
+        Widget::HassTile {
+            entity,
+            extra,
+            drawing,
+            hours,
+            ..
+        } => {
+            wants.entities.insert(entity.clone());
+            wants.entities.extend(extra.iter().cloned());
+            if *drawing == TileDrawing::Graph {
+                add_history(wants, entity, *hours);
+            }
+            if domain(entity) == "weather" {
+                wants.forecasts.insert(entity.clone());
+            }
+        }
         _ => {}
     }
+}
+
+fn add_history(wants: &mut Wants, entity: &str, hours: u32) {
+    let hours = hours.clamp(1, 24 * 7);
+    let longest = wants
+        .histories
+        .get(entity)
+        .map_or(hours, |h| (*h).max(hours));
+    wants.histories.insert(entity.to_string(), longest);
 }
 
 /// What of Home Assistant a look shows, and of which server, to draw it again when that changes.
@@ -312,9 +342,88 @@ fn appearance_topics(appearance: &Appearance) -> Vec<(Uuid, Topic)> {
             Widget::HassTemplate { template, .. } => {
                 topics.push(Topic::Template(template.clone()));
             }
+            Widget::HassTile {
+                entity,
+                extra,
+                drawing,
+                ..
+            } => {
+                topics.push(Topic::Entity(entity.clone()));
+                topics.extend(extra.iter().map(|e| Topic::Entity(e.clone())));
+                topics.push(Topic::Picture(entity.clone()));
+                if *drawing == TileDrawing::Graph {
+                    topics.push(Topic::History(entity.clone()));
+                }
+                if domain(entity) == "weather" {
+                    topics.push(Topic::Forecast(entity.clone()));
+                }
+            }
             _ => {}
         }
         all.extend(topics.into_iter().map(|topic| (server, topic)));
     }
     all
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::render::{Background, Color};
+
+    fn tile(drawing: &str) -> Widget {
+        serde_json::from_value(json!({
+            "kind": "hass_tile", "server": Uuid::from_u128(1), "entity": "sensor.temp",
+            "extra": "sensor.humidity", "drawing": drawing, "hours": 6,
+            "style": { "color": { "r": 255, "g": 255, "b": 255 }, "accent": { "r": 0, "g": 0, "b": 0 }, "font_family": "Inter" },
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_tile_follows_its_entity_and_the_other_one_it_shows() {
+        let mut wants = Wants::default();
+        add_widget(&mut wants, &tile("auto"));
+        assert_eq!(
+            wants.entities,
+            BTreeSet::from(["sensor.humidity".to_string(), "sensor.temp".to_string()])
+        );
+        assert!(wants.histories.is_empty());
+        add_widget(&mut wants, &tile("graph"));
+        assert_eq!(wants.histories.get("sensor.temp"), Some(&6));
+
+        let appearance = Appearance {
+            background: Background::Solid {
+                color: Color::BLACK,
+            },
+            layers: vec![LayerConfig::Widget {
+                widget: tile("graph"),
+            }],
+        };
+        let topics = appearance_topics(&appearance);
+        let server = Uuid::from_u128(1);
+        for topic in [
+            Topic::Entity("sensor.temp".into()),
+            Topic::Entity("sensor.humidity".into()),
+            Topic::History("sensor.temp".into()),
+        ] {
+            assert!(topics.contains(&(server, topic.clone())), "{topic:?}");
+        }
+    }
+
+    #[test]
+    fn keys_that_only_show_an_entity_follow_it_too() {
+        let mut all = BTreeMap::from([(Uuid::nil(), Wants::default())]);
+        add_action(
+            &mut all,
+            &Action::HomeAssistant {
+                server: Uuid::nil(),
+                command: crate::config::HassCommand::Show {
+                    entity: "sensor.temp".into(),
+                },
+            },
+        );
+        assert!(all[&Uuid::nil()].entities.contains("sensor.temp"));
+    }
 }

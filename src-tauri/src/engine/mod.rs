@@ -10,6 +10,7 @@ mod handle;
 mod hass;
 #[cfg(test)]
 mod hass_check;
+mod hass_drawings;
 mod hass_tiles;
 mod hass_widgets;
 mod history;

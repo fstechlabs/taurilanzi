@@ -302,6 +302,105 @@ pub enum WidgetContent {
         detail: Option<String>,
         days: Vec<WeatherDay>,
     },
+    /// An entity of Home Assistant drawn as what it is, with its values.
+    Tile {
+        label: Option<String>,
+        value: String,
+        unit: Option<String>,
+        /// Lines under the value, on keys with room for them.
+        detail: Option<String>,
+        extra: Option<String>,
+        /// The value of another entity, on every key: what a plug draws.
+        badge: Option<String>,
+        /// Off is drawn dimmed.
+        on: Option<bool>,
+        /// The color of its state; the style's accent when none.
+        tint: Option<Color>,
+        drawing: Drawing,
+    },
+}
+
+/// What a tile draws of its entity. Levels go from 0 to 1.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Drawing {
+    Icon {
+        icon: Option<ImageData>,
+    },
+    /// Only the value, as large as it goes.
+    Value,
+    /// An arc from the least to the most, with the value inside. `marks` are targets on it;
+    /// a ring goes all the way round.
+    Gauge {
+        level: Option<f32>,
+        marks: Vec<f32>,
+        ring: bool,
+    },
+    Bulb {
+        level: Option<f32>,
+    },
+    Plug,
+    Switch,
+    Fan {
+        level: Option<f32>,
+    },
+    Cover {
+        shape: CoverShape,
+        open: f32,
+        /// How open its slats are.
+        tilt: Option<f32>,
+    },
+    Valve {
+        open: f32,
+    },
+    Lock {
+        state: LockState,
+    },
+    Thermometer {
+        level: f32,
+    },
+    Droplet {
+        level: f32,
+    },
+    Battery {
+        level: f32,
+    },
+    /// A player's artwork or a person's photo; the icon until there is one.
+    Picture {
+        image: Option<ImageData>,
+        round: bool,
+        icon: Option<ImageData>,
+    },
+    /// Where the sun is: `x` across the sky from east to west, `height` above the horizon, below
+    /// it when negative.
+    Sun {
+        x: f32,
+        height: f32,
+    },
+    Vacuum,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverShape {
+    Curtain,
+    Blind,
+    Shutter,
+    Shade,
+    Garage,
+    Awning,
+    Gate,
+    Door,
+    Window,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LockState {
+    Locked,
+    Unlocked,
+    Moving,
+    Jammed,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

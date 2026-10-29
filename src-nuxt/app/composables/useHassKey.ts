@@ -1,15 +1,21 @@
 import type { MaybeRefOrGetter, Ref } from 'vue'
 import type { ImageDraft, KeyDraft, StateDraft } from '~/composables/useKeyEditor'
-import { followInKey, followedState, offState } from '~/lib/actions/hass'
+import { followInKey, followedState, offState, suggestedExtra } from '~/lib/actions/hass'
 import { iconSvg } from '~/lib/iconify'
 import { isDefaultKeyText } from '~/lib/new-key'
 import { newWidget } from '~/lib/widgets'
 import type { HassCommand, Widget } from '~/types/engine'
 
 type Card = Extract<Widget, { kind: 'hass_entity' }>
+export type HassTile = Extract<Widget, { kind: 'hass_tile' }>
+type Live = Card | HassTile
 
-/** How a key looks after an entity of Home Assistant: as a card of the entity, with its icon,
- * name and state always up to date, or with an image and a text of its own. */
+/** How a key shows an entity: drawn as what it is, as a card of its values, or with an image
+ * and a text of its own. */
+export type HassLook = 'tile' | 'card' | 'image'
+
+/** How a key looks after an entity of Home Assistant: as a tile or a card of the entity, with its
+ * icon, name and state always up to date, or with an image and a text of its own. */
 export function useHassKey(draft: Ref<KeyDraft | null> | null, server: MaybeRefOrGetter<string>) {
   const hass = useHass(server)
   const { upload } = useEngine()
@@ -32,31 +38,42 @@ export function useHassKey(draft: Ref<KeyDraft | null> | null, server: MaybeRefO
     return key.second ? [key, key.second] : [key]
   }
 
-  /** The card of `entity` on a look, if it has one. */
-  function cardOf(look: StateDraft, entity?: string): Card | null {
+  /** The tile or card of `entity` on a look, if it has one. */
+  function liveOf(look: StateDraft, entity?: string): Live | null {
     const widget = look.widget
-    return widget?.kind === 'hass_entity' && (!entity || widget.entity === entity) ? widget : null
+    return (widget?.kind === 'hass_entity' || widget?.kind === 'hass_tile') && (!entity || widget.entity === entity) ? widget : null
   }
 
-  const card = computed(() => (draft?.value ? cardOf(draft.value) : null))
+  const live = computed(() => (draft?.value ? liveOf(draft.value) : null))
+  const card = computed(() => (live.value?.kind === 'hass_entity' ? live.value : null))
+  const tile = computed(() => (live.value?.kind === 'hass_tile' ? live.value : null))
+  const mode = computed<HassLook>(() => (tile.value ? 'tile' : card.value ? 'card' : 'image'))
 
-  /** Every look shows the entity as a card, keeping the name and icon chosen for it. */
-  async function showCard(entity: string) {
+  /** Every look shows the entity as a tile or a card, keeping the name and icon chosen for it. */
+  async function showLive(entity: string, kind: 'tile' | 'card') {
     const key = draft?.value
     if (!key) {
       return
     }
     const byState = await icons(entity)
+    const extra = kind === 'tile' ? suggestedExtra(entity, hass.entities.value) : null
     for (const look of looks(key)) {
-      const previous = cardOf(look)
-      const widget = newWidget('hass_entity', look.widget) as Card
-      look.widget = {
-        ...widget,
+      const previous = liveOf(look)
+      const common = {
         server: toValue(server),
         entity,
         label: previous?.label ?? '',
         icon: previous?.icon ?? null,
         icons: byState,
+      }
+      if (kind === 'tile') {
+        const kept = previous?.kind === 'hass_tile' && previous.entity === entity ? previous : null
+        const widget = newWidget('hass_tile', look.widget) as HassTile
+        look.widget = { ...widget, ...kept, ...common, extra: kept ? kept.extra : extra }
+      }
+      else {
+        const widget = newWidget('hass_entity', look.widget) as Card
+        look.widget = { ...widget, ...common }
       }
       if (look.text && isDefaultKeyText(look.text.content)) {
         look.text = null
@@ -67,13 +84,21 @@ export function useHassKey(draft: Ref<KeyDraft | null> | null, server: MaybeRefO
     }
   }
 
+  async function showCard(entity: string) {
+    await showLive(entity, 'card')
+  }
+
+  async function showTile(entity: string) {
+    await showLive(entity, 'tile')
+  }
+
   function hideCard() {
     const key = draft?.value
     if (!key) {
       return
     }
     for (const look of looks(key)) {
-      const widget = cardOf(look)
+      const widget = liveOf(look)
       if (widget) {
         look.widget = null
         look.text = { content: widget.label || hass.entity(widget.entity)?.name || '', fontFamily: 'Inter', fontWeight: 700, size: 20, color: '#ffffff', position: 'bottom' }
@@ -81,17 +106,27 @@ export function useHassKey(draft: Ref<KeyDraft | null> | null, server: MaybeRefO
     }
   }
 
-  /** A key just set up for an entity, still as it was created, shows the entity as a card; a
-   * card of another entity follows the new one. */
-  async function dress(entity: string) {
+  async function setMode(entity: string, next: HassLook) {
+    if (next === 'image') {
+      hideCard()
+    }
+    else {
+      await showLive(entity, next)
+    }
+  }
+
+  /** A key just set up for an entity, still as it was created, shows the entity as `kind`; a
+   * tile or a card of another entity follows the new one. */
+  async function dress(entity: string, kind: 'tile' | 'card' = 'card') {
     const key = draft?.value
     if (!key || !hass.entity(entity)) {
       return
     }
     const fresh = !key.image && (!key.text || isDefaultKeyText(key.text.content)) && !key.widget
-    if (fresh || (card.value && card.value.entity !== entity)) {
+    const shown = live.value
+    if (fresh || (shown && shown.entity !== entity)) {
       try {
-        await showCard(entity)
+        await showLive(entity, fresh ? kind : (shown!.kind === 'hass_tile' ? 'tile' : 'card'))
       }
       catch {
         // Without the icons the key keeps its look; the card can be turned on by hand.
@@ -99,7 +134,7 @@ export function useHassKey(draft: Ref<KeyDraft | null> | null, server: MaybeRefO
     }
   }
 
-  /** An icon of the user's on the card, over Home Assistant's; null goes back to them. */
+  /** An icon of the user's on the tile or card, over Home Assistant's; null goes back to them. */
   async function setCardIcon(icon: string | null) {
     const key = draft?.value
     if (!key) {
@@ -107,7 +142,7 @@ export function useHassKey(draft: Ref<KeyDraft | null> | null, server: MaybeRefO
     }
     const asset = icon ? await uploadIcon(icon) : null
     for (const look of looks(key)) {
-      const widget = cardOf(look)
+      const widget = liveOf(look)
       if (widget) {
         widget.icon = asset
       }
@@ -120,9 +155,23 @@ export function useHassKey(draft: Ref<KeyDraft | null> | null, server: MaybeRefO
       return
     }
     for (const look of looks(key)) {
-      const widget = cardOf(look)
+      const widget = liveOf(look)
       if (widget) {
         widget.label = label
+      }
+    }
+  }
+
+  /** Changes the settings of the tile on every look. */
+  function setTile(changes: Partial<HassTile>) {
+    const key = draft?.value
+    if (!key) {
+      return
+    }
+    for (const look of looks(key)) {
+      const widget = liveOf(look)
+      if (widget?.kind === 'hass_tile') {
+        Object.assign(widget, changes)
       }
     }
   }
@@ -196,5 +245,24 @@ export function useHassKey(draft: Ref<KeyDraft | null> | null, server: MaybeRefO
     }
   }
 
-  return { icons, uploadIcon, card, dress, showCard, hideCard, setCardIcon, setCardLabel, setImage, setText, follow, unfollow }
+  return {
+    icons,
+    uploadIcon,
+    card,
+    tile,
+    live,
+    mode,
+    dress,
+    showCard,
+    showTile,
+    hideCard,
+    setMode,
+    setCardIcon,
+    setCardLabel,
+    setTile,
+    setImage,
+    setText,
+    follow,
+    unfollow,
+  }
 }

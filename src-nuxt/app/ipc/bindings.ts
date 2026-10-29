@@ -410,7 +410,14 @@ data?: { [key in string]: unknown } } |
 /**  Empty is Home Assistant's own agent. */
 agent?: string } | 
 /**  Fires an event on Home Assistant's bus, for automations to react to. */
-{ kind: "event"; event: string; data?: { [key in string]: unknown } };
+{ kind: "event"; event: string; data?: { [key in string]: unknown } } | 
+/**  Nothing on a press: the key only shows the entity. */
+{ kind: "show"; entity: string } | 
+/**
+ *  What suits the entity, as the tiles of Home Assistant do: toggles a light or a cover,
+ *  runs a scene, plays or pauses a player…
+ */
+{ kind: "tile"; entity: string; press?: HassPress };
 
 export type HassDevice = {
 	id: string,
@@ -514,6 +521,11 @@ export type HassOption =
 "operation_mode" | 
 /**  Of a vacuum. */
 "fan_speed";
+
+/**  What a tile does when pressed. */
+export type HassPress = 
+/**  What suits its domain; nothing for those that only measure. */
+"auto" | "nothing";
 
 export type HassStatus = 
 /**  No key uses Home Assistant and nobody asked to connect. */
@@ -953,6 +965,25 @@ export type SoundMode =
 /**  The whole state, after anything in it changed. */
 export type StateChanged = Snapshot;
 
+/**  How a tile draws its entity. Each kind of entity offers the ones that suit it. */
+export type TileDrawing = 
+/**  The one that suits its domain and device class best. */
+"auto" | 
+/**  Its icon of Home Assistant, in the color of its state. */
+"icon" | 
+/**  Only its value, as large as it goes. */
+"value" | 
+/**  An arc from its least to its most, with the target of a thermostat on it. */
+"gauge" | 
+/**  How it went in the last hours. */
+"graph" | "bulb" | "plug" | "switch" | "fan" | "curtain" | 
+/**  Slats that tilt. */
+"blind" | 
+/**  A roller shutter, the Spanish persiana. */
+"shutter" | 
+/**  A roller blind of fabric. */
+"shade" | "garage" | "awning" | "gate" | "door" | "window" | "valve" | "lock" | "thermometer" | "droplet" | "battery";
+
 /**  The update the window offers to install, or the one being installed. */
 export type UpdateOffer = {
 	version: string,
@@ -1059,7 +1090,22 @@ seconds?: number; style: WidgetStyle } |
 /**  The weather now and, on a wide key, the next days. */
 { kind: "hass_weather"; server?: string; entity: string; forecast?: boolean; style: WidgetStyle } | 
 /**  A template of Home Assistant, worked out by it whenever what it reads changes. */
-{ kind: "hass_template"; server?: string; template: string; label?: string; style: WidgetStyle };
+{ kind: "hass_template"; server?: string; template: string; label?: string; style: WidgetStyle } | 
+/**
+ *  An entity of Home Assistant drawn as what it is: a curtain as open as it is, the dial of
+ *  a thermostat, a lamp lit in its color, a plug with what it draws…
+ */
+{ kind: "hass_tile"; server?: string; entity: string; 
+/**  Empty is the entity's name. */
+label?: string; drawing?: TileDrawing; 
+/**  Another entity whose value shows too: what a plug draws, the humidity of a room… */
+extra?: string | null; 
+/**  Where a gauge or a thermometer starts and ends, when the entity does not say. */
+min?: number | null; max?: number | null; 
+/**  How far back a graph goes. */
+hours?: number; 
+/**  Same as those of an entity's card, for the drawings that are its icon. */
+icon?: string | null; icons?: { [key in string]: string }; style: WidgetStyle };
 
 export type WidgetStyle = {
 	color: Color,

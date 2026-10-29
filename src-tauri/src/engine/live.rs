@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use super::runtime::Engine;
 use crate::config::{Appearance, Key, LayerConfig, Widget};
+use crate::hass::domain;
 
 /// Lands just after the boundary, so the new second is already there when drawing.
 const LATE: Duration = Duration::from_millis(3);
@@ -47,6 +48,10 @@ fn period(widget: &Widget) -> u64 {
         },
         // Drawn again when Home Assistant reports a change; timers and players also tick.
         Widget::HassEntity { .. } => 1,
+        Widget::HassTile { entity, .. } => match domain(entity) {
+            "timer" | "media_player" => 1,
+            _ => 60,
+        },
         Widget::HassGraph { .. } | Widget::HassEntities { .. } => 60,
         Widget::HassPicture { .. } | Widget::HassWeather { .. } | Widget::HassTemplate { .. } => {
             3600
@@ -212,6 +217,14 @@ mod tests {
             "kind": "countdown", "target": "2026-12-31T23:59", "label": "", "done": "",
         }));
         assert_eq!(period(&countdown), 1);
+    }
+
+    #[test]
+    fn tiles_tick_only_for_what_counts_down_or_plays() {
+        let tile = |entity: &str| widget(json!({ "kind": "hass_tile", "entity": entity }));
+        assert_eq!(period(&tile("timer.tea")), 1);
+        assert_eq!(period(&tile("media_player.tv")), 1);
+        assert_eq!(period(&tile("cover.salon")), 60);
     }
 
     #[test]

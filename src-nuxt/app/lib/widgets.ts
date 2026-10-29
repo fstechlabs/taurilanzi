@@ -12,7 +12,7 @@ const KINDS: WidgetKind[] = [
 ]
 
 /** Widgets of Home Assistant, listed apart. */
-const HASS_KINDS: WidgetKind[] = ['hass_entity', 'hass_graph', 'hass_entities', 'hass_picture', 'hass_weather', 'hass_template']
+const HASS_KINDS: WidgetKind[] = ['hass_tile', 'hass_entity', 'hass_graph', 'hass_entities', 'hass_picture', 'hass_weather', 'hass_template']
 
 /** `now_playing` is found in the messages as `nowPlaying`. */
 function messageKey(id: string) {
@@ -94,6 +94,8 @@ export function newWidget(kind: WidgetKind, previous: Widget | null, now = new D
       return { kind, server: NO_SERVER, entity: '', forecast: true, style }
     case 'hass_template':
       return { kind, server: NO_SERVER, template: '', label: '', style }
+    case 'hass_tile':
+      return { kind, server: NO_SERVER, entity: '', label: '', drawing: 'auto', extra: null, min: null, max: null, hours: 24, icon: null, icons: {}, style }
     case 'calendar':
     case 'battery':
     case 'now_playing':

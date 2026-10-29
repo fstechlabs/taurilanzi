@@ -8,13 +8,13 @@ use jiff::{Timestamp, Zoned};
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::hass_tiles;
 use super::widgets::{day_month, decimal, text, track_time, weekday};
+use super::{hass_drawings, hass_tiles};
 use crate::config::{AssetStore, HassItem, Widget};
 use crate::hass::{Entity, Forecast, HassData, HassReport, domain, is_on, labels};
 use crate::render::{ImageData, Reading, WeatherDay, WidgetContent};
 
-const MISSING: &str = "—";
+pub(super) const MISSING: &str = "—";
 const GRAPH_POINTS: usize = 90;
 const READINGS_MAX: usize = 3;
 const FORECAST_DAYS: usize = 3;
@@ -118,6 +118,31 @@ pub fn view(
         Widget::HassWeather {
             entity, forecast, ..
         } => weather(data, connected, entity, *forecast, now),
+        Widget::HassTile {
+            entity,
+            label,
+            drawing,
+            extra,
+            min,
+            max,
+            hours,
+            icon,
+            icons,
+            ..
+        } => {
+            let state = data.entity(entity).filter(|_| connected);
+            let image = hass_tiles::icon(assets, icon.as_deref(), icons, state);
+            let settings = hass_drawings::Settings {
+                entity,
+                label,
+                drawing: *drawing,
+                extra: extra.as_deref(),
+                min: *min,
+                max: *max,
+                hours: *hours,
+            };
+            hass_drawings::view(data, connected, &settings, image, now)
+        }
         Widget::HassTemplate {
             template, label, ..
         } => {
@@ -263,7 +288,12 @@ pub(super) fn duration_seconds(text: &str) -> Option<i64> {
 }
 
 /// The value of an entity in a few characters, and its unit.
-fn reading(data: &HassData, id: &str, entity: &Entity, now: Timestamp) -> (String, Option<String>) {
+pub(super) fn reading(
+    data: &HassData,
+    id: &str,
+    entity: &Entity,
+    now: Timestamp,
+) -> (String, Option<String>) {
     if !entity.available() {
         return (labels::state(data, id, entity), None);
     }
@@ -513,7 +543,7 @@ fn item_reading(data: &HassData, connected: bool, item: &HassItem, now: Timestam
     }
 }
 
-fn graph(
+pub(super) fn graph(
     data: &HassData,
     connected: bool,
     id: &str,
@@ -588,7 +618,7 @@ fn graph(
     }
 }
 
-fn weather(
+pub(super) fn weather(
     data: &HassData,
     connected: bool,
     id: &str,

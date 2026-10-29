@@ -79,6 +79,7 @@ pub fn run(action: &Action, context: &Context) -> Result<(), ActionError> {
             .ok_or(ActionError::NoServer)?
             .run(command)?),
         Action::Http { request } => http::run(request),
+        Action::HomeAssistant { command, .. } if command.does_nothing() => Ok(()),
         Action::HomeAssistant { server, command } => Ok(context
             .hass
             .get(*server)

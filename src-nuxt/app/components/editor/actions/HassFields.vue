@@ -9,6 +9,7 @@ import {
   hassStatusText,
   levelUnit,
   levelsOf,
+  tileAction,
   optionAttribute,
   optionsOf,
   switchLabels,
@@ -71,7 +72,16 @@ function setEntity(entity: string) {
   else {
     patch({ entity })
   }
-  look.dress(entity)
+  look.dress(entity, value.kind === 'tile' || value.kind === 'show' ? 'tile' : 'card')
+}
+
+/** What the tile's entity does when pressed, if anything. */
+const natural = computed(() => (command.value.kind === 'tile' && entityId.value ? tileAction(entityId.value) : null))
+
+function setPress(value: unknown) {
+  if (value === 'auto' || value === 'nothing') {
+    patch({ press: value })
+  }
 }
 
 const labels = computed(() => (command.value.kind === 'switch' && entityId.value ? switchLabels(entityId.value) : null))
@@ -203,7 +213,8 @@ function setEventData(text: string) {
 /** Alarm panels and locks with a code take it from the secrets. */
 const needsCode = computed(() => {
   const domain = domainOf(entityId.value)
-  return (domain === 'alarm_control_panel' || domain === 'lock') && ['switch', 'run', 'alarm'].includes(command.value.kind)
+  return (domain === 'alarm_control_panel' || domain === 'lock')
+    && (['switch', 'run', 'alarm'].includes(command.value.kind) || (command.value.kind === 'tile' && command.value.press === 'auto'))
 })
 
 </script>
@@ -237,6 +248,27 @@ const needsCode = computed(() => {
     <p v-else-if="command.kind === 'run'" class="text-[11px] text-muted-foreground">
       {{ t('actions.hass.runHint') }}
     </p>
+
+    <p v-else-if="command.kind === 'show'" class="text-[11px] text-muted-foreground">
+      {{ t('actions.hass.showHint') }}
+    </p>
+
+    <template v-else-if="command.kind === 'tile' && entityId">
+      <div class="flex flex-col gap-1.5">
+        <Label class="text-xs text-muted-foreground">{{ t('actions.hass.tile.press') }}</Label>
+        <ToggleGroup v-if="natural" :model-value="command.press ?? 'auto'" type="single" variant="outline" size="sm" class="w-full" :aria-label="t('actions.hass.tile.press')" @update:model-value="setPress">
+          <ToggleGroupItem value="auto" class="flex-1">
+            {{ natural }}
+          </ToggleGroupItem>
+          <ToggleGroupItem value="nothing" class="flex-1">
+            {{ t('actions.hass.tile.nothing') }}
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <p class="text-[11px] text-muted-foreground">
+          {{ natural ? t('actions.hass.tile.pressHint') : t('actions.hass.tile.onlyShows') }}
+        </p>
+      </div>
+    </template>
 
     <template v-else-if="level && entityId">
       <Select :model-value="level.level" @update:model-value="setLevel">

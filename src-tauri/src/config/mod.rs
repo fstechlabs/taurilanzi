@@ -17,8 +17,8 @@ pub use actions::{Action, KeyCombo, MediaKey, SoundMode};
 pub use assets::{AssetStore, SoundFormat};
 pub use defaults::{back_key, first_run};
 pub use hass::{
-    HassAlarm, HassChange, HassChoice, HassCommand, HassLevel, HassMedia, HassOption, HassSwitch,
-    HassTarget,
+    HassAlarm, HassChange, HassChoice, HassCommand, HassLevel, HassMedia, HassOption, HassPress,
+    HassSwitch, HassTarget,
 };
 #[cfg_attr(not(test), allow(unused_imports))]
 pub use http::{HttpBody, HttpMethod, HttpPair, HttpRequest};
@@ -36,4 +36,4 @@ pub use preferences::{LockAction, Preferences, Scene, ScreensaverImage, Screensa
 pub use store::Store;
 #[cfg(test)]
 pub use widgets::WidgetStyle;
-pub use widgets::{ClockLine, HassItem, Metric, Period, Usage, Widget, WorldClock};
+pub use widgets::{ClockLine, HassItem, Metric, Period, TileDrawing, Usage, Widget, WorldClock};

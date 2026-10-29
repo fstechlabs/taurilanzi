@@ -35,7 +35,7 @@ pub(super) struct Figure<'a> {
 }
 
 impl<'a> Figure<'a> {
-    fn plain(value: &'a str, unit: Option<&'a str>) -> Self {
+    pub(super) fn plain(value: &'a str, unit: Option<&'a str>) -> Self {
         Self {
             value,
             unit,
@@ -45,7 +45,13 @@ impl<'a> Figure<'a> {
 }
 
 impl Pen<'_> {
-    fn image(&mut self, image: &ImageData, area: Chart, aspect: &str, tint: Option<Color>) {
+    pub(super) fn image(
+        &mut self,
+        image: &ImageData,
+        area: Chart,
+        aspect: &str,
+        tint: Option<Color>,
+    ) {
         let Chart { x, y, w, h } = area;
         let _ = write!(
             self.svg,
@@ -64,7 +70,7 @@ impl Pen<'_> {
     }
 
     /// `text` in `font`, shrunk to fit `width` but not below `least`, and cut there.
-    fn fitted(text: &str, font: Font, width: f32, least: f32) -> (String, Font) {
+    pub(super) fn fitted(text: &str, font: Font, width: f32, least: f32) -> (String, Font) {
         let font = font.sized(font.fit(text, width).size.max(least));
         (ellipsize(text, font, width), font)
     }
@@ -76,7 +82,7 @@ impl Pen<'_> {
     }
 
     /// The width of a value and its unit at size 1.
-    fn value_width(value: &str, unit: Option<&str>) -> f32 {
+    pub(super) fn value_width(value: &str, unit: Option<&str>) -> f32 {
         let font = Font::new(1.0, 700, Color::WHITE);
         text_width(value, font)
             + unit.map_or(0.0, |unit| {
@@ -85,7 +91,7 @@ impl Pen<'_> {
     }
 
     /// A value with its unit right after it, from `x` as `anchor` says, on the baseline `y`.
-    fn value(&mut self, x: f32, y: f32, anchor: Anchor, size: f32, figure: Figure) {
+    pub(super) fn value(&mut self, x: f32, y: f32, anchor: Anchor, size: f32, figure: Figure) {
         let Figure { value, unit, on } = figure;
         let (color, opacity) = self.value_color(on);
         let font = Font::new(size, 700, color).dim(opacity);
@@ -291,7 +297,7 @@ impl Pen<'_> {
 
     /// The size and lines of a value in `width` and `height`: one line when it has a unit,
     /// wrapped into a few larger lines rather than shrunk when it is words.
-    fn figure_size(
+    pub(super) fn figure_size(
         &self,
         figure: Figure,
         width: f32,
@@ -309,12 +315,12 @@ impl Pen<'_> {
         }
     }
 
-    fn lines_height(size: f32, lines: &[String]) -> f32 {
+    pub(super) fn lines_height(size: f32, lines: &[String]) -> f32 {
         size * CAP * lines.len() as f32 + size * 0.3 * (lines.len() as f32 - 1.0)
     }
 
     /// Draws the lines of a value from `y`, its unit after the last, and gives where they end.
-    fn figure_lines(
+    pub(super) fn figure_lines(
         &mut self,
         x: f32,
         mut y: f32,
@@ -344,7 +350,7 @@ impl Pen<'_> {
     }
 
     /// An icon in a soft circle of `tint`, the way Home Assistant's cards show the state.
-    fn icon_circle(
+    pub(super) fn icon_circle(
         &mut self,
         icon: Option<&ImageData>,
         x: f32,

@@ -71,6 +71,27 @@ pub enum HassCommand {
         #[specta(type = std::collections::BTreeMap<String, specta_typescript::Unknown>)]
         data: Value,
     },
+    /// Nothing on a press: the key only shows the entity.
+    Show {
+        entity: String,
+    },
+    /// What suits the entity, as the tiles of Home Assistant do: toggles a light or a cover,
+    /// runs a scene, plays or pauses a player…
+    Tile {
+        entity: String,
+        #[serde(default)]
+        press: HassPress,
+    },
+}
+
+/// What a tile does when pressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum HassPress {
+    /// What suits its domain; nothing for those that only measure.
+    #[default]
+    Auto,
+    Nothing,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
@@ -231,10 +252,24 @@ impl HassCommand {
             | Self::Choose { entity, .. }
             | Self::Media { entity, .. }
             | Self::Color { entity, .. }
-            | Self::Alarm { entity, .. } => Some(entity),
+            | Self::Alarm { entity, .. }
+            | Self::Show { entity }
+            | Self::Tile { entity, .. } => Some(entity),
             Self::Call { target, .. } => target.entities.first().map(String::as_str),
             Self::Assist { .. } | Self::Event { .. } => None,
         }
+    }
+
+    /// Whether a press leaves Home Assistant alone.
+    pub fn does_nothing(&self) -> bool {
+        matches!(
+            self,
+            Self::Show { .. }
+                | Self::Tile {
+                    press: HassPress::Nothing,
+                    ..
+                }
+        )
     }
 
     /// What is missing for the command to be saved.
@@ -378,6 +413,13 @@ mod tests {
             Event {
                 event: "taurilanzi_pressed".into(),
                 data: json!({ "key": 1 }),
+            },
+            Show {
+                entity: "sensor.salon_temperature".into(),
+            },
+            Tile {
+                entity: "cover.salon".into(),
+                press: HassPress::Nothing,
             },
         ]
     }

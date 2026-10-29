@@ -1,4 +1,4 @@
-import type { Action, HassCommand, HassEntityInfo, HassInfo, HassLevel, HassOption } from '~/types/engine'
+import type { Action, HassCommand, HassEntityInfo, HassInfo, HassLevel, HassOption, TileDrawing } from '~/types/engine'
 import type { KeyDraft, StateDraft } from '~/composables/useKeyEditor'
 // Relative, not `~`: the unit tests import this file and bun does not know that alias.
 import { t } from '../i18n'
@@ -101,6 +101,8 @@ export const DOMAINS_OF: Record<HassKind, string[] | null> = {
   call: null,
   assist: null,
   event: null,
+  show: null,
+  tile: null,
 }
 
 export function canSwitch(entity: string) {
@@ -190,7 +192,7 @@ export function levelUnit(level: HassLevel, info?: HassEntityInfo, temperatureUn
 
 /** What is missing for a command to be saved, the same checks the engine makes. */
 export function hassError(command: HassCommand): string | null {
-  const entityKinds: HassKind[] = ['switch', 'run', 'level', 'choose', 'media', 'color', 'alarm']
+  const entityKinds: HassKind[] = ['switch', 'run', 'level', 'choose', 'media', 'color', 'alarm', 'show', 'tile']
   if (entityKinds.includes(command.kind) && 'entity' in command && !isEntityId(command.entity)) {
     return t('actions.hass.errors.entity')
   }
@@ -306,9 +308,183 @@ export function followedState(command: HassCommand): FollowedState | null {
       return null
     case 'call':
       return command.target?.entities?.[0] ? active(command.target.entities[0]) : null
+    case 'show':
+    case 'tile':
+      return hasOnOff(command.entity) ? active(command.entity) : null
     default:
       return null
   }
+}
+
+/** Entities that are on or off, in their own words. */
+function hasOnOff(entity: string) {
+  const domain = domainOf(entity)
+  return Boolean(domain) && (canSwitch(entity) || ['binary_sensor', 'person', 'device_tracker', 'sun'].includes(domain)) && !PRESS_ONLY.has(domain)
+}
+
+const TILE_SWITCHES = new Set([
+  'light', 'switch', 'fan', 'input_boolean', 'siren', 'humidifier', 'remote', 'group', 'automation', 'climate',
+  'water_heater', 'cover', 'valve', 'lock', 'vacuum', 'lawn_mower', 'timer', 'alarm_control_panel',
+])
+
+/** What a tile of `entity` does when pressed, as the engine does it; null when it does nothing. */
+export function tileAction(entity: string): string | null {
+  const domain = domainOf(entity)
+  if (['scene', 'script', 'button', 'input_button', 'counter'].includes(domain)) {
+    return t(`actions.hass.tile.does.${domain === 'counter' ? 'increment' : 'run'}`)
+  }
+  if (domain === 'media_player') {
+    return t('actions.hass.media.playPause')
+  }
+  if (domain === 'select' || domain === 'input_select') {
+    return t('actions.hass.tile.does.nextOption')
+  }
+  const labels = TILE_SWITCHES.has(domain) ? switchLabels(entity) : null
+  return labels ? t('actions.hass.tile.does.switch', labels) : null
+}
+
+const COVER_DRAWINGS: Record<string, TileDrawing> = {
+  curtain: 'curtain',
+  blind: 'blind',
+  damper: 'blind',
+  shade: 'shade',
+  garage: 'garage',
+  awning: 'awning',
+  gate: 'gate',
+  door: 'door',
+  window: 'window',
+}
+
+const BINARY_DRAWINGS: Record<string, TileDrawing> = {
+  door: 'door',
+  opening: 'door',
+  window: 'window',
+  garage_door: 'garage',
+  plug: 'plug',
+  power: 'plug',
+  light: 'bulb',
+  lock: 'lock',
+  moisture: 'droplet',
+  battery: 'battery',
+}
+
+const GAUGE_CLASSES = new Set([
+  'carbon_dioxide', 'carbon_monoxide', 'pm1', 'pm25', 'pm10', 'aqi', 'volatile_organic_compounds',
+  'volatile_organic_compounds_parts', 'nitrogen_dioxide', 'ozone',
+])
+
+/** Domains whose tile has a drawing of its own: a vacuum, the sun, a timer's ring, a player's
+ * artwork, a person's photo, a camera's picture, the weather. */
+const OWN_DRAWING = new Set(['vacuum', 'sun', 'timer', 'media_player', 'person', 'device_tracker', 'camera', 'image', 'weather'])
+
+function isNumeric(info?: HassEntityInfo) {
+  return Boolean(info) && info!.state.trim() !== '' && Number.isFinite(Number(info!.state))
+}
+
+/** The drawing the engine picks for an entity when left to it; `auto` for those of their own. */
+export function suitedDrawing(entity: string, info?: HassEntityInfo): TileDrawing {
+  const domain = domainOf(entity)
+  const deviceClass = String(info?.attributes.device_class ?? '')
+  switch (domain) {
+    case 'light':
+      return 'bulb'
+    case 'switch':
+      return deviceClass === 'outlet' ? 'plug' : 'switch'
+    case 'input_boolean':
+    case 'automation':
+      return 'switch'
+    case 'fan':
+      return 'fan'
+    case 'cover':
+      return COVER_DRAWINGS[deviceClass] ?? 'shutter'
+    case 'valve':
+      return 'valve'
+    case 'lock':
+      return 'lock'
+    case 'climate':
+    case 'water_heater':
+    case 'humidifier':
+    case 'number':
+    case 'input_number':
+      return 'gauge'
+    case 'counter':
+      return 'value'
+    case 'sensor':
+      if (!isNumeric(info)) {
+        return 'icon'
+      }
+      if (deviceClass === 'temperature') {
+        return 'thermometer'
+      }
+      if (deviceClass === 'humidity' || deviceClass === 'moisture') {
+        return 'droplet'
+      }
+      if (deviceClass === 'battery') {
+        return 'battery'
+      }
+      return GAUGE_CLASSES.has(deviceClass) || info?.attributes.unit_of_measurement === '%' ? 'gauge' : 'icon'
+    case 'binary_sensor':
+      return BINARY_DRAWINGS[deviceClass] ?? 'icon'
+    default:
+      return OWN_DRAWING.has(domain) ? 'auto' : 'icon'
+  }
+}
+
+const COVERS: TileDrawing[] = ['curtain', 'blind', 'shutter', 'shade', 'garage', 'awning', 'gate', 'door', 'window']
+
+/** The drawings a tile of `entity` can choose from, besides leaving it to the app. */
+export function tileDrawings(entity: string, info?: HassEntityInfo): TileDrawing[] {
+  switch (domainOf(entity)) {
+    case 'light':
+      return ['bulb', 'icon', 'value']
+    case 'switch':
+    case 'input_boolean':
+      return ['plug', 'switch', 'bulb', 'fan', 'icon', 'value']
+    case 'automation':
+      return ['switch', 'icon']
+    case 'fan':
+      return ['fan', 'icon', 'value']
+    case 'cover':
+      return [...COVERS, 'icon', 'value']
+    case 'valve':
+      return ['valve', 'icon', 'value']
+    case 'lock':
+      return ['lock', 'icon']
+    case 'climate':
+    case 'water_heater':
+      return ['gauge', 'thermometer', 'icon', 'value']
+    case 'humidifier':
+      return ['gauge', 'droplet', 'icon', 'value']
+    case 'number':
+    case 'input_number':
+    case 'counter':
+      return ['gauge', 'value', 'graph', 'icon']
+    case 'sensor':
+      return isNumeric(info) ? ['gauge', 'graph', 'thermometer', 'droplet', 'battery', 'value', 'icon'] : ['icon', 'value']
+    case 'binary_sensor':
+      return ['door', 'window', 'garage', 'plug', 'bulb', 'lock', 'droplet', 'battery', 'icon']
+    default:
+      return ['icon', 'value']
+  }
+}
+
+/** Whether a tile drawn so takes a least and a most. */
+export function drawingHasRange(drawing: TileDrawing) {
+  return drawing === 'gauge' || drawing === 'thermometer' || drawing === 'droplet'
+}
+
+/** Domains whose devices often measure what they draw, which a tile shows next to them. */
+const DRAWS_POWER = new Set(['switch', 'light', 'fan', 'media_player', 'climate', 'water_heater', 'humidifier', 'vacuum', 'input_boolean'])
+
+/** A sensor of the same device as `entity` worth showing beside it: what a plug draws. */
+export function suggestedExtra(entity: string, entities: readonly HassEntityInfo[]): string | null {
+  const own = entities.find(e => e.id === entity)
+  if (!own?.device || !DRAWS_POWER.has(domainOf(entity))) {
+    return null
+  }
+  const siblings = entities.filter(e => e.id !== entity && e.device === own.device && domainOf(e.id) === 'sensor')
+  const of = (deviceClass: string) => siblings.find(e => e.attributes.device_class === deviceClass)
+  return (of('power') ?? null)?.id ?? null
 }
 
 /** The action a key of two states follows, as the engine picks it: the first one with a state,
@@ -365,6 +541,10 @@ export function newCommand(kind: HassKind, entity = ''): HassCommand {
       return { kind, text: '', agent: '' }
     case 'event':
       return { kind, event: '', data: {} }
+    case 'show':
+      return { kind, entity }
+    case 'tile':
+      return { kind, entity, press: 'auto' }
   }
 }
 

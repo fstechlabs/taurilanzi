@@ -7,6 +7,7 @@ use std::fmt::Write;
 use super::design::{
     ClockFace, Color, Meter, NetworkGraph, Rate, TimerPhase, WidgetContent, WidgetView,
 };
+use super::hass_drawings::Tile;
 use super::hass_widgets::{Card, Figure};
 use super::svg::{SAFE_MARGIN, escape};
 
@@ -172,6 +173,29 @@ pub fn write(svg: &mut String, view: &WidgetView, w: f32, h: f32) {
             detail,
             days,
         } => pen.weather(condition, text, temperature, detail.as_deref(), days),
+        WidgetContent::Tile {
+            label,
+            value,
+            unit,
+            detail,
+            extra,
+            badge,
+            on,
+            tint,
+            drawing,
+        } => pen.tile(&Tile {
+            label: label.as_deref(),
+            figure: Figure {
+                value,
+                unit: unit.as_deref(),
+                on: *on,
+            },
+            detail: detail.as_deref(),
+            extra: extra.as_deref(),
+            badge: badge.as_deref(),
+            tint: *tint,
+            drawing,
+        }),
     }
 }
 
@@ -1915,7 +1939,9 @@ impl Pen<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::render::design::{ImageData, KeyDesign, Layer, Reading, WeatherDay};
+    use crate::render::design::{
+        CoverShape, Drawing, ImageData, KeyDesign, Layer, LockState, Reading, WeatherDay,
+    };
     use crate::render::{fonts, rasterize, svg};
 
     fn rate(value: &str, unit: &str) -> Rate {
@@ -1948,7 +1974,7 @@ mod tests {
             meter("GPU", None, vec![None; 60]),
             meter("Disco", Some(0.0), Vec::new()),
         ];
-        vec![
+        let mut all = vec![
             WidgetContent::DigitalClock {
                 time: "13:05".into(),
                 seconds: Some("09".into()),
@@ -2282,7 +2308,239 @@ mod tests {
                 detail: None,
                 days: Vec::new(),
             },
-        ]
+        ];
+        all.extend(tiles());
+        all
+    }
+
+    fn tile(
+        label: &str,
+        value: &str,
+        unit: Option<&str>,
+        on: Option<bool>,
+        tint: Option<Color>,
+        drawing: Drawing,
+    ) -> WidgetContent {
+        WidgetContent::Tile {
+            label: Some(label.into()),
+            value: value.into(),
+            unit: unit.map(Into::into),
+            detail: Some("Abierta".into()),
+            extra: Some("Hace 5 min".into()),
+            badge: None,
+            on,
+            tint,
+            drawing,
+        }
+    }
+
+    fn with_lines(
+        mut content: WidgetContent,
+        new_detail: Option<&str>,
+        new_badge: Option<&str>,
+    ) -> WidgetContent {
+        if let WidgetContent::Tile { detail, badge, .. } = &mut content {
+            *detail = new_detail.map(Into::into).or(detail.take());
+            *badge = new_badge.map(Into::into);
+        }
+        content
+    }
+
+    fn tiles() -> Vec<WidgetContent> {
+        let amber = Some(Color::rgb(255, 193, 7));
+        let cover = |shape, open| Drawing::Cover {
+            shape,
+            open,
+            tilt: Some(0.5),
+        };
+        let mut all = vec![
+            tile(
+                "Lámpara",
+                "80",
+                Some("%"),
+                Some(true),
+                amber,
+                Drawing::Bulb { level: Some(0.8) },
+            ),
+            tile(
+                "Lámpara",
+                "Apagada",
+                None,
+                Some(false),
+                None,
+                Drawing::Bulb { level: None },
+            ),
+            with_lines(
+                tile(
+                    "Enchufe",
+                    "Encendido",
+                    None,
+                    Some(true),
+                    amber,
+                    Drawing::Plug,
+                ),
+                None,
+                Some("35,2 W"),
+            ),
+            tile("Enchufe", "Apagado", None, Some(false), None, Drawing::Plug),
+            tile(
+                "Interruptor",
+                "Encendido",
+                None,
+                Some(true),
+                amber,
+                Drawing::Switch,
+            ),
+            tile(
+                "Ventilador",
+                "60",
+                Some("%"),
+                Some(true),
+                Some(Color::rgb(0, 188, 212)),
+                Drawing::Fan { level: Some(0.6) },
+            ),
+            with_lines(
+                tile(
+                    "Salón",
+                    "21,3",
+                    Some("°C"),
+                    Some(true),
+                    Some(Color::rgb(255, 129, 0)),
+                    Drawing::Gauge {
+                        level: Some(0.5),
+                        marks: vec![0.55],
+                        ring: false,
+                    },
+                ),
+                Some("→ 22°"),
+                Some("21 %"),
+            ),
+            tile(
+                "Temporizador",
+                "0:04:32",
+                None,
+                Some(true),
+                amber,
+                Drawing::Gauge {
+                    level: Some(0.7),
+                    marks: Vec::new(),
+                    ring: true,
+                },
+            ),
+            tile(
+                "Puerta",
+                "Bloqueada",
+                None,
+                Some(true),
+                Some(Color::rgb(76, 175, 80)),
+                Drawing::Lock {
+                    state: LockState::Locked,
+                },
+            ),
+            tile(
+                "Puerta",
+                "Desbloqueada",
+                None,
+                Some(false),
+                Some(Color::rgb(244, 67, 54)),
+                Drawing::Lock {
+                    state: LockState::Unlocked,
+                },
+            ),
+            tile(
+                "Temperatura",
+                "21,5",
+                Some("°C"),
+                None,
+                Some(Color::rgb(255, 129, 0)),
+                Drawing::Thermometer { level: 0.63 },
+            ),
+            tile(
+                "Humedad",
+                "48",
+                Some("%"),
+                None,
+                Some(Color::rgb(43, 154, 249)),
+                Drawing::Droplet { level: 0.48 },
+            ),
+            tile(
+                "Batería",
+                "15",
+                Some("%"),
+                None,
+                Some(Color::rgb(244, 67, 54)),
+                Drawing::Battery { level: 0.15 },
+            ),
+            tile(
+                "Riego",
+                "Abierta",
+                None,
+                Some(true),
+                None,
+                Drawing::Valve { open: 1.0 },
+            ),
+            tile(
+                "Sol",
+                "Sobre el horizonte",
+                None,
+                Some(true),
+                amber,
+                Drawing::Sun {
+                    x: 0.3,
+                    height: 0.6,
+                },
+            ),
+            tile(
+                "Robot",
+                "Limpiando",
+                None,
+                Some(true),
+                Some(Color::rgb(0, 150, 136)),
+                Drawing::Vacuum,
+            ),
+            tile("Contador", "1234", Some("kWh"), None, None, Drawing::Value),
+            tile(
+                "Movimiento",
+                "Detectado",
+                None,
+                Some(true),
+                amber,
+                Drawing::Icon { icon: Some(icon()) },
+            ),
+            tile(
+                "Salón",
+                "Bohemian Rhapsody",
+                None,
+                Some(true),
+                None,
+                Drawing::Picture {
+                    image: None,
+                    round: false,
+                    icon: Some(icon()),
+                },
+            ),
+        ];
+        for shape in [
+            CoverShape::Curtain,
+            CoverShape::Blind,
+            CoverShape::Shutter,
+            CoverShape::Shade,
+            CoverShape::Garage,
+            CoverShape::Awning,
+            CoverShape::Gate,
+            CoverShape::Door,
+            CoverShape::Window,
+        ] {
+            all.push(tile(
+                "Salón",
+                "40",
+                Some("%"),
+                Some(true),
+                Some(Color::rgb(186, 104, 200)),
+                cover(shape, 0.4),
+            ));
+        }
+        all
     }
 
     fn icon() -> ImageData {

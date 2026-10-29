@@ -46,7 +46,8 @@ pub fn view(widget: &Widget, feeds: &Feeds, key: KeyNow, now: Timestamp) -> Widg
         | Widget::HassEntities { .. }
         | Widget::HassPicture { .. }
         | Widget::HassWeather { .. }
-        | Widget::HassTemplate { .. } => hass_widgets::view(widget, feeds.hass, feeds.assets, now),
+        | Widget::HassTemplate { .. }
+        | Widget::HassTile { .. } => hass_widgets::view(widget, feeds.hass, feeds.assets, now),
         Widget::DigitalClock {
             seconds,
             hour12,

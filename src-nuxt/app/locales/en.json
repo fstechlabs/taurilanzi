@@ -270,6 +270,11 @@
           }
         },
         "homeAssistant": {
+          "tile": {
+            "name": "Smart tile",
+            "description": "Draws the entity as what it is (blind, thermostat, light, plug…) and does what suits it when pressed",
+            "keywords": "tile, card, device, cover, blind, curtain, thermostat, gauge, lamp, plug, power, auto, magic"
+          },
           "switch": {
             "name": "Turn on or off",
             "description": "Turns on, off, opens, closes or locks an entity",
@@ -319,6 +324,11 @@
             "name": "Fire an event",
             "description": "Fires an event for your automations to pick up",
             "keywords": "event, automation, trigger"
+          },
+          "show": {
+            "name": "Display only",
+            "description": "Shows an entity on the key; pressing it does nothing",
+            "keywords": "display, show, view, nothing, do nothing, sensor, indicator"
           }
         },
         "lights": {
@@ -899,8 +909,6 @@
         "offColor": "Off",
         "onColor": "On",
         "failed": "Could not fetch the icon from Home Assistant.",
-        "card": "Show as a card",
-        "cardHint": "The entity's icon, name and state, always up to date, with what matters for its kind.",
         "icon": "Icon",
         "ownIcon": "Chosen by you",
         "haIconLive": "Home Assistant's, changes with its state",
@@ -912,11 +920,35 @@
         "resetName": "Back to Home Assistant's",
         "nameHint": "Empty uses its name in Home Assistant.",
         "textHint": "The text drawn on the key.",
-        "background": "Change background with its state"
+        "background": "Change background with its state",
+        "mode": "Look",
+        "modes": {
+          "tile": "Tile",
+          "card": "Card",
+          "image": "Icon and text"
+        },
+        "hints": {
+          "tile": "The entity drawn as what it is, always up to date: a blind as open as it is, a thermostat's dial…",
+          "card": "The entity's icon, name and state, always up to date, with what matters for its kind.",
+          "image": "A fixed icon and text, which you can change."
+        }
       },
       "summary": {
         "assist": "Says it to Assist",
         "event": "Fires this event in Home Assistant"
+      },
+      "showHint": "Pressing it does nothing: the key only shows the entity. If you want the key to do something else, add another action.",
+      "tile": {
+        "press": "When pressed",
+        "nothing": "Nothing",
+        "pressHint": "“Nothing” keeps the key just for showing the entity; another action of the key can do whatever you want.",
+        "onlyShows": "This entity only measures: pressing does nothing.",
+        "does": {
+          "switch": "{on} / {off}",
+          "run": "Activate",
+          "increment": "Add one",
+          "nextOption": "Next option"
+        }
       }
     },
     "path": {
@@ -1578,7 +1610,8 @@
       "hassEntities": "Several entities",
       "hassPicture": "Camera or image",
       "hassWeather": "Weather",
-      "hassTemplate": "Template"
+      "hassTemplate": "Template",
+      "hassTile": "Smart tile"
     },
     "periods": {
       "day": "Day",
@@ -1714,7 +1747,42 @@
       "forecast": "With the forecast",
       "forecastHint": "The next days, on the wide key.",
       "template": "Template",
-      "templateHint": "A Home Assistant template: it works it out whenever something it reads changes."
+      "templateHint": "A Home Assistant template: it works it out whenever something it reads changes.",
+      "drawing": "Drawing",
+      "autoDrawing": "Automatic: {drawing}",
+      "drawings": {
+        "auto": "Automatic",
+        "icon": "Icon",
+        "value": "Value only",
+        "gauge": "Dial",
+        "graph": "Graph",
+        "bulb": "Bulb",
+        "plug": "Plug",
+        "switch": "Switch",
+        "fan": "Fan",
+        "curtain": "Curtain",
+        "blind": "Venetian blind",
+        "shutter": "Roller shutter",
+        "shade": "Roller shade",
+        "garage": "Garage door",
+        "awning": "Awning",
+        "gate": "Gate",
+        "door": "Door",
+        "window": "Window",
+        "valve": "Valve",
+        "lock": "Lock",
+        "thermometer": "Thermometer",
+        "droplet": "Droplet",
+        "battery": "Battery"
+      },
+      "range": "Scale",
+      "rangeAuto": "auto",
+      "min": "Minimum",
+      "max": "Maximum",
+      "extra": "Another value",
+      "extraRemove": "Remove",
+      "extraHint": "Shown next to the entity: what a plug draws, the humidity of a room…",
+      "extraSuggest": "Use {name}"
     }
   },
   "integrations": {

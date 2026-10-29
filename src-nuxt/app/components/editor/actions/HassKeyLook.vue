@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { RotateCcw, Search } from '@lucide/vue'
 import type { PickedIcon } from '~/composables/useIconCatalog'
+import type { HassLook } from '~/composables/useHassKey'
 import { KEY_DRAFT } from '~/lib/actions/key-draft'
 import { followedAction, followedState, sameCommand } from '~/lib/actions/hass'
 import { preload, thumbnail } from '~/lib/iconify'
 import type { HassCommand } from '~/types/engine'
 
-/** How the key shows the entity of a command: as a card of the entity, or with an image and a
- * text of its own; its icon and its name, Home Assistant's unless changed here. */
+/** How the key shows the entity of a command: drawn as what it is, as a card of its values, or
+ * with an image and a text of its own; its icon and its name, Home Assistant's unless changed
+ * here. */
 const props = defineProps<{ command: HassCommand, server: string }>()
 
 const { t } = useI18n()
@@ -38,8 +40,9 @@ const hasGestures = computed(() => Boolean(draft?.value?.doublePress.length || d
 /** Another action of the key already decides its two states. */
 const followsOther = computed(() => Boolean(draft?.value?.second && !isFollowed.value))
 
-const card = computed(() => look.card.value)
+const card = computed(() => look.live.value)
 const showsCard = computed(() => Boolean(card.value))
+const tile = computed(() => look.tile.value)
 
 /** The icon the key shows now, Home Assistant's for the state the entity is in when not changed. */
 const haIcon = computed(() => (entity.value ? hass.entityIcon(entity.value) : null))
@@ -88,8 +91,10 @@ async function run(task: () => Promise<void> | void) {
   }
 }
 
-function setCard(on: boolean) {
-  run(() => (on ? look.showCard(entity.value) : look.hideCard()))
+function setMode(value: unknown) {
+  if (value === 'tile' || value === 'card' || value === 'image') {
+    run(() => look.setMode(entity.value, value as HassLook))
+  }
 }
 
 function pick({ icon: picked }: PickedIcon) {
@@ -135,13 +140,24 @@ const offColor = computed({
       {{ t('actions.hass.look.title') }}
     </p>
 
-    <label class="flex items-center justify-between gap-2 text-sm">
-      <span>
-        {{ t('actions.hass.look.card') }}
-        <span class="block text-[11px] text-muted-foreground">{{ t('actions.hass.look.cardHint') }}</span>
-      </span>
-      <Switch :model-value="showsCard" :disabled="busy" :aria-label="t('actions.hass.look.card')" @update:model-value="setCard" />
-    </label>
+    <div class="flex flex-col gap-1.5">
+      <ToggleGroup :model-value="look.mode.value" type="single" variant="outline" size="sm" class="w-full" :disabled="busy || !info" :aria-label="t('actions.hass.look.mode')" @update:model-value="setMode">
+        <ToggleGroupItem value="tile" class="flex-1" data-look="tile">
+          {{ t('actions.hass.look.modes.tile') }}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="card" class="flex-1" data-look="card">
+          {{ t('actions.hass.look.modes.card') }}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="image" class="flex-1" data-look="image">
+          {{ t('actions.hass.look.modes.image') }}
+        </ToggleGroupItem>
+      </ToggleGroup>
+      <p class="text-[11px] text-muted-foreground">
+        {{ t(`actions.hass.look.hints.${look.mode.value}`) }}
+      </p>
+    </div>
+
+    <HassTileFields v-if="tile" :widget="tile" :server="server" @update="look.setTile($event)" />
 
     <div class="flex items-center gap-3">
       <div class="flex size-14 shrink-0 items-center justify-center rounded-lg bg-neutral-800 p-2.5" data-hass-icon>

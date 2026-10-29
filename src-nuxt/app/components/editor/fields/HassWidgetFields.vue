@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { HASS_SERVER } from '~/composables/useHass'
 import { Plus, RotateCcw, Search, X } from '@lucide/vue'
-import { hassStatusText } from '~/lib/actions/hass'
+import { hassStatusText, suggestedExtra } from '~/lib/actions/hass'
 import { preload, thumbnail } from '~/lib/iconify'
 import type { PickedIcon } from '~/composables/useIconCatalog'
 import { HASS_ENTITIES_MAX } from '~/lib/widgets'
@@ -36,6 +36,18 @@ const several = only('hass_entities')
 const picture = only('hass_picture')
 const weather = only('hass_weather')
 const template = only('hass_template')
+const tile = only('hass_tile')
+/** The widget whose icons follow the state of its entity: a card or a tile. */
+const iconic = computed(() => entity.value ?? tile.value)
+
+/** A tile set to another entity starts over with what suits it. */
+function setTileEntity(id: string) {
+  const widget = tile.value
+  if (!widget || id === widget.entity) {
+    return
+  }
+  Object.assign(widget, { entity: id, drawing: 'auto', min: null, max: null, extra: suggestedExtra(id, hass.entities.value) })
+}
 
 /** Attributes worth showing on their own: not the ones that only describe the entity. */
 const HIDDEN = new Set(['friendly_name', 'icon', 'entity_picture', 'supported_features', 'supported_color_modes', 'attribution', 'access_token', 'editable', 'id', 'user_id', 'device_trackers'])
@@ -63,7 +75,7 @@ const iconFailed = ref(false)
 
 /** Home Assistant's icons for the entity, so the card follows its state; refreshed with it. */
 async function refreshIcons(id: string) {
-  const widget = entity.value
+  const widget = iconic.value
   if (!widget || !id || !hass.entity(id)) {
     return
   }
@@ -76,21 +88,21 @@ async function refreshIcons(id: string) {
   }
 }
 
-watch(() => [entity.value?.entity, hass.catalog.value] as const, ([id], before) => {
-  const widget = entity.value
+watch(() => [iconic.value?.entity, hass.catalog.value] as const, ([id], before) => {
+  const widget = iconic.value
   if (id && widget && (id !== before?.[0] || !Object.keys(widget.icons ?? {}).length)) {
     refreshIcons(id)
   }
 }, { immediate: true })
 
 async function pickIcon({ icon }: PickedIcon) {
-  if (entity.value) {
-    entity.value.icon = await keyIcons.uploadIcon(icon)
+  if (iconic.value) {
+    iconic.value.icon = await keyIcons.uploadIcon(icon)
   }
 }
 
 const iconPreview = computed(() => {
-  const widget = entity.value
+  const widget = iconic.value
   if (widget?.icon) {
     return { src: assetUrl(widget.icon), own: true }
   }
@@ -99,7 +111,7 @@ const iconPreview = computed(() => {
   return { src: name ? thumbnail(name) : null, own: false }
 })
 const iconsLoaded = ref(0)
-watch(() => (entity.value?.entity ? hass.entityIcon(entity.value.entity) : null), async (name) => {
+watch(() => (iconic.value?.entity ? hass.entityIcon(iconic.value.entity) : null), async (name) => {
   if (name) {
     await preload([name])
     iconsLoaded.value++
@@ -131,7 +143,7 @@ const TEMPLATE_EXAMPLE = "{{ states('sensor.temperature') }} °C"
 const NUMBERS = ['sensor', 'number', 'input_number', 'counter', 'climate', 'water_heater', 'humidifier']
 
 const entityLabel = computed(() => {
-  const id = entity.value?.entity ?? graph.value?.entity
+  const id = iconic.value?.entity ?? graph.value?.entity
   return (id && hass.entity(id)?.name) || t('widgets.hass.labelPlaceholder')
 })
 </script>
@@ -160,6 +172,17 @@ const entityLabel = computed(() => {
           </SelectContent>
         </Select>
       </div>
+    </template>
+
+    <template v-if="tile">
+      <div class="flex flex-col gap-2">
+        <Label class="text-xs text-muted-foreground">{{ t('widgets.hass.entity') }}</Label>
+        <HassEntityField :model-value="tile.entity" @update:model-value="setTileEntity" />
+      </div>
+      <HassTileFields :widget="tile" :server="server" @update="Object.assign(tile, $event)" />
+    </template>
+
+    <template v-if="iconic">
       <div class="flex items-center gap-3">
         <div class="flex size-12 shrink-0 items-center justify-center rounded-lg bg-neutral-800 p-2">
           <img v-if="iconPreview.src" :src="iconPreview.src" alt="" class="size-full" :class="iconPreview.own ? 'invert' : ''">
@@ -168,10 +191,10 @@ const entityLabel = computed(() => {
           <span class="text-xs text-muted-foreground">{{ t('actions.hass.look.icon') }}</span>
           <span class="truncate text-sm">{{ iconFailed ? t('widgets.hass.iconFailed') : iconPreview.own ? t('actions.hass.look.ownIcon') : t('actions.hass.look.haIconLive') }}</span>
         </div>
-        <Button variant="outline" size="sm" :disabled="!entity.entity" @click="picking = true">
+        <Button variant="outline" size="sm" :disabled="!iconic.entity" @click="picking = true">
           <Search /> {{ t('actions.hass.look.changeIcon') }}
         </Button>
-        <Button v-if="iconPreview.own" variant="ghost" size="icon-sm" :aria-label="t('actions.hass.look.resetIcon')" :title="t('actions.hass.look.resetIcon')" @click="entity.icon = null">
+        <Button v-if="iconPreview.own" variant="ghost" size="icon-sm" :aria-label="t('actions.hass.look.resetIcon')" :title="t('actions.hass.look.resetIcon')" @click="iconic.icon = null">
           <RotateCcw />
         </Button>
       </div>
@@ -190,9 +213,9 @@ const entityLabel = computed(() => {
       </div>
     </template>
 
-    <div v-if="entity || graph" class="flex flex-col gap-2">
+    <div v-if="iconic || graph" class="flex flex-col gap-2">
       <Label class="text-xs text-muted-foreground">{{ t('widgets.fields.label') }}</Label>
-      <Input v-if="entity" v-model="entity.label" :placeholder="entityLabel" maxlength="32" :aria-label="t('widgets.hass.label')" />
+      <Input v-if="iconic" v-model="iconic.label" :placeholder="entityLabel" maxlength="32" :aria-label="t('widgets.hass.label')" />
       <Input v-else-if="graph" v-model="graph.label" :placeholder="entityLabel" maxlength="32" :aria-label="t('widgets.hass.label')" />
     </div>
 

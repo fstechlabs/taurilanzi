@@ -27,7 +27,9 @@ impl Watch {
             HassCommand::Switch { entity, .. }
             | HassCommand::Level { entity, .. }
             | HassCommand::Color { entity, .. }
-            | HassCommand::Alarm { entity, .. } => active(entity),
+            | HassCommand::Alarm { entity, .. }
+            | HassCommand::Show { entity }
+            | HassCommand::Tile { entity, .. } => active(entity),
             HassCommand::Run { entity } if matches!(domain(entity), "script" | "automation") => {
                 active(entity)
             }

@@ -6,8 +6,8 @@ use serde_json::{Map, Value, json};
 use super::entities::{Entity, domain};
 use super::error::HassError;
 use crate::config::{
-    HassAlarm, HassChange, HassChoice, HassCommand, HassLevel, HassMedia, HassOption, HassSwitch,
-    HassTarget,
+    HassAlarm, HassChange, HassChoice, HassCommand, HassLevel, HassMedia, HassOption, HassPress,
+    HassSwitch, HassTarget,
 };
 
 const REPEAT_MODES: [&str; 3] = ["off", "all", "one"];
@@ -221,7 +221,60 @@ pub fn plan(
             event: event.trim().into(),
             data: data.clone(),
         }),
+        HassCommand::Show { .. }
+        | HassCommand::Tile {
+            press: HassPress::Nothing,
+            ..
+        } => Ok(Plan::Nothing),
+        HassCommand::Tile {
+            entity: id,
+            press: HassPress::Auto,
+        } => match tile_command(id) {
+            Some(command) => plan(&command, entity, code),
+            None => Ok(Plan::Nothing),
+        },
     }
+}
+
+/// What a tile of `id` does when pressed: what Home Assistant's own tiles do, except for
+/// updates, which are not installed by a stray press.
+pub fn tile_command(id: &str) -> Option<HassCommand> {
+    let entity = id.to_string();
+    let switch = || HassCommand::Switch {
+        entity: id.to_string(),
+        mode: HassSwitch::Toggle,
+    };
+    Some(match domain(id) {
+        "scene" | "script" | "button" | "input_button" | "counter" => HassCommand::Run { entity },
+        "media_player" => HassCommand::Media {
+            entity,
+            control: HassMedia::PlayPause,
+        },
+        "select" | "input_select" => HassCommand::Choose {
+            entity,
+            option: HassOption::Option,
+            choice: HassChoice::Next,
+        },
+        "light"
+        | "switch"
+        | "fan"
+        | "input_boolean"
+        | "siren"
+        | "humidifier"
+        | "remote"
+        | "group"
+        | "automation"
+        | "climate"
+        | "water_heater"
+        | "cover"
+        | "valve"
+        | "lock"
+        | "vacuum"
+        | "lawn_mower"
+        | "timer"
+        | "alarm_control_panel" => switch(),
+        _ => return None,
+    })
 }
 
 fn target_fields(target: &HassTarget) -> Map<String, Value> {
@@ -642,6 +695,100 @@ mod tests {
             entity: entity.into(),
             mode,
         }
+    }
+
+    #[test]
+    fn tiles_do_what_suits_each_domain() {
+        let tile = |entity: &str| HassCommand::Tile {
+            entity: entity.into(),
+            press: HassPress::Auto,
+        };
+        let cases = [
+            ("light.a", "on", "light", "toggle", json!({})),
+            ("cover.a", "open", "cover", "toggle", json!({})),
+            ("lock.a", "locked", "lock", "unlock", json!({})),
+            ("scene.a", "", "scene", "turn_on", json!({})),
+            ("button.a", "", "button", "press", json!({})),
+            ("counter.a", "3", "counter", "increment", json!({})),
+            (
+                "media_player.a",
+                "playing",
+                "media_player",
+                "media_play_pause",
+                json!({}),
+            ),
+            ("climate.a", "heat", "climate", "toggle", json!({})),
+        ];
+        for (id, state, domain, action, data) in cases {
+            assert_eq!(
+                run(tile(id), Some(entity(state, json!({})))),
+                (domain.to_string(), action.to_string(), data),
+                "{id}"
+            );
+        }
+        let select = entity("b", json!({ "options": ["a", "b", "c"] }));
+        assert_eq!(
+            run(tile("input_select.mode"), Some(select)),
+            (
+                "input_select".into(),
+                "select_option".into(),
+                json!({ "option": "c" })
+            )
+        );
+        for id in [
+            "sensor.temp",
+            "binary_sensor.door",
+            "weather.home",
+            "update.core",
+        ] {
+            assert!(
+                matches!(
+                    plan(&tile(id), Some(&entity("on", json!({}))), None),
+                    Ok(Plan::Nothing)
+                ),
+                "{id}"
+            );
+        }
+    }
+
+    #[test]
+    fn showing_and_tiles_set_to_nothing_ask_for_nothing() {
+        let light = entity("on", json!({}));
+        for command in [
+            HassCommand::Show {
+                entity: "light.a".into(),
+            },
+            HassCommand::Tile {
+                entity: "light.a".into(),
+                press: HassPress::Nothing,
+            },
+        ] {
+            assert!(command.does_nothing());
+            assert!(matches!(
+                plan(&command, Some(&light), None),
+                Ok(Plan::Nothing)
+            ));
+        }
+        assert!(
+            !HassCommand::Tile {
+                entity: "light.a".into(),
+                press: HassPress::Auto,
+            }
+            .does_nothing()
+        );
+    }
+
+    #[test]
+    fn a_lock_tile_carries_its_code() {
+        let command = HassCommand::Tile {
+            entity: "lock.door".into(),
+            press: HassPress::Auto,
+        };
+        let plan = plan(&command, Some(&entity("unlocked", json!({}))), Some("1234")).unwrap();
+        assert_eq!(
+            service(plan),
+            ("lock".into(), "lock".into(), json!({ "code": "1234" }))
+        );
     }
 
     #[test]
