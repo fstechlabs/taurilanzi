@@ -4,6 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use jiff::Timestamp;
+use serde::de::DeserializeOwned;
+use serde_json::Value;
 use uuid::Uuid;
 
 use super::api::{Api, ApiError, Head, NewVersion, RemoteDocument};
@@ -214,7 +216,10 @@ impl Inner {
             };
             match kind {
                 Kind::Profile => {
-                    let content: ProfileContent = serde_json::from_value(content)?;
+                    let Some(content) = readable::<ProfileContent>(id, content) else {
+                        newer = true;
+                        continue;
+                    };
                     if content.schema > SCHEMA_VERSION {
                         newer = true;
                         continue;
@@ -227,7 +232,10 @@ impl Inner {
                     changes.profiles.push(content.profile);
                 }
                 Kind::Settings => {
-                    let content: SettingsContent = serde_json::from_value(content)?;
+                    let Some(content) = readable::<SettingsContent>(id, content) else {
+                        newer = true;
+                        continue;
+                    };
                     if content.schema > SCHEMA_VERSION {
                         newer = true;
                         continue;
@@ -320,6 +328,15 @@ impl Inner {
     }
 }
 
+/// A document as this version reads it. None when a newer version put in it something this one
+/// does not know, such as a new kind of action: it is left alone, as documents of a newer schema
+/// are, instead of failing the whole sync.
+fn readable<T: DeserializeOwned>(id: Uuid, content: Value) -> Option<T> {
+    serde_json::from_value(content)
+        .map_err(|err| log::warn!("document {id} is of a newer version of the app: {err}"))
+        .ok()
+}
+
 fn remembered(head: &Head) -> Base {
     Base {
         version: head.version,
@@ -359,6 +376,29 @@ mod tests {
             hash: None,
             edited_at: edited_at.into(),
         }
+    }
+
+    #[test]
+    fn documents_with_what_this_version_does_not_know_are_left_alone() {
+        let profile = |action: serde_json::Value| {
+            serde_json::json!({
+                "schema": SCHEMA_VERSION,
+                "profile": {
+                    "id": Uuid::nil(), "name": "Casa", "home_page": Uuid::nil(), "apps": [],
+                    "pages": [{
+                        "id": Uuid::nil(), "name": "Inicio", "position": { "x": 0.0, "y": 0.0 },
+                        "keys": { "0": {
+                            "appearance": { "background": { "type": "solid", "color": { "r": 0, "g": 0, "b": 0 } }, "layers": [] },
+                            "actions": [action],
+                        } },
+                    }],
+                },
+            })
+        };
+        let known = profile(serde_json::json!({ "type": "home" }));
+        assert!(readable::<ProfileContent>(Uuid::nil(), known).is_some());
+        let unknown = profile(serde_json::json!({ "type": "teleport" }));
+        assert!(readable::<ProfileContent>(Uuid::nil(), unknown).is_none());
     }
 
     #[test]
