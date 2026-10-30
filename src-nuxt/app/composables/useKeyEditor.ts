@@ -50,6 +50,8 @@ export interface StateDraft {
   actions: Action[]
   /** Live content, drawn between the image and the text. */
   widget: Widget | null
+  /** Shown in turn after `widget`, one more on each press. */
+  moreWidgets: Widget[]
 }
 
 /** A whole key: its first state, gestures, and the second state of a key of two. */
@@ -79,6 +81,7 @@ export function emptyDraft(style: NewKeyStyle): KeyDraft {
     untouched: [],
     actions: [],
     widget: null,
+    moreWidgets: [],
     doublePress: [],
     longPress: [],
     second: null,
@@ -101,6 +104,7 @@ function stateFrom(appearance: DeepReadonly<Appearance>, actions: DeepReadonly<A
     untouched: [],
     actions: clone<Action[]>(actions),
     widget: null,
+    moreWidgets: [],
   }
   for (const layer of appearance.layers) {
     if (layer.type === 'image' && !state.image) {
@@ -124,8 +128,14 @@ function stateFrom(appearance: DeepReadonly<Appearance>, actions: DeepReadonly<A
         position: layer.position,
       }
     }
-    else if (layer.type === 'widget' && !state.widget) {
-      state.widget = clone<Widget>(layer.widget)
+    else if (layer.type === 'widget') {
+      const widget = clone<Widget>(layer.widget)
+      if (state.widget) {
+        state.moreWidgets.push(widget)
+      }
+      else {
+        state.widget = widget
+      }
     }
     else {
       state.untouched.push(clone<LayerConfig>(layer))
@@ -143,8 +153,14 @@ export function draftFromKey(key: DeepReadonly<Key>): KeyDraft {
   }
 }
 
-/** The look of one state as the engine stores it. */
-export function appearanceFrom(state: StateDraft): Appearance {
+/** The live content of a look, in the order a press goes through it. */
+export function widgetsOf(state: StateDraft): Widget[] {
+  return state.widget ? [state.widget, ...state.moreWidgets] : []
+}
+
+/** The look of one state as the engine stores it; with `onlyWidget`, holding just that one of its
+ * widgets, so a preview shows it whatever turn the key is on. */
+export function appearanceFrom(state: StateDraft, onlyWidget?: number): Appearance {
   const background: Background = state.background === 'solid'
     ? { type: 'solid', color: fromHex(state.from) }
     : { type: 'linear_gradient', from: fromHex(state.from), to: fromHex(state.to), angle: state.angle }
@@ -161,9 +177,11 @@ export function appearanceFrom(state: StateDraft): Appearance {
       crop: state.image.crop ? { ...state.image.crop } : null,
     })
   }
-  if (state.widget) {
+  const widgets = widgetsOf(state)
+  const shown = onlyWidget === undefined ? widgets : widgets.slice(onlyWidget, onlyWidget + 1)
+  for (const widget of shown.length ? shown : widgets) {
     // Read through the proxy, not toRaw: whoever compares drafts must see changes inside it.
-    layers.push({ type: 'widget', widget: JSON.parse(JSON.stringify(state.widget)) as Widget })
+    layers.push({ type: 'widget', widget: JSON.parse(JSON.stringify(widget)) as Widget })
   }
   if (state.text && state.text.content.trim()) {
     layers.push({
@@ -326,6 +344,8 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
   const invalid = computed(() => (draft.value ? keyDraftError(draft.value, servers.value) : null))
   /** Which state the inspector shows and edits, for a key of two. */
   const editing = ref<0 | 1>(0)
+  /** Which of the widgets of that state the inspector edits, and so the preview shows. */
+  const shownWidget = ref(0)
 
   async function save(ref: KeyRef, key: Key) {
     const text = canonical(key)
@@ -431,6 +451,9 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
   watch(() => target.value && `${target.value.page}:${target.value.index}`, () => {
     editing.value = 0
   })
+  watch([target, editing], () => {
+    shownWidget.value = 0
+  })
   watch(() => draft.value?.second, (second) => {
     if (!second) {
       editing.value = 0
@@ -440,7 +463,7 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
   let previewTimer: ReturnType<typeof setTimeout> | undefined
   /** A plugin redraws its keys by itself; the preview follows. */
   const redrawn = computed(() => (target.value ? redraws(target.value.page, target.value.index) : 0))
-  watch([state, editing, redrawn], ([value]) => {
+  watch([state, editing, redrawn, shownWidget], ([value]) => {
     clearTimeout(previewTimer)
     if (!value || !target.value) {
       preview.value = null
@@ -448,7 +471,7 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
     }
     const { page, index } = target.value
     previewTimer = setTimeout(() => {
-      preview.value = `${previewUrl(index, appearanceFrom(value), page)}${redrawn.value ? `&v=${redrawn.value}` : ''}`
+      preview.value = `${previewUrl(index, appearanceFrom(value, shownWidget.value), page)}${redrawn.value ? `&v=${redrawn.value}` : ''}`
     }, 120)
   }, { deep: true, immediate: true })
 
@@ -460,7 +483,7 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
       liveTimer = setInterval(() => {
         const value = state.value
         if (value && target.value) {
-          preview.value = `${previewUrl(target.value.index, appearanceFrom(value), target.value.page)}&live=${Date.now()}`
+          preview.value = `${previewUrl(target.value.index, appearanceFrom(value, shownWidget.value), target.value.page)}&live=${Date.now()}`
         }
       }, LIVE_MS)
     }
@@ -531,5 +554,5 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
     }
   }
 
-  return { stored, draft, state, editing, preview, dirty, invalid, status, error, create, clear, uploadImage, pickIcon, tryKey }
+  return { stored, draft, state, editing, shownWidget, preview, dirty, invalid, status, error, create, clear, uploadImage, pickIcon, tryKey }
 }

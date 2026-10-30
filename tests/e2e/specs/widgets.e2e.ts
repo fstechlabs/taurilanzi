@@ -1,4 +1,5 @@
-import { $, browser, expect } from '@wdio/globals'
+import { $, $$, browser, expect } from '@wdio/globals'
+import { Key } from 'webdriverio'
 import type { LayerConfig, Widget } from '../../../src-nuxt/app/ipc/bindings'
 import {
   button,
@@ -31,15 +32,18 @@ async function toggle(name: string) {
   await clickOn(item)
 }
 
-async function keyImageSize() {
+async function keyImage(): Promise<string> {
   const snapshot = await state()
-  const base64 = await browser.execute(async (page, index) => {
+  return browser.execute(async (page, index) => {
     const bytes = new Uint8Array(await (await fetch(`deck://localhost/key/${page}/${index}?live=${Date.now()}`)).arrayBuffer())
     let binary = ''
     bytes.forEach((b) => { binary += String.fromCharCode(b) })
     return btoa(binary)
   }, snapshot.home_page, WIDE_KEY)
-  return pngSize(Buffer.from(base64, 'base64'))
+}
+
+async function keyImageSize() {
+  return pngSize(Buffer.from(await keyImage(), 'base64'))
 }
 
 describe('live content on the wide key', () => {
@@ -114,6 +118,41 @@ describe('live content on the wide key', () => {
     await fill($('[aria-label="Etiqueta de la cuenta atrás"]'), 'Fin de siglo')
     await saved()
     expect(await widget()).toMatchObject({ kind: 'countdown', target: '2099-12-31T23:59', label: 'Fin de siglo' })
+  })
+
+  it('moves on to the next live content on each press and back to the first', async () => {
+    const kinds = async () => (await wideLayers()).flatMap(l => (l.type === 'widget' ? [l.widget.kind] : []))
+    await chooseOption('Información en vivo', 'Calendario')
+    await clickOn(button('Añadir otra información en vivo'))
+    await saved()
+    expect(await kinds()).toEqual(['calendar', 'digital_clock'])
+    await chooseOption('Información en vivo', 'Fase lunar')
+    await saved()
+    expect(await kinds()).toEqual(['calendar', 'moon'])
+    await expect($$('[data-widget-tab]')).toBeElementsArrayOfSize(2)
+    await expect($('//*[normalize-space()="Cada pulsación de la tecla pasa a la siguiente, en este orden."]')).toBeDisplayed()
+
+    await clickOn($('[aria-label="Información en vivo"]'))
+    await expect($('//*[@role="option"][normalize-space()="Temporizador"][@data-disabled]')).toExist()
+    await browser.keys(Key.Escape)
+
+    const calendar = await keyImage()
+    await clickOn(button('Probar tecla'))
+    await browser.waitUntil(async () => (await keyImage()) !== calendar, {
+      timeout: 4000,
+      timeoutMsg: 'a press did not move on to the moon',
+    })
+    await shot('widget-several')
+    await clickOn(button('Probar tecla'))
+    await browser.waitUntil(async () => (await keyImage()) === calendar, {
+      timeout: 4000,
+      timeoutMsg: 'another press did not go back to the calendar',
+    })
+
+    await clickOn(button('Quitar Fase lunar'))
+    await saved()
+    expect(await kinds()).toEqual(['calendar'])
+    await expect($$('[data-widget-tab]')).toBeElementsArrayOfSize(0)
   })
 
   it('removes the live content and leaves the rest of the key', async () => {

@@ -59,16 +59,9 @@ fn period(widget: &Widget) -> u64 {
     }
 }
 
-/// The shortest period of the widgets in an appearance, if it has any.
-fn live_period(appearance: &Appearance) -> Option<u64> {
-    appearance
-        .layers
-        .iter()
-        .filter_map(|layer| match layer {
-            LayerConfig::Widget { widget } => Some(period(widget)),
-            _ => None,
-        })
-        .min()
+/// How often the widget an appearance shows after `turn` presses changes, if it has one.
+fn live_period(appearance: &Appearance, turn: u32) -> Option<u64> {
+    appearance.widget_at(turn).map(period)
 }
 
 fn slot(time: SystemTime, period: u64) -> u64 {
@@ -118,7 +111,11 @@ impl Engine {
         page.keys
             .iter()
             .filter_map(|(&index, key)| {
-                live_period(self.appearance_now(page.id, index, key)).map(|p| (index, p))
+                live_period(
+                    self.appearance_now(page.id, index, key),
+                    self.key_widgets.turn((page.id, index)),
+                )
+                .map(|p| (index, p))
             })
             .collect()
     }
@@ -228,22 +225,24 @@ mod tests {
     }
 
     #[test]
-    fn the_fastest_widget_of_a_key_sets_its_period() {
+    fn the_widget_on_show_sets_the_period_of_its_key() {
         let mut appearance = Appearance {
             background: Background::Solid {
                 color: Color::BLACK,
             },
             layers: Vec::new(),
         };
-        assert_eq!(live_period(&appearance), None);
+        assert_eq!(live_period(&appearance, 0), None);
         appearance.layers.push(LayerConfig::Widget {
             widget: clock(false),
         });
-        assert_eq!(live_period(&appearance), Some(60));
+        assert_eq!(live_period(&appearance, 0), Some(60));
         appearance.layers.push(LayerConfig::Widget {
             widget: widget(json!({ "kind": "network" })),
         });
-        assert_eq!(live_period(&appearance), Some(2));
+        assert_eq!(live_period(&appearance, 0), Some(60));
+        assert_eq!(live_period(&appearance, 1), Some(2));
+        assert_eq!(live_period(&appearance, 2), Some(60), "back to the first");
     }
 
     #[test]

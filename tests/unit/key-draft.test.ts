@@ -68,3 +68,29 @@ test('a second state keeps its own widget', () => {
   expect(draft.second!.widget).not.toBe(draft.widget)
   expect(appearanceFrom(draft.second!)).toEqual(key.second_state!.appearance)
 })
+
+test('several widgets come back in the order a press goes through them', () => {
+  const calendar: Widget = { kind: 'calendar', style: widget.style }
+  const moon: Widget = { kind: 'moon', style: widget.style }
+  const appearance = {
+    ...key.appearance,
+    layers: [layers[1]!, { type: 'widget', widget: calendar }, layers[2]!, { type: 'widget', widget: moon }] as LayerConfig[],
+  }
+  const draft = draftFromKey({ ...key, appearance })
+  expect(draft.widget).toEqual(widget)
+  expect(draft.moreWidgets).toEqual([calendar, moon])
+  expect(appearanceFrom(draft).layers.map(layer => layer.type === 'widget' ? layer.widget.kind : layer.type))
+    .toEqual(['digital_clock', 'calendar', 'moon', 'text'])
+})
+
+test('a preview holds only the widget being edited', () => {
+  const calendar: Widget = { kind: 'calendar', style: widget.style }
+  const draft = draftFromKey(key)
+  draft.moreWidgets.push(calendar)
+  const kinds = (shown?: number) => appearanceFrom(draft, shown).layers
+    .flatMap(layer => layer.type === 'widget' ? [layer.widget.kind] : [])
+  expect(kinds()).toEqual(['digital_clock', 'calendar'])
+  expect(kinds(0)).toEqual(['digital_clock'])
+  expect(kinds(1)).toEqual(['calendar'])
+  expect(kinds(5)).toEqual(['digital_clock', 'calendar'])
+})

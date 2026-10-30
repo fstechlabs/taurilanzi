@@ -100,7 +100,7 @@ export function useHassKey(draft: Ref<KeyDraft | null> | null, server: MaybeRefO
     for (const look of looks(key)) {
       const widget = liveOf(look)
       if (widget) {
-        look.widget = null
+        look.widget = look.moreWidgets.shift() ?? null
         look.text = { content: widget.label || hass.entity(widget.entity)?.name || '', fontFamily: 'Inter', fontWeight: 700, size: 20, color: '#ffffff', position: 'bottom' }
       }
     }

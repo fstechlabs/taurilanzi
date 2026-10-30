@@ -1,6 +1,7 @@
 //! Widgets that answer to their key: timers and stopwatches start, pause and start over,
 //! counters add up and phrases move on. Timers, stopwatches and phrases live while the app runs,
-//! like the state of keys of two states; counters are kept in a file of their own.
+//! like the state of keys of two states, and so does which of the widgets of a key shows; counters
+//! are kept in a file of their own.
 
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
@@ -40,6 +41,8 @@ pub struct KeyNow {
     pub count: i64,
     /// Presses on a phrases widget, each moving one phrase on.
     pub presses: u32,
+    /// Presses on a key of several widgets, each moving on to the next one.
+    pub turn: u32,
 }
 
 impl Default for KeyNow {
@@ -49,6 +52,7 @@ impl Default for KeyNow {
             stopwatch: StopwatchNow::default(),
             count: 0,
             presses: 0,
+            turn: 0,
         }
     }
 }
@@ -64,6 +68,7 @@ pub struct KeyWidgets {
     runs: HashMap<Slot, Run>,
     watches: HashMap<Slot, Watch>,
     presses: HashMap<Slot, u32>,
+    turns: HashMap<Slot, u32>,
     /// By `page:index`, as they are saved.
     counters: BTreeMap<String, i64>,
 }
@@ -91,7 +96,17 @@ impl KeyWidgets {
             stopwatch: self.stopwatch(slot, now),
             count: self.counters.get(&counter_key(slot)).copied().unwrap_or(0),
             presses: self.presses.get(&slot).copied().unwrap_or(0),
+            turn: self.turn(slot),
         }
+    }
+
+    pub fn turn(&self, slot: Slot) -> u32 {
+        self.turns.get(&slot).copied().unwrap_or(0)
+    }
+
+    pub fn next_turn(&mut self, slot: Slot) {
+        let turn = self.turns.entry(slot).or_insert(0);
+        *turn = turn.wrapping_add(1);
     }
 
     fn stopwatch(&self, slot: Slot, now: Instant) -> StopwatchNow {
@@ -277,5 +292,19 @@ mod tests {
             TimerNow::Idle,
             "each key has its own"
         );
+    }
+
+    #[test]
+    fn each_key_moves_through_its_widgets_on_its_own() {
+        let page = Uuid::new_v4();
+        let mut keys = KeyWidgets::default();
+        let now = Instant::now();
+        assert_eq!(keys.key_now((page, 13), now).turn, 0);
+        keys.next_turn((page, 13));
+        keys.next_turn((page, 13));
+        assert_eq!(keys.turn((page, 13)), 2);
+        assert_eq!(keys.key_now((page, 13), now).turn, 2);
+        assert_eq!(keys.turn((page, 0)), 0);
+        assert_eq!(keys.turn((Uuid::new_v4(), 13)), 0);
     }
 }

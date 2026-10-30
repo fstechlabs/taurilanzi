@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { Plus, X } from '@lucide/vue'
 import type { StateDraft } from '~/composables/useKeyEditor'
+import { widgetsOf } from '~/composables/useKeyEditor'
 import type { ClockLine, Metric, Period, Widget } from '~/types/engine'
 import { fromHex, toHex } from '~/lib/color'
 import type { WidgetKind } from '~/lib/widgets'
-import { HASS_WIDGET_KINDS, METRICS, PERIODS, WIDGET_KINDS, WORLD_CLOCKS_MAX, newWidget, zoneCity } from '~/lib/widgets'
+import { HASS_WIDGET_KINDS, METRICS, PERIODS, PRESSED_KINDS, WIDGET_KINDS, WORLD_CLOCKS_MAX, newWidget, nextKind, widgetLabel, zoneCity } from '~/lib/widgets'
 import { isDefaultKeyText } from '~/lib/new-key'
 import { os } from '~/lib/os'
 
@@ -20,28 +21,75 @@ const LINES: { value: ClockLine, label: string }[] = [
   { value: 'weekday_date', label: 'widgets.lines.weekdayDate' },
 ]
 
+/** Which of the widgets of the look is being edited. */
+const shown = defineModel<number>('shown', { default: 0 })
+
+const widgets = computed(() => widgetsOf(draft.value))
+const current = computed(() => widgets.value[shown.value] ?? widgets.value[0] ?? null)
+const several = computed(() => widgets.value.length > 1)
+const canAdd = computed(() => widgets.value.length > 0 && !widgets.value.some(w => PRESSED_KINDS.includes(w.kind)))
+
+watch(() => widgets.value.length, (count) => {
+  if (shown.value >= count) {
+    shown.value = Math.max(0, count - 1)
+  }
+})
+
+function put(index: number, widget: Widget) {
+  const state = draft.value
+  if (index === 0 || !state.widget) {
+    state.widget = widget
+  }
+  else {
+    state.moreWidgets[index - 1] = widget
+  }
+}
+
+function remove(index: number) {
+  const state = draft.value
+  if (index === 0) {
+    state.widget = state.moreWidgets.shift() ?? null
+  }
+  else {
+    state.moreWidgets.splice(index - 1, 1)
+  }
+  shown.value = Math.min(index, Math.max(0, widgets.value.length - 1))
+}
+
+function add() {
+  const widget = current.value
+  draft.value.moreWidgets.push(newWidget(nextKind(widgets.value), widget))
+  shown.value = widgets.value.length - 1
+}
+
 const kind = computed({
-  get: () => draft.value.widget?.kind ?? NONE,
+  get: () => current.value?.kind ?? NONE,
   set: (value: string) => {
     const state = draft.value
+    const widget = current.value
     if (value === NONE) {
-      state.widget = null
+      remove(widget ? shown.value : 0)
       return
     }
-    if (value === state.widget?.kind) {
+    if (value === widget?.kind) {
       return
     }
     // The text a key is created with would only get in the way of the widget.
     if (!state.widget && isDefaultKeyText(state.text?.content)) {
       state.text = null
     }
-    state.widget = newWidget(value as WidgetKind, state.widget)
+    put(widget ? shown.value : 0, newWidget(value as WidgetKind, widget))
   },
 })
 
+/** A key of several widgets cannot hold one that answers to presses. */
+function unavailable(option: WidgetKind) {
+  return several.value && PRESSED_KINDS.includes(option)
+}
+
 type Of<K extends WidgetKind> = Extract<Widget, { kind: K }>
 function only<K extends WidgetKind>(wanted: K) {
-  return computed(() => (draft.value.widget?.kind === wanted ? draft.value.widget as Of<K> : null))
+  return computed(() => (current.value?.kind === wanted ? current.value as Of<K> : null))
 }
 const digital = only('digital_clock')
 const analog = only('analog_clock')
@@ -201,18 +249,18 @@ function setMetrics(value: unknown) {
 }
 
 const color = computed({
-  get: () => toHex(draft.value.widget?.style.color ?? { r: 255, g: 255, b: 255 }),
+  get: () => toHex(current.value?.style.color ?? { r: 255, g: 255, b: 255 }),
   set: (hex: string) => {
-    if (draft.value.widget) {
-      draft.value.widget.style.color = fromHex(hex)
+    if (current.value) {
+      current.value.style.color = fromHex(hex)
     }
   },
 })
 const accent = computed({
-  get: () => toHex(draft.value.widget?.style.accent ?? { r: 255, g: 255, b: 255 }),
+  get: () => toHex(current.value?.style.accent ?? { r: 255, g: 255, b: 255 }),
   set: (hex: string) => {
-    if (draft.value.widget) {
-      draft.value.widget.style.accent = fromHex(hex)
+    if (current.value) {
+      current.value.style.accent = fromHex(hex)
     }
   },
 })
@@ -222,6 +270,27 @@ const accent = computed({
   <div class="flex flex-col gap-4">
     <div class="flex flex-col gap-2">
       <Label class="text-xs text-muted-foreground">{{ t('widgets.fields.show') }}</Label>
+      <div v-if="several" class="flex flex-wrap gap-1.5" role="tablist" :aria-label="t('widgets.fields.list')">
+        <div
+          v-for="(w, i) in widgets"
+          :key="i"
+          class="flex items-center rounded-md border text-xs"
+          :class="i === shown ? 'border-sky-500/60 bg-sky-500/15' : 'border-border'"
+          data-widget-tab
+        >
+          <button type="button" role="tab" :aria-selected="i === shown" class="py-1 pl-2 pr-1" @click="shown = i">
+            {{ i + 1 }}. {{ widgetLabel(w.kind) }}
+          </button>
+          <button
+            type="button"
+            class="py-1 pl-0.5 pr-1.5 text-muted-foreground hover:text-foreground"
+            :aria-label="t('widgets.fields.removeWidget', { name: widgetLabel(w.kind) })"
+            @click="remove(i)"
+          >
+            <X class="size-3" />
+          </button>
+        </div>
+      </div>
       <Select v-model="kind">
         <SelectTrigger class="w-full" :aria-label="t('widgets.fields.live')">
           <SelectValue />
@@ -230,7 +299,7 @@ const accent = computed({
           <SelectItem :value="NONE">
             {{ t('widgets.fields.none') }}
           </SelectItem>
-          <SelectItem v-for="k in WIDGET_KINDS" :key="k.kind" :value="k.kind">
+          <SelectItem v-for="k in WIDGET_KINDS" :key="k.kind" :value="k.kind" :disabled="unavailable(k.kind)">
             {{ k.label }}
           </SelectItem>
           <SelectSeparator />
@@ -244,6 +313,15 @@ const accent = computed({
       </Select>
       <p class="text-[11px] text-muted-foreground">
         {{ t('widgets.fields.hint') }}
+      </p>
+      <p v-if="several" class="text-[11px] text-muted-foreground">
+        {{ t('widgets.fields.several') }}
+      </p>
+      <Button v-if="canAdd" variant="outline" size="sm" :aria-label="t('widgets.fields.addLabel')" @click="add">
+        <Plus /> {{ t('widgets.fields.add') }}
+      </Button>
+      <p v-else-if="current && PRESSED_KINDS.includes(current.kind)" class="text-[11px] text-muted-foreground">
+        {{ t('widgets.fields.alone') }}
       </p>
     </div>
 
@@ -526,11 +604,11 @@ const accent = computed({
       </p>
     </template>
 
-    <HassWidgetFields v-if="draft.widget?.kind.startsWith('hass_')" :widget="draft.widget" />
+    <HassWidgetFields v-if="current?.kind.startsWith('hass_')" :widget="current" />
 
-    <div v-if="draft.widget" class="flex flex-col gap-2">
+    <div v-if="current" class="flex flex-col gap-2">
       <Label class="text-xs text-muted-foreground">{{ t('widgets.fields.style') }}</Label>
-      <Select v-model="draft.widget.style.font_family">
+      <Select v-model="current.style.font_family">
         <SelectTrigger class="w-full" :aria-label="t('widgets.fields.font')">
           <SelectValue />
         </SelectTrigger>

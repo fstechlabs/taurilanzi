@@ -178,6 +178,32 @@ impl Key {
     }
 }
 
+impl Appearance {
+    pub fn widgets(&self) -> impl Iterator<Item = &Widget> {
+        self.layers.iter().filter_map(|layer| match layer {
+            LayerConfig::Widget { widget } => Some(widget),
+            _ => None,
+        })
+    }
+
+    /// With several widgets only one shows at a time, and each press moves on to the next.
+    pub fn rotates(&self) -> bool {
+        self.widgets().nth(1).is_some()
+    }
+
+    /// Which of its widgets shows after `turn` presses.
+    pub fn shown_widget(&self, turn: u32) -> Option<usize> {
+        match self.widgets().count() {
+            0 => None,
+            count => Some(turn as usize % count),
+        }
+    }
+
+    pub fn widget_at(&self, turn: u32) -> Option<&Widget> {
+        self.widgets().nth(self.shown_widget(turn)?)
+    }
+}
+
 impl<'de> Deserialize<'de> for Key {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         StoredKey::deserialize(deserializer).map(Self::from)
@@ -471,5 +497,49 @@ mod tests {
             crop.map(|c| (c.zoom, c.rotation, c.flip_x)),
             Some((1.5, 90.0, true))
         );
+    }
+
+    #[test]
+    fn a_press_moves_on_to_the_next_widget_and_back_to_the_first() {
+        let style = super::super::WidgetStyle {
+            color: Color::WHITE,
+            accent: Color::BLACK,
+            font_family: "Inter".into(),
+        };
+        let mut appearance = Appearance {
+            background: Background::Solid {
+                color: Color::BLACK,
+            },
+            layers: Vec::new(),
+        };
+        assert!(!appearance.rotates());
+        assert_eq!(appearance.widget_at(3), None);
+
+        appearance.layers.push(LayerConfig::Widget {
+            widget: Widget::Calendar {
+                style: style.clone(),
+            },
+        });
+        assert!(!appearance.rotates(), "one widget stays");
+        assert_eq!(appearance.shown_widget(5), Some(0));
+
+        appearance.layers.push(LayerConfig::Border {
+            color: Color::WHITE,
+            width: 2.0,
+            radius: 0.0,
+        });
+        appearance.layers.push(LayerConfig::Widget {
+            widget: Widget::Moon { style },
+        });
+        assert!(appearance.rotates());
+        assert!(matches!(
+            appearance.widget_at(0),
+            Some(Widget::Calendar { .. })
+        ));
+        assert!(matches!(appearance.widget_at(1), Some(Widget::Moon { .. })));
+        assert!(matches!(
+            appearance.widget_at(2),
+            Some(Widget::Calendar { .. })
+        ));
     }
 }

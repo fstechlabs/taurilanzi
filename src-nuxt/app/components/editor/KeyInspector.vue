@@ -19,7 +19,7 @@ const props = defineProps<{ target: KeyRef | null }>()
 const { t } = useI18n()
 const target = toRef(props, 'target')
 
-const { stored, draft, state, editing, preview, dirty, invalid, status, error, create, clear, uploadImage, pickIcon, tryKey } = useKeyEditor(target)
+const { stored, draft, state, editing, shownWidget, preview, dirty, invalid, status, error, create, clear, uploadImage, pickIcon, tryKey } = useKeyEditor(target)
 const { pages } = useWorkspace()
 
 /** Dragging the left edge resizes the inspector; the width is kept for next time. */
@@ -60,8 +60,8 @@ const twoStates = computed({
     }
     if (on) {
       // The second state starts as a copy of the first, to change just what differs.
-      const { background, from, to, angle, image, text, untouched, widget } = draft.value
-      draft.value.second = JSON.parse(JSON.stringify({ background, from, to, angle, image, text, untouched, actions: [], widget }))
+      const { background, from, to, angle, image, text, untouched, widget, moreWidgets } = draft.value
+      draft.value.second = JSON.parse(JSON.stringify({ background, from, to, angle, image, text, untouched, actions: [], widget, moreWidgets }))
       editing.value = 1
     }
     else {
@@ -78,7 +78,8 @@ const GESTURES: { gesture: Gesture, label: string }[] = [
 
 const canTry = computed(() => {
   const key = stored.value
-  return Boolean(key && (key.actions.length || key.double_press.length || key.long_press.length || key.second_state))
+  const rotates = key && key.appearance.layers.filter(layer => layer.type === 'widget').length > 1
+  return Boolean(key && (key.actions.length || key.double_press.length || key.long_press.length || key.second_state || rotates))
 })
 
 provide(KEY_SETUP, {
@@ -204,7 +205,7 @@ const { previewUrl } = useEngine()
             <ChevronDown class="size-4 text-muted-foreground" />
           </CollapsibleTrigger>
           <CollapsibleContent class="px-4 pb-4">
-            <WidgetFields v-model="state" />
+            <WidgetFields v-model="state" v-model:shown="shownWidget" />
           </CollapsibleContent>
         </Collapsible>
 

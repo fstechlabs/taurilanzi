@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Widget, WidgetStyle } from '../../src-nuxt/app/ipc/bindings'
-import { WIDGET_KINDS, hasWidget, localDateTime, newWidget, zoneCity } from '../../src-nuxt/app/lib/widgets'
+import { PRESSED_KINDS, WIDGET_KINDS, hasWidget, localDateTime, newWidget, nextKind, zoneCity } from '../../src-nuxt/app/lib/widgets'
 
 const style: WidgetStyle = {
   color: { r: 1, g: 2, b: 3 },
@@ -75,4 +75,15 @@ test('hasWidget looks for a widget layer', () => {
   expect(hasWidget({ layers: [] })).toBe(false)
   expect(hasWidget({ layers: [{ type: 'image' }, { type: 'text' }] })).toBe(false)
   expect(hasWidget({ layers: [{ type: 'image' }, { type: 'widget' }] })).toBe(true)
+})
+
+test('nextKind adds one not on the key yet and never one that answers to presses', () => {
+  expect(nextKind([])).toBe('digital_clock')
+  const clock = newWidget('digital_clock', null)
+  const analog = newWidget('analog_clock', null)
+  expect(nextKind([clock])).toBe('analog_clock')
+  expect(nextKind([clock, analog])).toBe('system_monitor')
+  const all = WIDGET_KINDS.map(k => newWidget(k.kind, null)).filter(w => w.kind !== 'moon')
+  expect(nextKind(all)).toBe('moon')
+  expect(PRESSED_KINDS).not.toContain(nextKind([clock]))
 })

@@ -8,9 +8,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use super::runtime::Engine;
-use crate::config::{
-    Action, Appearance, DeviceSettings, Integration, LayerConfig, TileDrawing, Widget,
-};
+use crate::config::{Action, Appearance, DeviceSettings, Integration, TileDrawing, Widget};
 use crate::hass::{HassReport, Topic, Wants, domain};
 
 /// How often a card of a camera or an image fetches its picture while it is on screen.
@@ -96,7 +94,8 @@ impl Engine {
             .keys
             .iter()
             .filter(|(index, key)| {
-                appearance_topics(self.appearance_now(page.id, **index, key))
+                let turn = self.key_widgets.turn((page.id, **index));
+                widget_topics(self.appearance_now(page.id, **index, key).widget_at(turn))
                     .iter()
                     .any(|(on, topic)| *on == server && (everything || changed.contains(topic)))
             })
@@ -171,7 +170,7 @@ impl Engine {
             for action in key.all_actions() {
                 add_action(&mut all, action);
             }
-            for widget in key.appearances().flat_map(widgets) {
+            for widget in key.appearances().flat_map(Appearance::widgets) {
                 if let Some(wants) = widget.hass_server().and_then(|s| all.get_mut(&s)) {
                     add_widget(wants, widget);
                 }
@@ -182,36 +181,38 @@ impl Engine {
             && let Some(page) = self.current_page()
         {
             for (&index, key) in &page.keys {
-                for widget in widgets(self.appearance_now(page.id, index, key)) {
-                    let (server, entity, seconds) = match widget {
-                        Widget::HassPicture {
-                            server,
-                            entity,
-                            seconds,
-                            ..
-                        } => (server, entity, *seconds),
-                        Widget::HassEntity { server, entity, .. }
-                            if matches!(domain(entity), "camera" | "image") =>
-                        {
-                            (server, entity, CARD_PICTURE_SECONDS)
-                        }
-                        Widget::HassTile { server, entity, .. }
-                            if matches!(
-                                domain(entity),
-                                "camera" | "image" | "media_player" | "person" | "device_tracker"
-                            ) =>
-                        {
-                            (server, entity, CARD_PICTURE_SECONDS)
-                        }
-                        _ => continue,
-                    };
-                    if let Some(wants) = all.get_mut(server) {
-                        let seconds = wants
-                            .pictures
-                            .get(entity)
-                            .map_or(seconds, |s| (*s).min(seconds));
-                        wants.pictures.insert(entity.clone(), seconds);
+                let turn = self.key_widgets.turn((page.id, index));
+                let Some(widget) = self.appearance_now(page.id, index, key).widget_at(turn) else {
+                    continue;
+                };
+                let (server, entity, seconds) = match widget {
+                    Widget::HassPicture {
+                        server,
+                        entity,
+                        seconds,
+                        ..
+                    } => (server, entity, *seconds),
+                    Widget::HassEntity { server, entity, .. }
+                        if matches!(domain(entity), "camera" | "image") =>
+                    {
+                        (server, entity, CARD_PICTURE_SECONDS)
                     }
+                    Widget::HassTile { server, entity, .. }
+                        if matches!(
+                            domain(entity),
+                            "camera" | "image" | "media_player" | "person" | "device_tracker"
+                        ) =>
+                    {
+                        (server, entity, CARD_PICTURE_SECONDS)
+                    }
+                    _ => continue,
+                };
+                if let Some(wants) = all.get_mut(server) {
+                    let seconds = wants
+                        .pictures
+                        .get(entity)
+                        .map_or(seconds, |s| (*s).min(seconds));
+                    wants.pictures.insert(entity.clone(), seconds);
                 }
             }
         }
@@ -220,13 +221,6 @@ impl Engine {
         }
         all
     }
-}
-
-fn widgets(appearance: &Appearance) -> impl Iterator<Item = &Widget> {
-    appearance.layers.iter().filter_map(|layer| match layer {
-        LayerConfig::Widget { widget } => Some(widget),
-        _ => None,
-    })
 }
 
 fn add_action(all: &mut BTreeMap<Uuid, Wants>, action: &Action) {
@@ -307,10 +301,11 @@ fn add_history(wants: &mut Wants, entity: &str, hours: u32) {
     wants.histories.insert(entity.to_string(), longest);
 }
 
-/// What of Home Assistant a look shows, and of which server, to draw it again when that changes.
-fn appearance_topics(appearance: &Appearance) -> Vec<(Uuid, Topic)> {
+/// What of Home Assistant the widgets show, and of which server, to draw them again when that
+/// changes.
+fn widget_topics<'a>(widgets: impl IntoIterator<Item = &'a Widget>) -> Vec<(Uuid, Topic)> {
     let mut all = Vec::new();
-    for widget in widgets(appearance) {
+    for widget in widgets {
         let Some(server) = widget.hass_server() else {
             continue;
         };
@@ -370,6 +365,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::config::LayerConfig;
     use crate::render::{Background, Color};
 
     fn tile(drawing: &str) -> Widget {
@@ -401,7 +397,7 @@ mod tests {
                 widget: tile("graph"),
             }],
         };
-        let topics = appearance_topics(&appearance);
+        let topics = widget_topics(appearance.widgets());
         let server = Uuid::from_u128(1);
         for topic in [
             Topic::Entity("sensor.temp".into()),

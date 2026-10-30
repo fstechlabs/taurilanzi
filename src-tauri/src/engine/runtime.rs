@@ -28,8 +28,8 @@ use super::sync::Saved;
 use super::widgets::Feeds;
 use crate::actions;
 use crate::config::{
-    AppRef, Appearance, Config, DeviceSettings, Key, LayerConfig, Navigation, Page, Profile,
-    ScreensaverImage, Store, Widget, assets_in,
+    AppRef, Config, DeviceSettings, Key, Navigation, Page, Profile, ScreensaverImage, Store,
+    Widget, assets_in,
 };
 use crate::driver::d200::{D200, Event, KEY_COUNT, KEY_SIZE, WIDE_KEY, WIDE_KEY_SIZE};
 use crate::hass::{HassReport, Wants as HassWants};
@@ -71,7 +71,7 @@ pub struct Engine {
     pub(super) app_profiles: AppProfiles,
     pub(super) front_app: Option<AppRef>,
     pub(super) live: Live,
-    key_widgets: KeyWidgets,
+    pub(super) key_widgets: KeyWidgets,
     /// Readings for the system monitor and network widgets, taken only while one is drawn.
     pub(super) monitor: Monitor,
     pub(super) results: Results,
@@ -686,13 +686,15 @@ impl Engine {
 
     fn on_key(&mut self, index: u8, pressed: bool) {
         self.plugin_key(index, pressed);
+        let page = self.current_page_id();
+        let turn = self.key_widgets.turn((page, index));
         let reacts = self
             .key(index)
             .filter(|key| key.second_state.is_none())
             .map(|key| Reacts {
                 double: !key.double_press.is_empty(),
                 long: !key.long_press.is_empty()
-                    || key_widget(&key.appearance).is_some_and(starts_over),
+                    || key.appearance.widget_at(turn).is_some_and(starts_over),
             })
             .unwrap_or_default();
         let now = Instant::now();
@@ -733,9 +735,15 @@ impl Engine {
         .clone();
         let toggles =
             gesture == Gesture::Press && key.second_state.is_some() && followed(key).is_none();
-        let widget = key_widget(self.appearance_now(page, index, key)).cloned();
+        let appearance = self.appearance_now(page, index, key);
+        let rotates = gesture == Gesture::Press && appearance.rotates();
+        let widget = appearance
+            .widget_at(self.key_widgets.turn((page, index)))
+            .cloned();
         self.run_actions(list, KeySlot { page, index });
-        if let Some(widget) = widget {
+        if rotates {
+            self.next_widget(page, index);
+        } else if let Some(widget) = widget {
             self.press_widget(page, index, &widget, gesture);
         }
         if toggles {
@@ -801,6 +809,14 @@ impl Engine {
             self.emit(EngineEvent::KeyImage { page, index });
             self.redraw_on_dock(page, index);
         }
+    }
+
+    fn next_widget(&mut self, page: Uuid, index: u8) {
+        self.key_widgets.next_turn((page, index));
+        self.emit(EngineEvent::KeyImage { page, index });
+        self.redraw_on_dock(page, index);
+        // A camera is only watched while it shows.
+        self.tell_hass();
     }
 
     fn save_counters(&self, changed: bool) {
@@ -946,14 +962,6 @@ pub(super) fn check_index(index: u8) -> Result<(), CommandError> {
     } else {
         Err(CommandError::InvalidKey(index))
     }
-}
-
-/// The live content of a look, if it has some.
-fn key_widget(appearance: &Appearance) -> Option<&Widget> {
-    appearance.layers.iter().find_map(|layer| match layer {
-        LayerConfig::Widget { widget } => Some(widget),
-        _ => None,
-    })
 }
 
 /// Widgets that start over when their key is held down.

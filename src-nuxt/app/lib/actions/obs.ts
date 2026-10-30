@@ -74,8 +74,8 @@ export function followInKey(draft: KeyDraft, command: ObsCommand, server: string
   if (!state || draft.second) {
     return
   }
-  const { background, from, to, angle, image, text, untouched, widget } = draft
-  const second = JSON.parse(JSON.stringify({ background, from, to, angle, image, text, untouched, widget })) as Omit<StateDraft, 'actions'>
+  const { background, from, to, angle, image, text, untouched, widget, moreWidgets } = draft
+  const second = JSON.parse(JSON.stringify({ background, from, to, angle, image, text, untouched, widget, moreWidgets })) as Omit<StateDraft, 'actions'>
   draft.second = {
     ...second,
     background: 'solid',

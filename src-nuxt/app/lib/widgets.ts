@@ -19,11 +19,25 @@ function messageKey(id: string) {
   return id.replace(/_(\w)/g, (_, letter: string) => letter.toUpperCase())
 }
 
+export function widgetLabel(kind: WidgetKind): string {
+  return t(`widgets.kinds.${messageKey(kind)}`)
+}
+
 export const WIDGET_KINDS: { kind: WidgetKind, readonly label: string }[] = KINDS
-  .map(kind => ({ kind, get label() { return t(`widgets.kinds.${messageKey(kind)}`) } }))
+  .map(kind => ({ kind, get label() { return widgetLabel(kind) } }))
 
 export const HASS_WIDGET_KINDS: { kind: WidgetKind, readonly label: string }[] = HASS_KINDS
-  .map(kind => ({ kind, get label() { return t(`widgets.kinds.${messageKey(kind)}`) } }))
+  .map(kind => ({ kind, get label() { return widgetLabel(kind) } }))
+
+/** They answer to presses of their key, which a key of several widgets uses to move on: they can
+ * only be alone. */
+export const PRESSED_KINDS: WidgetKind[] = ['timer', 'stopwatch', 'counter']
+
+/** What a key of `widgets` shows next when one more is added: the first not on it yet. */
+export function nextKind(widgets: readonly Widget[]): WidgetKind {
+  const used = new Set(widgets.map(widget => widget.kind))
+  return KINDS.find(kind => !used.has(kind) && !PRESSED_KINDS.includes(kind)) ?? 'calendar'
+}
 
 /** The most each widget of several entities shows. */
 export const HASS_ENTITIES_MAX = 3
