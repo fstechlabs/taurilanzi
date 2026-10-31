@@ -27,9 +27,9 @@ Built with [Tauri](https://tauri.app) and Rust · Works with the Ulanzi D200 · 
 </div>
 
 > [!WARNING]
-> Windows and Linux support is new and has not been tried on real machines yet: the app builds
-> for both, but the dock, the actions and the installers are still to be checked there. macOS is
-> the system it is used on every day.
+> Linux support is new and has not been tried on real machines yet: the app builds for it, but
+> the dock, the actions and the packages are still to be checked there. macOS is the system it is
+> used on every day, and Windows has had a first round of testing.
 
 ---
 
