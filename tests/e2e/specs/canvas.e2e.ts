@@ -112,6 +112,7 @@ describe('the canvas', () => {
     await drag(handle(homeName, free), node(OBS))
     await expect(line()).toBeExisting()
     expect(homePage(await state()).keys[free]?.actions).toEqual([{ type: 'open_page', page: created }])
+    expect(homePage(await state()).keys[free]?.kind).toBe('action')
     await shot('canvas-2-linked')
 
     await drag(handle(OBS, 3), node(OBS))
@@ -119,14 +120,14 @@ describe('the canvas', () => {
     await expect($(`.vue-flow__edge[data-id^="${created}:"]`)).not.toBeExisting()
   })
 
-  it('shows the line as the key\'s first action, and sends a page to the dock', async () => {
+  it('shows the line as what the key is, and sends a page to the dock', async () => {
     await keyButton(OBS, 0).click()
     await expect(text(`Tecla 1 · ${OBS}`)).toBeDisplayed()
-    await expect($('[aria-label="Acción 1: Volver"]')).toBeDisplayed()
+    await expect($('[data-key-type-name]')).toHaveText('Volver')
 
     await keyButton(homeName, free).click()
-    await expect($('[aria-label="Acción 1: Ir a página"]')).toBeDisplayed()
-    await expect($('[aria-label="Página de destino"]')).toHaveText(expect.stringContaining('OBS'))
+    await expect($('[data-key-type-name]')).toHaveText('Ir a página')
+    await expect($('[data-key-type]')).toHaveText(expect.stringContaining(`Va a la página ${OBS}`))
 
     await button(`Opciones de ${OBS}`, node(OBS)).click()
     await menuItem('Mostrar en el dock').click()
@@ -244,6 +245,7 @@ describe('the canvas', () => {
     await expect(node(OBS)).toBeDisplayed()
     await expect(line()).toBeExisting()
     expect(homePage(await state()).keys[free]?.actions).toEqual([{ type: 'open_page', page: created }])
+    expect(homePage(await state()).keys[free]?.kind).toBe('action')
     await button('Rehacer').click()
     await expect(node(OBS)).not.toBeExisting()
   })

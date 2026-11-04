@@ -510,12 +510,13 @@ export function followInKey(draft: KeyDraft, command: HassCommand, server: strin
     return
   }
   const { background, from, to, angle, image, text, untouched, widget, moreWidgets } = draft
-  const second = JSON.parse(JSON.stringify({ background, from, to, angle, image, text, untouched, widget, moreWidgets })) as Omit<StateDraft, 'actions'>
+  const second = JSON.parse(JSON.stringify({ background, from, to, angle, image, text, untouched, widget, moreWidgets })) as Omit<StateDraft, 'main' | 'actions'>
   draft.second = {
     ...second,
     background: 'solid',
     from: state.color,
-    actions: [{ type: 'home_assistant', server, command: JSON.parse(JSON.stringify(command)) as HassCommand }],
+    main: { type: 'home_assistant', server, command: JSON.parse(JSON.stringify(command)) as HassCommand },
+    actions: [],
   }
 }
 

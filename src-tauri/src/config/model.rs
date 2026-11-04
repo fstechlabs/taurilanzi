@@ -110,6 +110,10 @@ pub struct Position {
 
 #[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
 pub struct Key {
+    /// What the key is, as the editor sets it up; the engine runs keys the same whatever it is.
+    /// Keys saved before it existed have none, and the editor works it out from the rest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<KeyKind>,
     pub appearance: Appearance,
     /// Run in order on press. At most one of them navigates.
     pub actions: Vec<Action>,
@@ -121,6 +125,24 @@ pub struct Key {
     pub second_state: Option<KeyState>,
 }
 
+/// The one type of a key, which decides what it shows; its other actions only run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum KeyKind {
+    /// Its own look, and actions.
+    Basic,
+    /// Its first action is what the key is; it may draw the key.
+    Action,
+    /// Live content.
+    Widget,
+    /// Several live contents, one more on each press.
+    Carousel,
+    /// Two looks and two lists of actions, one every other press.
+    TwoStates,
+    /// Shows the page the dock is on.
+    PageIndicator,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 pub struct KeyState {
     pub appearance: Appearance,
@@ -130,6 +152,9 @@ pub struct KeyState {
 /// Schema 1 had a single optional `action` per key, and keys without gestures or states.
 #[derive(Deserialize)]
 struct StoredKey {
+    /// A kind from a newer version is forgotten rather than refusing the whole configuration.
+    #[serde(default, deserialize_with = "known_kind")]
+    kind: Option<KeyKind>,
     appearance: Appearance,
     #[serde(default)]
     actions: Vec<Action>,
@@ -143,6 +168,13 @@ struct StoredKey {
     second_state: Option<KeyState>,
 }
 
+fn known_kind<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<KeyKind>, D::Error> {
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.and_then(|value| serde_json::from_value(value).ok()))
+}
+
 impl From<StoredKey> for Key {
     fn from(stored: StoredKey) -> Self {
         let mut actions = stored.actions;
@@ -150,6 +182,7 @@ impl From<StoredKey> for Key {
             actions.extend(stored.action);
         }
         Self {
+            kind: stored.kind,
             appearance: stored.appearance,
             actions,
             double_press: stored.double_press,
@@ -349,6 +382,7 @@ mod tests {
             device: None,
         };
         let key = Key {
+            kind: None,
             appearance: image("first.png"),
             actions: Vec::new(),
             double_press: vec![sound("double.wav")],
@@ -384,6 +418,7 @@ mod tests {
             keys: BTreeMap::from([(
                 0,
                 Key {
+                    kind: None,
                     appearance: Appearance {
                         background: Background::Solid {
                             color: Color::rgb(1, 2, 3),
@@ -479,6 +514,37 @@ mod tests {
         );
         assert!(keys[&1].actions.is_empty());
         assert_eq!(profile.pages[0].position, Position::default());
+    }
+
+    #[test]
+    fn keys_keep_their_kind_and_forget_one_they_do_not_know() {
+        let read = |kind: &str| {
+            serde_json::from_str::<Key>(&format!(
+                r#"{{{kind}"appearance":{{"background":{{"type":"solid","color":{{"r":0,"g":0,"b":0}}}},"layers":[]}},"actions":[]}}"#
+            ))
+            .unwrap()
+            .kind
+        };
+        assert_eq!(read(""), None, "saved before keys had a kind");
+        assert_eq!(read(r#""kind":"two_states","#), Some(KeyKind::TwoStates));
+        assert_eq!(read(r#""kind":"carousel","#), Some(KeyKind::Carousel));
+        assert_eq!(
+            read(r#""kind":"slider","#),
+            None,
+            "a kind of a newer version"
+        );
+
+        let key = serde_json::from_str::<Key>(
+            r#"{"kind":"action","appearance":{"background":{"type":"solid","color":{"r":0,"g":0,"b":0}},"layers":[]},"actions":[{"type":"home"}]}"#,
+        )
+        .unwrap();
+        let json = serde_json::to_value(&key).unwrap();
+        assert_eq!(json["kind"], "action");
+        let unset = serde_json::to_value(Key { kind: None, ..key }).unwrap();
+        assert!(
+            unset.get("kind").is_none(),
+            "keys without a kind stay as before"
+        );
     }
 
     #[test]

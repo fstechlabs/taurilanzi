@@ -1,13 +1,13 @@
 import type { DeepReadonly } from 'vue'
 import { commands } from '~/ipc/bindings'
-import type { Action, Appearance, Background, Crop, Fit, Gesture, Key, LayerConfig, VerticalPosition, Widget } from '~/types/engine'
+import type { Action, Appearance, Background, Crop, Fit, Gesture, Key, KeyKind, LayerConfig, VerticalPosition, Widget } from '~/types/engine'
 import type { KeyRef } from '~/composables/useWorkspace'
 import { isNavigation } from '~/composables/usePages'
 import type { PickedIcon } from '~/composables/useIconCatalog'
 import { fromHex, toHex } from '~/lib/color'
 import { iconSvg } from '~/lib/iconify'
 import { httpError } from '~/lib/actions/http'
-import { hassError } from '~/lib/actions/hass'
+import { followedAction, hassError } from '~/lib/actions/hass'
 import { obsError } from '~/lib/actions/obs'
 import { NO_SERVER } from '~/lib/integrations'
 import type { NewKeyStyle } from '~/lib/new-key'
@@ -47,6 +47,9 @@ export interface StateDraft {
   image: ImageDraft | null
   text: TextDraft | null
   untouched: LayerConfig[]
+  /** What a key of the `action` kind is: run first, set up with the type of the key. */
+  main: Action | null
+  /** Run after `main`, without changing how the key looks. */
   actions: Action[]
   /** Live content, drawn between the image and the text. */
   widget: Widget | null
@@ -56,6 +59,7 @@ export interface StateDraft {
 
 /** A whole key: its first state, gestures, and the second state of a key of two. */
 export interface KeyDraft extends StateDraft {
+  kind: KeyKind
   doublePress: Action[]
   longPress: Action[]
   second: StateDraft | null
@@ -65,6 +69,7 @@ const WEB_URL = /^https?:\/\/\S+$/
 
 export function emptyDraft(style: NewKeyStyle): KeyDraft {
   return {
+    kind: 'basic',
     background: 'solid',
     from: toHex(style.background),
     to: '#3f3f46',
@@ -79,6 +84,7 @@ export function emptyDraft(style: NewKeyStyle): KeyDraft {
       position: style.text_position,
     },
     untouched: [],
+    main: null,
     actions: [],
     widget: null,
     moreWidgets: [],
@@ -92,7 +98,8 @@ function clone<T>(value: DeepReadonly<T> | T): T {
   return structuredClone(toRaw(value)) as T
 }
 
-function stateFrom(appearance: DeepReadonly<Appearance>, actions: DeepReadonly<Action[]>): StateDraft {
+function stateFrom(appearance: DeepReadonly<Appearance>, actions: DeepReadonly<Action[]>, hasMain: boolean): StateDraft {
+  const all = clone<Action[]>(actions)
   const bg = appearance.background
   const state: StateDraft = {
     background: bg.type === 'solid' ? 'solid' : 'gradient',
@@ -102,7 +109,8 @@ function stateFrom(appearance: DeepReadonly<Appearance>, actions: DeepReadonly<A
     image: null,
     text: null,
     untouched: [],
-    actions: clone<Action[]>(actions),
+    main: hasMain ? all.shift() ?? null : null,
+    actions: all,
     widget: null,
     moreWidgets: [],
   }
@@ -144,13 +152,70 @@ function stateFrom(appearance: DeepReadonly<Appearance>, actions: DeepReadonly<A
   return state
 }
 
+export const PAGE_INDICATOR = '{page_number}'
+
+/** An action that draws the key it is on, so it can only be what the key is. */
+function drawsKey(action: Action, appearance: DeepReadonly<Appearance>) {
+  if (action.type === 'plugin') {
+    return true
+  }
+  if (action.type !== 'home_assistant') {
+    return false
+  }
+  const command = action.command
+  const entity = 'entity' in command ? command.entity : command.kind === 'call' ? command.target?.entities?.[0] : undefined
+  return command.kind === 'tile' || command.kind === 'show' || appearance.layers.some(layer =>
+    layer.type === 'widget' && (layer.widget.kind === 'hass_tile' || layer.widget.kind === 'hass_entity') && layer.widget.entity === entity)
+}
+
+/** What a key saved before keys had a kind is, and its actions with the one it is first. */
+export function kindOf(key: DeepReadonly<Key>): { kind: KeyKind, actions: DeepReadonly<Action[]> } {
+  // Raw, so a copy in another order can still be cloned.
+  const actions = toRaw(key.actions)
+  const kind = key.kind
+  const widgets = key.appearance.layers.filter(layer => layer.type === 'widget').length
+  if (kind === 'action' && !actions.length) {
+    return { kind: 'basic', actions }
+  }
+  if (kind === 'widget' && widgets > 1) {
+    return { kind: 'carousel', actions }
+  }
+  if (kind) {
+    return { kind, actions }
+  }
+  if (key.second_state) {
+    const followed = followedAction(clone<Action[]>(actions), clone<Action[]>(key.second_state.actions))
+    const follows = followed && JSON.stringify(actions[0]) === JSON.stringify(followed) && JSON.stringify(key.second_state.actions[0]) === JSON.stringify(followed)
+    return { kind: follows ? 'action' : 'two_states', actions }
+  }
+  const face = actions.findIndex(action => drawsKey(action as Action, key.appearance))
+  if (face !== -1) {
+    return { kind: 'action', actions: [actions[face]!, ...actions.filter((_, i) => i !== face)] }
+  }
+  if (widgets) {
+    return { kind: widgets > 1 ? 'carousel' : 'widget', actions }
+  }
+  if (key.appearance.layers.some(layer => layer.type === 'text' && layer.content.includes(PAGE_INDICATOR))) {
+    return { kind: 'page_indicator', actions }
+  }
+  return { kind: actions.length ? 'action' : 'basic', actions }
+}
+
 export function draftFromKey(key: DeepReadonly<Key>): KeyDraft {
+  const { kind, actions } = kindOf(key)
+  const hasMain = kind === 'action'
   return {
-    ...stateFrom(key.appearance, key.actions),
+    kind,
+    ...stateFrom(key.appearance, actions, hasMain),
     doublePress: clone<Action[]>(key.double_press),
     longPress: clone<Action[]>(key.long_press),
-    second: key.second_state ? stateFrom(key.second_state.appearance, key.second_state.actions) : null,
+    second: key.second_state ? stateFrom(key.second_state.appearance, key.second_state.actions, hasMain) : null,
   }
+}
+
+/** Every action a look runs on press: what the key is, then the rest. */
+export function pressActions(state: StateDraft): Action[] {
+  return state.main ? [state.main, ...state.actions] : state.actions
 }
 
 /** The live content of a look, in the order a press goes through it. */
@@ -205,12 +270,18 @@ function cleanActions(actions: Action[]): Action[] {
 
 export function keyFromDraft(draft: KeyDraft): Key {
   return {
+    kind: draft.kind,
     appearance: appearanceFrom(draft),
-    actions: cleanActions(draft.actions),
+    actions: cleanActions(pressActions(draft)),
     double_press: draft.second ? [] : cleanActions(draft.doublePress),
     long_press: draft.second ? [] : cleanActions(draft.longPress),
-    second_state: draft.second ? { appearance: appearanceFrom(draft.second), actions: cleanActions(draft.second.actions) } : null,
+    second_state: draft.second ? { appearance: appearanceFrom(draft.second), actions: cleanActions(pressActions(draft.second)) } : null,
   }
+}
+
+/** A key as the editor would save it, to tell real changes from what reading it fills in. */
+export function normalized(key: DeepReadonly<Key> | null | undefined): string {
+  return canonical(key ? keyFromDraft(draftFromKey(key)) : null)
 }
 
 export function urlError(url: string): string | null {
@@ -238,11 +309,11 @@ export function actionsError(actions: Action[], servers?: string[]): string | nu
 /** What is missing for the whole key to be saved: every list follows the rules of a list, and
  * only the simple press can lead to a page of the canvas. */
 export function keyDraftError(draft: KeyDraft, servers?: string[]): string | null {
-  const others = draft.second ? [draft.second.actions] : [draft.doublePress, draft.longPress]
+  const others = draft.second ? [pressActions(draft.second)] : [draft.doublePress, draft.longPress]
   if (others.some(list => list.some(a => a.type === 'open_page'))) {
     return t('editor.validation.pageOnlyOnPress')
   }
-  return [draft.actions, ...others].map(list => actionsError(list, servers)).find(Boolean) ?? null
+  return [pressActions(draft), ...others].map(list => actionsError(list, servers)).find(Boolean) ?? null
 }
 
 /** What is missing for an action to be saved, the same checks the engine makes. */
@@ -334,7 +405,7 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
   function load() {
     clearTimeout(timer)
     draft.value = stored.value ? draftFromKey(stored.value) : null
-    known.value = canonical(stored.value)
+    known.value = normalized(stored.value)
     status.value = 'saved'
     error.value = null
   }
@@ -387,7 +458,7 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
   }, { immediate: true })
 
   watch(stored, (key) => {
-    const incoming = canonical(key)
+    const incoming = normalized(key)
     const echo = sent.indexOf(incoming)
     if (echo !== -1) {
       sent = sent.slice(echo + 1)
@@ -399,7 +470,9 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
     if (status.value === 'pending' && key && draft.value) {
       // A line drawn on the canvas while this key has changes waiting to be saved.
       known.value = incoming
-      draft.value.actions = structuredClone(toRaw(key.actions)) as Action[]
+      const fresh = draftFromKey(key)
+      draft.value.main = fresh.main
+      draft.value.actions = fresh.actions
       return
     }
     load()

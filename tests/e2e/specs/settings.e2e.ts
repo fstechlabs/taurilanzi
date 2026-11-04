@@ -6,14 +6,13 @@ import {
   dialog,
   clickOn,
   homePage,
-  node,
+  newKey,
   photoPng,
   pickFile,
   saved,
   setColor,
   shot,
   state,
-  text,
 } from '../helpers'
 
 async function preferences() {
@@ -105,9 +104,7 @@ describe('the settings', () => {
     await clickOn($('[data-profile][aria-current="true"]'))
     const home = homePage(await state())
     const index = [...Array(KEY_COUNT).keys()].reverse().find(i => !home.keys[i])!
-    await node(home.name).$(`button[aria-label="Tecla ${index + 1}"]`).click()
-    await expect(text('Esta tecla está vacía.')).toBeDisplayed()
-    await button('Configurar tecla').click()
+    await newKey(home.name, index)
     await saved()
     const key = homePage(await state()).keys[index]!
     expect(key.appearance.background).toEqual({ type: 'solid', color: { r: 0x1D, g: 0x4E, b: 0xD8 } })

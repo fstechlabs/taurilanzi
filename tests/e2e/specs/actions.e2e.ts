@@ -2,14 +2,17 @@ import { $, $$, browser, expect } from '@wdio/globals'
 import { Key } from 'webdriverio'
 import {
   KEY_COUNT,
+  actionSummaries,
   addAction,
   button,
   chooseOption,
+  done,
   engine,
   homePage,
-  node,
+  newKey,
   pickFile,
   saved,
+  settingsDialog,
   shot,
   silentWav,
   state,
@@ -33,8 +36,7 @@ describe('the action catalog', () => {
     home = page.id
     homeName = page.name
     index = [...Array(KEY_COUNT).keys()].reverse().find(i => !page.keys[i])!
-    await node(homeName).$(`button[aria-label="Tecla ${index + 1}"]`).click()
-    await button('Configurar tecla').click()
+    await newKey(homeName, index)
   })
 
   after(async () => {
@@ -51,6 +53,11 @@ describe('the action catalog', () => {
     const all = await entries()
     expect(all).toContain('hotkey')
     expect(all).toContain('obs:record')
+    expect(all).toContain('home_assistant:switch')
+    // What draws the key can only be its type.
+    for (const face of ['basic', 'home_assistant:tile', 'home_assistant:show', 'widget:digital_clock', 'toggle_sequences', 'switch_hotkey', 'page_indicator']) {
+      expect(all).not.toContain(face)
+    }
 
     await $(PICKER).setValue('volumen')
     const volume = await entries()
@@ -82,31 +89,52 @@ describe('the action catalog', () => {
 
   it('edits shortcuts, waits, random picks, text and sounds, and saves them', async () => {
     await addAction('hotkey')
+    let dialog = await settingsDialog()
     await chooseOption('Tecla del atajo', 'C')
-    await $('[aria-label="Comando"]').click()
-    await expect($('[data-shortcut]')).toHaveText('⌘C')
+    await dialog.$('[aria-label="Comando"]').click()
+    await expect(dialog.$('[data-shortcut]')).toHaveText('⌘C')
+    await done()
 
     await addAction('delay')
-    await $('[aria-label="Segundos de espera"]').setValue('1.5')
+    await (await settingsDialog()).$('[aria-label="Segundos de espera"]').setValue('1.5')
+    await done()
 
     await addAction('random')
-    await button('Añadir acción al azar').click()
+    dialog = await settingsDialog()
+    await button('Añadir acción al azar', dialog).click()
     await $(PICKER).waitForDisplayed()
     expect(await entries()).not.toContain('home')
     expect(await entries()).not.toContain('delay')
     await $('[data-entry="media:mute"]').click()
-    await button('Añadir acción al azar').click()
-    await $('[data-entry="stop_sounds"]').click()
+    await $(PICKER).waitForExist({ reverse: true })
+    // Its own dialog opens over the one of the random action.
+    await browser.waitUntil(async () => (await $$('[data-action-dialog]').length) === 2)
+    await done()
+    await addAction('stop_sounds', 'Añadir acción al azar')
+    await expect(dialog.$$('[data-action-summary]')).toBeElementsArrayOfSize(2)
+    await done()
 
     await addAction('type_text')
-    await $('[aria-label="Texto a escribir"]').setValue('hola')
-    await $('[aria-label="Pegar en vez de teclear"]').click()
+    dialog = await settingsDialog()
+    await dialog.$('[aria-label="Texto a escribir"]').setValue('hola')
+    await dialog.$('[aria-label="Pegar en vez de teclear"]').click()
+    await done()
 
     await addAction('play_sound')
-    await pickFile($('[aria-label="Archivo de sonido"]'), silentWav(), 'silencio.wav', 'audio/wav')
-    await expect(text('silencio.wav')).toBeDisplayed()
+    dialog = await settingsDialog()
+    await pickFile(dialog.$('[aria-label="Archivo de sonido"]'), silentWav(), 'silencio.wav', 'audio/wav')
+    await expect(text('silencio.wav', dialog)).toBeDisplayed()
     await chooseOption('Al pulsar otra vez', 'Pulsar para parar')
     await shot('actions-3-editors')
+    await done()
+
+    expect(await actionSummaries()).toEqual([
+      'Pulsa el atajo ⌘C',
+      'Espera 1,5 s',
+      'Hace una de 2 acciones al azar',
+      'Escribe «hola»',
+      'Reproduce silencio.wav',
+    ])
 
     await saved()
     const list = homePage(await state()).keys[index]!.actions

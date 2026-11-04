@@ -119,6 +119,7 @@ mod tests {
             layers: Vec::new(),
         };
         Key {
+            kind: None,
             appearance: appearance.clone(),
             actions: first,
             double_press: Vec::new(),

@@ -2,6 +2,7 @@
 import { open as choose } from '@tauri-apps/plugin-dialog'
 import { Folder, ToggleRight, X } from '@lucide/vue'
 import { commands } from '~/ipc/bindings'
+import { pressActions } from '~/composables/useKeyEditor'
 import { KEY_DRAFT } from '~/lib/actions/key-draft'
 import { followInKey, followedCommand, followedState, obsStatusText, sameCommand, switchLabels } from '~/lib/actions/obs'
 import type { ObsCommand, ObsMediaControl, ObsSwitch } from '~/types/engine'
@@ -111,7 +112,7 @@ async function pickFolder() {
 
 /** The OBS state this command can show on the key, and whether the key already follows it. */
 const state = computed(() => followedState(command.value))
-const followed = computed(() => (draft?.value ? followedCommand(draft.value.actions, draft.value.second?.actions ?? []) : null))
+const followed = computed(() => (draft?.value ? followedCommand(pressActions(draft.value), draft.value.second ? pressActions(draft.value.second) : []) : null))
 const follows = computed(() => Boolean(draft?.value?.second && followed.value && sameCommand(followed.value, command.value)))
 const canFollow = computed(() => {
   const key = draft?.value

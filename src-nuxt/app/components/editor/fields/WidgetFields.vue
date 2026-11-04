@@ -6,14 +6,15 @@ import type { ClockLine, Metric, Period, Widget } from '~/types/engine'
 import { fromHex, toHex } from '~/lib/color'
 import type { WidgetKind } from '~/lib/widgets'
 import { HASS_WIDGET_KINDS, METRICS, PERIODS, PRESSED_KINDS, WIDGET_KINDS, WORLD_CLOCKS_MAX, newWidget, nextKind, widgetLabel, zoneCity } from '~/lib/widgets'
-import { isDefaultKeyText } from '~/lib/new-key'
 import { os } from '~/lib/os'
 
 const draft = defineModel<StateDraft>({ required: true })
+/** Several contents, one more on each press, chosen here; otherwise only the settings of the one
+ * the key shows. */
+const props = defineProps<{ carousel?: boolean }>()
 const { fonts } = useFonts()
 const { t } = useI18n()
 
-const NONE = 'none'
 const LINES: { value: ClockLine, label: string }[] = [
   { value: 'none', label: 'widgets.lines.none' },
   { value: 'date', label: 'widgets.lines.date' },
@@ -27,7 +28,6 @@ const shown = defineModel<number>('shown', { default: 0 })
 const widgets = computed(() => widgetsOf(draft.value))
 const current = computed(() => widgets.value[shown.value] ?? widgets.value[0] ?? null)
 const several = computed(() => widgets.value.length > 1)
-const canAdd = computed(() => widgets.value.length > 0 && !widgets.value.some(w => PRESSED_KINDS.includes(w.kind)))
 
 watch(() => widgets.value.length, (count) => {
   if (shown.value >= count) {
@@ -62,30 +62,16 @@ function add() {
   shown.value = widgets.value.length - 1
 }
 
+/** What the content shown in the carousel is. */
 const kind = computed({
-  get: () => current.value?.kind ?? NONE,
+  get: () => current.value?.kind ?? '',
   set: (value: string) => {
-    const state = draft.value
     const widget = current.value
-    if (value === NONE) {
-      remove(widget ? shown.value : 0)
-      return
+    if (widget && value !== widget.kind) {
+      put(shown.value, newWidget(value as WidgetKind, widget))
     }
-    if (value === widget?.kind) {
-      return
-    }
-    // The text a key is created with would only get in the way of the widget.
-    if (!state.widget && isDefaultKeyText(state.text?.content)) {
-      state.text = null
-    }
-    put(widget ? shown.value : 0, newWidget(value as WidgetKind, widget))
   },
 })
-
-/** A key of several widgets cannot hold one that answers to presses. */
-function unavailable(option: WidgetKind) {
-  return several.value && PRESSED_KINDS.includes(option)
-}
 
 type Of<K extends WidgetKind> = Extract<Widget, { kind: K }>
 function only<K extends WidgetKind>(wanted: K) {
@@ -268,9 +254,8 @@ const accent = computed({
 
 <template>
   <div class="flex flex-col gap-4">
-    <div class="flex flex-col gap-2">
-      <Label class="text-xs text-muted-foreground">{{ t('widgets.fields.show') }}</Label>
-      <div v-if="several" class="flex flex-wrap gap-1.5" role="tablist" :aria-label="t('widgets.fields.list')">
+    <div v-if="props.carousel" class="flex flex-col gap-2" data-carousel>
+      <div class="flex flex-wrap items-center gap-1.5" role="tablist" :aria-label="t('widgets.fields.list')">
         <div
           v-for="(w, i) in widgets"
           :key="i"
@@ -278,28 +263,33 @@ const accent = computed({
           :class="i === shown ? 'border-sky-500/60 bg-sky-500/15' : 'border-border'"
           data-widget-tab
         >
-          <button type="button" role="tab" :aria-selected="i === shown" class="py-1 pl-2 pr-1" @click="shown = i">
+          <button type="button" role="tab" :aria-selected="i === shown" class="py-1 pr-1 pl-2" :class="several ? '' : 'pr-2'" @click="shown = i">
             {{ i + 1 }}. {{ widgetLabel(w.kind) }}
           </button>
           <button
+            v-if="several"
             type="button"
-            class="py-1 pl-0.5 pr-1.5 text-muted-foreground hover:text-foreground"
+            class="py-1 pr-1.5 pl-0.5 text-muted-foreground hover:text-foreground"
             :aria-label="t('widgets.fields.removeWidget', { name: widgetLabel(w.kind) })"
             @click="remove(i)"
           >
             <X class="size-3" />
           </button>
         </div>
+        <Button variant="outline" size="sm" class="h-7" :aria-label="t('widgets.fields.addLabel')" @click="add">
+          <Plus /> {{ t('widgets.fields.add') }}
+        </Button>
       </div>
+      <p class="text-[11px] text-muted-foreground">
+        {{ t('widgets.fields.several') }}
+      </p>
+      <Label class="mt-2 text-xs text-muted-foreground">{{ t('widgets.fields.show') }}</Label>
       <Select v-model="kind">
         <SelectTrigger class="w-full" :aria-label="t('widgets.fields.live')">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem :value="NONE">
-            {{ t('widgets.fields.none') }}
-          </SelectItem>
-          <SelectItem v-for="k in WIDGET_KINDS" :key="k.kind" :value="k.kind" :disabled="unavailable(k.kind)">
+          <SelectItem v-for="k in WIDGET_KINDS" :key="k.kind" :value="k.kind" :disabled="PRESSED_KINDS.includes(k.kind)">
             {{ k.label }}
           </SelectItem>
           <SelectSeparator />
@@ -312,15 +302,6 @@ const accent = computed({
         </SelectContent>
       </Select>
       <p class="text-[11px] text-muted-foreground">
-        {{ t('widgets.fields.hint') }}
-      </p>
-      <p v-if="several" class="text-[11px] text-muted-foreground">
-        {{ t('widgets.fields.several') }}
-      </p>
-      <Button v-if="canAdd" variant="outline" size="sm" :aria-label="t('widgets.fields.addLabel')" @click="add">
-        <Plus /> {{ t('widgets.fields.add') }}
-      </Button>
-      <p v-else-if="current && PRESSED_KINDS.includes(current.kind)" class="text-[11px] text-muted-foreground">
         {{ t('widgets.fields.alone') }}
       </p>
     </div>

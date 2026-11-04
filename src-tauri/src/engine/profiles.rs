@@ -336,6 +336,7 @@ mod tests {
 
     fn key(actions: Vec<Action>) -> Key {
         Key {
+            kind: None,
             appearance: Appearance {
                 background: Background::Solid {
                     color: Color::BLACK,

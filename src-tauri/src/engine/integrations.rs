@@ -135,6 +135,7 @@ mod tests {
     fn lists_the_secrets_of_the_servers_and_of_the_keys_codes() {
         let (obs, hass) = (Uuid::from_u128(1), Uuid::from_u128(2));
         let key = Key {
+            kind: None,
             appearance: Appearance {
                 background: Background::Solid {
                     color: Color::BLACK,

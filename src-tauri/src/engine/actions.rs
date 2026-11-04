@@ -355,6 +355,7 @@ mod tests {
             layers: Vec::new(),
         };
         let key = |long_press: Vec<Action>, second_state: Option<KeyState>| Key {
+            kind: None,
             appearance: look(),
             actions: vec![open_page(other)],
             double_press: Vec::new(),
@@ -421,6 +422,7 @@ mod tests {
             settings: serde_json::Value::Null,
         };
         let key = |actions: Vec<Action>| Key {
+            kind: None,
             appearance: look(),
             actions,
             double_press: Vec::new(),

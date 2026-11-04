@@ -3,13 +3,12 @@ import type { AddressInfo } from 'node:net'
 import { $, browser, expect } from '@wdio/globals'
 import {
   KEY_COUNT,
-  addAction,
   button,
   chooseOption,
   clickOn,
   fill,
   homePage,
-  node,
+  newKey,
   saved,
   shot,
   state,
@@ -55,14 +54,14 @@ describe('the HTTP request action', () => {
   const { server, received } = echoServer()
   let base: string
   let index: number
+  let homeName: string
 
   before(async () => {
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
     const home = homePage(await state())
     index = [...Array(KEY_COUNT).keys()].reverse().find(i => !home.keys[i])!
-    await clickOn(node(home.name).$(`button[aria-label="Tecla ${index + 1}"]`))
-    await button('Configurar tecla').click()
+    homeName = home.name
   })
 
   after(() => {
@@ -70,7 +69,7 @@ describe('the HTTP request action', () => {
   })
 
   it('builds a POST with headers and a JSON body in its own dialog', async () => {
-    await addAction('http')
+    await newKey(homeName, index, 'http')
     await expect($('[data-action-dialog]')).toBeDisplayed()
     await expect($('[data-save-status]')).toHaveText(expect.stringContaining('escribe la dirección'))
 
@@ -85,6 +84,7 @@ describe('the HTTP request action', () => {
     await $('[aria-label="Cuerpo JSON"]').setValue('{"on": true}')
     await saved()
 
+    expect((await storedKey(index))!.kind).toBe('action')
     expect((await storedKey(index))!.actions).toEqual([{
       type: 'http',
       request: {
@@ -111,8 +111,7 @@ describe('the HTTP request action', () => {
     await shot('http-answer')
     await button('Hecho').click()
     await $('[data-action-dialog]').waitForExist({ reverse: true })
-    await expect($('[data-action-summary]')).toHaveText(expect.stringContaining(`POST ${base}/api/luz?x=1`))
-    await expect($('[data-action-summary]')).toHaveText(expect.stringContaining('1 cabecera · cuerpo JSON'))
+    await expect($('[data-key-type]')).toHaveText(expect.stringContaining(`POST ${base}/api/luz?x=1`))
     await shot('http-summary')
   })
 

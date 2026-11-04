@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { CircleHelp, GripVertical, Plus, Puzzle, Trash2 } from '@lucide/vue'
+import { ChevronRight, CircleHelp, GripVertical, Plus, Puzzle, Trash2 } from '@lucide/vue'
+import { actionsError } from '~/composables/useKeyEditor'
 import type { CatalogEntry } from '~/lib/actions/catalog'
 import { entryFor } from '~/lib/actions/catalog'
-import { KEY_DRAFT } from '~/lib/actions/key-draft'
-import { KEY_SETUP } from '~/lib/actions/setup'
-import { isDefaultKeyText } from '~/lib/new-key'
 import type { Action, Gesture } from '~/types/engine'
 
 const actions = defineModel<Action[]>({ required: true })
@@ -14,44 +12,33 @@ const long = defineModel<Action[]>('long')
 const props = defineProps<{
   /** The page of the key, which its lines cannot lead to. */
   page: string
-  /** The picks of a random action rather than a key's own list. */
-  nested?: boolean
+  /** The actions of a key, or the picks of a random action. */
+  mode?: 'action' | 'random'
   /** A gesture or a second state, which cannot draw a line on the canvas. */
   noLines?: boolean
+  /** What the key is, run before the list: it counts when only one action may move the dock. */
+  main?: Action | null
+  /** What to say when the list is empty. */
+  empty?: string
 }>()
 
 const { t } = useI18n()
 const { pages } = useWorkspace()
 const { snapshot } = useEngine()
+const { summary } = useActionSummary()
 const picking = ref(false)
-const keySetup = inject(KEY_SETUP, null)
+const random = computed(() => props.mode === 'random')
 
 const otherPages = computed(() => pages.value.filter(p => p.id !== props.page))
 const profiles = computed(() => snapshot.value?.profiles ?? [])
-const navigates = computed(() => actions.value.some(a => entryFor(a)?.navigates))
+const servers = computed(() => (snapshot.value?.integrations ?? []).map(server => server.id))
+const navigates = computed(() => [props.main, ...actions.value].some(a => a && entryFor(a)?.navigates))
 
 function actionName(action: Action) {
   return entryFor(action)?.name ?? (action.type === 'plugin' ? t('actions.list.unknownPlugin') : action.type)
 }
 
-const keyDraft = inject(KEY_DRAFT, null)
-
 function unavailable(entry: CatalogEntry) {
-  if (entry.plugin) {
-    if (props.nested || props.noLines) {
-      return t('actions.list.unavailable.pluginOnlyPress')
-    }
-    if (keyDraft?.value?.second) {
-      return t('actions.list.unavailable.pluginTwoStates')
-    }
-    const lists = [actions.value, double.value ?? [], long.value ?? []]
-    if (lists.some(list => list.some(a => a.type === 'plugin'))) {
-      return t('actions.list.unavailable.pluginTaken')
-    }
-  }
-  if (entry.setup) {
-    return keySetup ? keySetup.unavailable(entry.setup) : t('actions.list.unavailable.setUpFromKey')
-  }
   if (entry.navigates && navigates.value) {
     return t('actions.list.unavailable.navigatesOnce')
   }
@@ -67,44 +54,8 @@ function unavailable(entry: CatalogEntry) {
   return null
 }
 
-/** The action just picked, which opens its dialog if it is set up in one. */
-const justAdded = shallowRef<Action | null>(null)
-const JUST_ADDED_MS = 1000
-
-function isJustAdded(action: Action) {
-  return justAdded.value !== null && toRaw(action) === justAdded.value
-}
-
-function add(entry: CatalogEntry) {
-  if (entry.setup) {
-    keySetup?.apply(entry.setup)
-    return
-  }
-  const action = entry.create?.({
-    otherPages: otherPages.value.map(p => p.id),
-    profiles: profiles.value.filter(p => p.id !== snapshot.value?.active_profile).map(p => p.id),
-  })
-  if (!action) {
-    return
-  }
-  // The plugin draws the key: the text of a new key would only cover it.
-  if (entry.plugin && keyDraft?.value && isDefaultKeyText(keyDraft.value.text?.content)) {
-    keyDraft.value.text = null
-  }
-  justAdded.value = action
-  setTimeout(() => {
-    if (justAdded.value === action) {
-      justAdded.value = null
-    }
-  }, JUST_ADDED_MS)
-  // What moves the dock goes first unless the user moves it.
-  if (entry.navigates) {
-    actions.value.unshift(action)
-  }
-  else {
-    actions.value.push(action)
-  }
-}
+/** Actions that have nothing to set up open no dialog when added. */
+const NOTHING_TO_SET: Action['type'][] = ['back', 'home', 'previous_page', 'next_page', 'stop_sounds']
 
 // The gestures for "when" an action runs; `actions.list.gestures` has their labels, which also
 // head their groups.
@@ -131,25 +82,80 @@ const groups = computed(() => WHEN
   .map(w => ({ ...w, list: listOf(w.gesture) })))
 const grouped = computed(() => groups.value.length > 1)
 
-/** Moves an action to another "when", at the end of its group. */
-function setWhen(from: Gesture, index: number, to: unknown) {
-  if (typeof to !== 'string' || to === from) {
+/** The action whose dialog is open, by its list and place in it. */
+const editing = ref<{ gesture: Gesture, index: number } | null>(null)
+const dialogOpen = computed({
+  get: () => editing.value !== null,
+  set: (open) => {
+    if (!open) {
+      editing.value = null
+    }
+  },
+})
+const edited = computed({
+  get: () => (editing.value ? listOf(editing.value.gesture)[editing.value.index] ?? null : null),
+  set: (action) => {
+    if (editing.value && action) {
+      listOf(editing.value.gesture)[editing.value.index] = action
+    }
+  },
+})
+
+/** Long enough for the catalog to finish closing: two dialogs at once fight over the focus. */
+const AFTER_CATALOG_MS = 250
+
+function add(entry: CatalogEntry) {
+  const action = entry.create?.({
+    otherPages: otherPages.value.map(p => p.id),
+    profiles: profiles.value.filter(p => p.id !== snapshot.value?.active_profile).map(p => p.id),
+  })
+  if (!action) {
     return
   }
-  const [action] = listOf(from).splice(index, 1)
-  listOf(to as Gesture).push(action!)
+  // What moves the dock goes first unless the user moves it.
+  if (entry.navigates) {
+    actions.value.unshift(action)
+  }
+  else {
+    actions.value.push(action)
+  }
+  if (!NOTHING_TO_SET.includes(action.type)) {
+    const index = entry.navigates ? 0 : actions.value.length - 1
+    setTimeout(() => {
+      editing.value = { gesture: 'press', index }
+    }, AFTER_CATALOG_MS)
+  }
+}
+
+/** Moves the action being edited to another "when", at the end of its group. */
+function setWhen(to: unknown) {
+  const from = editing.value
+  if (!from || typeof to !== 'string' || to === from.gesture) {
+    return
+  }
+  const [action] = listOf(from.gesture).splice(from.index, 1)
+  const target = listOf(to as Gesture)
+  target.push(action!)
+  editing.value = { gesture: to as Gesture, index: target.length - 1 }
+}
+
+function remove(gesture: Gesture, index: number) {
+  listOf(gesture).splice(index, 1)
+}
+
+function problem(action: Action) {
+  return actionsError([action], servers.value)
 }
 
 const sortable = useSortable((gesture, from, to) => moveItem(listOf(gesture as Gesture), from, to))
-
 </script>
 
 <template>
   <div class="flex flex-col gap-2">
     <p v-if="!actions.length && !grouped" class="text-xs text-muted-foreground">
-      {{ t(props.nested ? 'actions.list.emptyRandom' : 'actions.list.empty') }}
+      {{ props.empty ?? t(random ? 'actions.list.emptyRandom' : 'actions.list.empty') }}
     </p>
-    <section v-for="group in groups" :key="group.gesture" class="flex flex-col gap-2" :data-when="group.gesture">
+    <section v-for="group in groups" :key="group.gesture" class="flex flex-col gap-1.5" :data-when="group.gesture">
       <p v-if="grouped" class="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
         <WhenIcon :gesture="group.gesture" />
         {{ t(`${group.messages}.heading`) }}
@@ -157,71 +163,74 @@ const sortable = useSortable((gesture, from, to) => moveItem(listOf(gesture as G
       <p v-if="grouped && !group.list.length" class="text-xs text-muted-foreground">
         {{ t('actions.list.groupEmpty') }}
       </p>
-      <ol class="flex flex-col gap-2" data-sort-list>
+      <ol class="flex flex-col gap-1.5" data-sort-list>
         <li
           v-for="(action, i) in group.list"
           :key="i"
           :style="sortable.itemStyle(i, group.gesture)"
-          class="flex flex-col gap-2 rounded-lg border p-2.5"
+          class="group/action flex items-center gap-2 rounded-lg border bg-neutral-950/40 py-1.5 pr-1.5 pl-2 transition-colors hover:border-sky-500/50"
           :class="sortable.isDragging(i, group.gesture) ? 'relative z-10 border-sky-500 bg-neutral-900 shadow-lg shadow-black/40' : ''"
           data-sort-item
           :aria-label="t('actions.list.actionLabel', { n: i + 1, name: actionName(action) })"
         >
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              class="-ml-1 flex cursor-grab touch-none items-center rounded py-1 text-muted-foreground hover:text-foreground active:cursor-grabbing"
-              :aria-label="t('actions.list.dragLabel', { n: i + 1 })"
-              :title="t('actions.list.dragTitle')"
-              data-sort-handle
-              @pointerdown.prevent="sortable.press($event, i, group.gesture)"
-            >
-              <GripVertical class="size-3.5" />
-              <span class="w-3 text-center text-xs tabular-nums">{{ i + 1 }}</span>
-            </button>
+          <button
+            type="button"
+            class="-ml-1 flex cursor-grab touch-none items-center rounded py-1 text-muted-foreground hover:text-foreground active:cursor-grabbing"
+            :aria-label="t('actions.list.dragLabel', { n: i + 1 })"
+            :title="t('actions.list.dragTitle')"
+            data-sort-handle
+            @pointerdown.prevent="sortable.press($event, i, group.gesture)"
+          >
+            <GripVertical class="size-3.5" />
+          </button>
+          <button
+            type="button"
+            class="flex min-w-0 flex-1 items-center gap-2 text-left"
+            :aria-label="t('actions.details.configureLabel', { name: actionName(action) })"
+            data-action-summary
+            @click="editing = { gesture: group.gesture, index: i }"
+          >
             <img v-if="entryFor(action)?.image" :src="entryFor(action)!.image" alt="" class="size-7 shrink-0 rounded-md bg-neutral-800 object-cover">
-            <div v-else class="flex size-7 shrink-0 items-center justify-center rounded-md bg-sky-500/15 text-sky-400">
+            <span v-else class="flex size-7 shrink-0 items-center justify-center rounded-md bg-sky-500/15 text-sky-400">
               <component :is="entryFor(action)?.icon ?? (action.type === 'plugin' ? Puzzle : CircleHelp)" class="size-3.5" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium">
-                {{ actionName(action) }}
-              </p>
-              <p class="truncate text-[11px] text-muted-foreground">
-                {{ entryFor(action)?.description }}
-              </p>
-            </div>
-            <Button variant="ghost" size="icon-sm" :aria-label="t('actions.list.remove')" @click="group.list.splice(i, 1)">
-              <Trash2 />
-            </Button>
-          </div>
-          <div v-if="gestures" class="flex items-center gap-2 text-xs text-muted-foreground">
-            {{ t('actions.list.when') }}
-            <Select :model-value="group.gesture" @update:model-value="setWhen(group.gesture, i, $event)">
-              <SelectTrigger size="sm" class="h-7 flex-1" :aria-label="t('actions.list.when')">
-                <WhenIcon :gesture="group.gesture" class="text-muted-foreground" />
-                <SelectValue class="flex-1 text-left" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="w in WHEN"
-                  :key="w.gesture"
-                  :value="w.gesture"
-                  :disabled="w.gesture !== 'press' && (action.type === 'open_page' || action.type === 'plugin')"
-                >
-                  <WhenIcon :gesture="w.gesture" />
-                  {{ t(`${w.messages}.label`) }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <ActionDetails v-model="group.list[i]!" :page="props.page" :other-pages="otherPages" :open-on-mount="isJustAdded(action)" />
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-[11px] text-muted-foreground">{{ actionName(action) }}</span>
+              <span class="block truncate text-sm" :class="problem(action) ? 'text-destructive' : ''" data-summary>{{ summary(action) }}</span>
+            </span>
+            <ChevronRight class="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/action:opacity-100" />
+          </button>
+          <Button variant="ghost" size="icon-sm" :aria-label="t('actions.list.remove')" @click="remove(group.gesture, i)">
+            <Trash2 />
+          </Button>
         </li>
       </ol>
     </section>
     <Button variant="outline" size="sm" @click="picking = true">
-      <Plus /> {{ t(props.nested ? 'actions.list.addRandom' : 'actions.list.add') }}
+      <Plus /> {{ t(random ? 'actions.list.addRandom' : 'actions.list.add') }}
     </Button>
-    <ActionPicker v-model:open="picking" :nested="props.nested" :unavailable="unavailable" @pick="add" />
+    <ActionPicker v-model:open="picking" :mode="random ? 'random' : 'action'" :unavailable="unavailable" @pick="add" />
+    <ActionDialog v-if="edited" v-model:open="dialogOpen" v-model:action="edited" :page="props.page" :other-pages="otherPages">
+      <div v-if="gestures && editing" class="flex items-center gap-2 text-xs text-muted-foreground">
+        {{ t('actions.list.when') }}
+        <Select :model-value="editing.gesture" @update:model-value="setWhen">
+          <SelectTrigger size="sm" class="h-8 flex-1" :aria-label="t('actions.list.when')">
+            <WhenIcon :gesture="editing.gesture" class="text-muted-foreground" />
+            <SelectValue class="flex-1 text-left" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem
+              v-for="w in WHEN"
+              :key="w.gesture"
+              :value="w.gesture"
+              :disabled="w.gesture !== 'press' && edited.type === 'open_page'"
+            >
+              <WhenIcon :gesture="w.gesture" />
+              {{ t(`${w.messages}.label`) }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </ActionDialog>
   </div>
 </template>

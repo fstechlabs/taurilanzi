@@ -1,19 +1,18 @@
 <script setup lang="ts">
-import { Check, ChevronDown, Play, Plus, Trash2 } from '@lucide/vue'
+import { Check, ChevronsUpDown, Play, Plus, Trash2 } from '@lucide/vue'
 import { useLocalStorage } from '@vueuse/core'
 import type { KeyRef } from '~/composables/useWorkspace'
 import { appearanceFrom } from '~/composables/useKeyEditor'
-import type { KeySetup } from '~/lib/actions/catalog'
-import { KEY_SETUP } from '~/lib/actions/setup'
+import type { CatalogEntry } from '~/lib/actions/catalog'
 import { KEY_DRAFT, KEY_TARGET } from '~/lib/actions/key-draft'
-import type { Action, Gesture } from '~/types/engine'
+import { applyType, hasTypeSettings } from '~/lib/key-kinds'
+import type { Gesture } from '~/types/engine'
 
 const WIDE_KEY = 13
 /** 30 % wider than the first inspector, which was too tight for the action editors. */
 const DEFAULT_WIDTH = 500
 const MIN_WIDTH = 340
 const MAX_WIDTH = 900
-const INDICATOR = '{page_number}/{page_count}'
 
 const props = defineProps<{ target: KeyRef | null }>()
 const { t } = useI18n()
@@ -21,6 +20,7 @@ const target = toRef(props, 'target')
 
 const { stored, draft, state, editing, shownWidget, preview, dirty, invalid, status, error, create, clear, uploadImage, pickIcon, tryKey } = useKeyEditor(target)
 const { pages } = useWorkspace()
+const { snapshot, previewUrl } = useEngine()
 
 /** Dragging the left edge resizes the inspector; the width is kept for next time. */
 const width = useLocalStorage('inspector-width', DEFAULT_WIDTH)
@@ -45,30 +45,42 @@ const wide = computed(() => props.target?.index === WIDE_KEY)
 const title = computed(() => (wide.value ? t('editor.inspector.wideKey') : t('editor.inspector.key', { number: (props.target?.index ?? 0) + 1 })))
 const pageName = computed(() => pages.value.find(p => p.id === props.target?.page)?.name ?? '')
 
-const hasGestures = computed(() => Boolean(draft.value?.doublePress.length || draft.value?.longPress.length))
-/** The section the catalog opens when it gives the key two states. */
-const statesOpen = ref(false)
+const otherPages = computed(() => pages.value.filter(p => p.id !== props.target?.page))
+const profiles = computed(() => snapshot.value?.profiles ?? [])
+const configuringType = ref(false)
+const choosingType = ref(false)
 watch(() => props.target && `${props.target.page}:${props.target.index}`, () => {
-  statesOpen.value = Boolean(draft.value?.second)
-}, { immediate: true })
-
-const twoStates = computed({
-  get: () => Boolean(draft.value?.second),
-  set: (on) => {
-    if (!draft.value) {
-      return
-    }
-    if (on) {
-      // The second state starts as a copy of the first, to change just what differs.
-      const { background, from, to, angle, image, text, untouched, widget, moreWidgets } = draft.value
-      draft.value.second = JSON.parse(JSON.stringify({ background, from, to, angle, image, text, untouched, actions: [], widget, moreWidgets }))
-      editing.value = 1
-    }
-    else {
-      draft.value.second = null
-    }
-  },
+  configuringType.value = false
+  choosingType.value = false
 })
+
+/** A new key is of the type picked first. */
+function choose(entry: CatalogEntry) {
+  create()
+  if (!draft.value) {
+    return
+  }
+  applyType(draft.value, entry, {
+    otherPages: otherPages.value.map(p => p.id),
+    profiles: profiles.value.filter(p => p.id !== snapshot.value?.active_profile).map(p => p.id),
+  })
+  if (hasTypeSettings(draft.value)) {
+    // Once the catalog has closed: two dialogs at once fight over the focus.
+    setTimeout(() => {
+      configuringType.value = true
+    }, 250)
+  }
+}
+
+function unavailableType(entry: CatalogEntry) {
+  if (entry.id === 'open_page' && !otherPages.value.length) {
+    return t('actions.list.unavailable.noOtherPage')
+  }
+  if (entry.id === 'switch_profile' && profiles.value.length < 2) {
+    return t('actions.list.unavailable.oneProfile')
+  }
+  return null
+}
 
 const GESTURES: { gesture: Gesture, label: string }[] = [
   { gesture: 'press', label: 'editor.gestures.press' },
@@ -82,46 +94,11 @@ const canTry = computed(() => {
   return Boolean(key && (key.actions.length || key.double_press.length || key.long_press.length || key.second_state || rotates))
 })
 
-provide(KEY_SETUP, {
-  unavailable(setup: KeySetup) {
-    if ((setup === 'two_states' || setup === 'switch_hotkey') && hasGestures.value) {
-      return t('editor.inspector.twoStatesUnavailable')
-    }
-    return null
-  },
-  apply(setup: KeySetup) {
-    const key = draft.value
-    if (!key) {
-      return
-    }
-    if (setup === 'page_indicator') {
-      const look = state.value ?? key
-      look.text = look.text
-        ? { ...look.text, content: INDICATOR }
-        : { content: INDICATOR, fontFamily: 'Inter', fontWeight: 700, size: 40, color: '#ffffff', position: 'middle' }
-      return
-    }
-    if (!key.second) {
-      twoStates.value = true
-    }
-    statesOpen.value = true
-    if (setup === 'switch_hotkey') {
-      const hotkey = (): Action => ({ type: 'hotkey', keys: { key: '', command: false, shift: false, option: false, control: false } })
-      for (const look of [key, key.second!]) {
-        if (!look.actions.some(a => a.type === 'hotkey')) {
-          look.actions.push(hotkey())
-        }
-      }
-    }
-  },
-})
-
 provide(KEY_DRAFT, draft)
 provide(KEY_TARGET, target)
 
 /** For the state tabs: a small preview of each state. */
 const thumbnails = computed(() => (draft.value?.second && props.target ? [draft.value, draft.value.second] : []))
-const { previewUrl } = useEngine()
 </script>
 
 <template>
@@ -142,19 +119,34 @@ const { previewUrl } = useEngine()
       {{ t('editor.inspector.noKey') }}
     </div>
 
-    <div v-else-if="!draft" class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <p class="text-sm font-medium">
-        {{ title }}
-      </p>
-      <p class="text-xs text-muted-foreground">
-        {{ pageName }}
-      </p>
-      <p class="text-sm text-muted-foreground">
-        {{ t('editor.inspector.empty') }}
-      </p>
-      <Button size="sm" @click="create">
-        <Plus /> {{ t('editor.inspector.setUp') }}
-      </Button>
+    <div v-else-if="!draft" class="flex flex-col" data-choose-type>
+      <div class="flex flex-col items-center gap-2 border-b p-5">
+        <div class="rounded-xl bg-neutral-900" :class="wide ? 'aspect-[452/196] w-64' : 'aspect-square w-28'" />
+        <p class="text-sm font-medium">
+          {{ title }} · {{ pageName }}
+        </p>
+      </div>
+      <section class="flex flex-col gap-3 border-b border-sky-950/70 bg-[#0d121a] px-4 pt-3 pb-4" data-section="type">
+        <h2 class="text-[11px] font-semibold tracking-wider text-sky-200/70 uppercase">
+          {{ t('editor.inspector.typeSection') }}
+        </h2>
+        <button
+          type="button"
+          class="flex items-center gap-3 rounded-lg border border-dashed border-sky-500/50 bg-sky-500/5 p-2.5 text-left transition-colors hover:border-sky-500 hover:bg-sky-500/10"
+          data-change-type
+          @click="choosingType = true"
+        >
+          <span class="flex size-9 shrink-0 items-center justify-center rounded-md bg-sky-500/15 text-sky-400">
+            <Plus class="size-4.5" />
+          </span>
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-medium">{{ t('editor.type.choose') }}</span>
+            <span class="block text-xs text-muted-foreground">{{ t('editor.type.firstChoose') }}</span>
+          </span>
+          <ChevronsUpDown class="size-4 shrink-0 text-muted-foreground" />
+        </button>
+      </section>
+      <ActionPicker v-model:open="choosingType" mode="type" :unavailable="unavailableType" @pick="choose" />
     </div>
 
     <template v-else>
@@ -170,83 +162,75 @@ const { previewUrl } = useEngine()
           <p class="text-xs text-muted-foreground">
             {{ t('editor.inspector.preview', { size: wide ? '452 × 196' : '196 × 196' }) }}
           </p>
-          <div v-if="thumbnails.length" class="mt-1 flex gap-2" role="tablist" :aria-label="t('editor.inspector.states')">
-            <button
-              v-for="(look, i) in thumbnails"
-              :key="i"
-              type="button"
-              role="tab"
-              class="flex items-center gap-2 rounded-md border px-2 py-1 text-xs transition-colors"
-              :class="editing === i ? 'border-sky-500 bg-sky-500/10 text-foreground' : 'text-muted-foreground hover:text-foreground'"
-              :aria-selected="editing === i"
-              :aria-label="t('editor.inspector.state', { number: i + 1 })"
-              @click="editing = i as 0 | 1"
-            >
-              <img :src="previewUrl(props.target.index, appearanceFrom(look), props.target.page)" alt="" class="size-6 rounded">
-              {{ t('editor.inspector.state', { number: i + 1 }) }}
-            </button>
-          </div>
         </div>
 
-        <Collapsible v-if="state" default-open class="border-b">
-          <CollapsibleTrigger class="flex w-full items-center justify-between px-4 py-3 text-sm font-medium">
-            {{ draft.second ? t('editor.inspector.lookOfState', { number: editing + 1 }) : t('editor.inspector.look') }} <ChevronDown class="size-4 text-muted-foreground" />
-          </CollapsibleTrigger>
-          <CollapsibleContent class="flex flex-col gap-5 px-4 pb-4">
-            <BackgroundFields v-model="state" />
-            <ImageFields v-model="state" :wide="wide" @upload="uploadImage" @pick-icon="pickIcon" />
-            <TextFields v-model="state" />
-          </CollapsibleContent>
-        </Collapsible>
+        <section class="flex flex-col gap-3 border-b border-sky-950/70 bg-[#0d121a] px-4 pt-3 pb-4" data-section="type">
+          <h2 class="text-[11px] font-semibold tracking-wider text-sky-200/70 uppercase">
+            {{ t('editor.inspector.typeSection') }}
+          </h2>
+          <KeyTypeSection v-model="draft" v-model:configuring="configuringType" v-model:shown-widget="shownWidget" :page="props.target.page" />
+        </section>
 
-        <Collapsible v-if="state && (wide || state.widget)" default-open class="border-b">
-          <CollapsibleTrigger class="flex w-full items-center justify-between px-4 py-3 text-sm font-medium">
-            {{ draft.second ? t('editor.inspector.liveOfState', { number: editing + 1 }) : t('editor.inspector.live') }}
-            <ChevronDown class="size-4 text-muted-foreground" />
-          </CollapsibleTrigger>
-          <CollapsibleContent class="px-4 pb-4">
-            <WidgetFields v-model="state" v-model:shown="shownWidget" />
-          </CollapsibleContent>
-        </Collapsible>
-
-        <Collapsible v-if="state" default-open class="border-b">
-          <CollapsibleTrigger class="flex w-full items-center justify-between px-4 py-3 text-sm font-medium">
-            {{ draft.second ? t('editor.inspector.actionsOfState', { number: editing + 1 }) : t('editor.inspector.actions') }}
-            <ChevronDown class="size-4 text-muted-foreground" />
-          </CollapsibleTrigger>
-          <CollapsibleContent class="px-4 pb-4">
-            <p v-if="draft.second" class="mb-2 text-[11px] text-muted-foreground">
+        <section class="flex flex-col gap-3 border-b border-violet-950/70 bg-[#110e18] px-4 pt-3 pb-4" data-section="actions">
+          <h2 class="text-[11px] font-semibold tracking-wider text-violet-200/70 uppercase">
+            {{ t('editor.inspector.actions') }}
+          </h2>
+          <template v-if="draft.second">
+            <p class="text-[11px] text-muted-foreground">
               {{ t('editor.inspector.actionsHint') }}
             </p>
-            <!-- One list for both cases, so an action that gives the key two states from its dialog
-                 keeps that dialog open. -->
-            <ActionList
-              :key="editing"
-              v-model="state.actions"
-              :double="draft.second ? undefined : draft.doublePress"
-              :long="draft.second ? undefined : draft.longPress"
-              :page="props.target.page"
-              :no-lines="editing === 1"
-              @update:double="draft.doublePress = $event ?? []"
-              @update:long="draft.longPress = $event ?? []"
-            />
-          </CollapsibleContent>
-        </Collapsible>
+            <div v-for="(look, i) in [draft, draft.second]" :key="i" class="flex flex-col gap-2" :data-state-actions="i + 1">
+              <p class="text-xs font-medium">
+                {{ t('editor.inspector.state', { number: i + 1 }) }}
+              </p>
+              <ActionList
+                v-model="look.actions"
+                :page="props.target.page"
+                :main="look.main"
+                :no-lines="i === 1"
+                :empty="t(look.main ? 'editor.inspector.noMoreActions' : 'actions.list.empty')"
+              />
+            </div>
+          </template>
+          <ActionList
+            v-else
+            v-model="draft.actions"
+            :double="draft.doublePress"
+            :long="draft.longPress"
+            :page="props.target.page"
+            :main="draft.main"
+            :empty="t(draft.main ? 'editor.inspector.noMoreActions' : 'actions.list.empty')"
+            @update:double="draft.doublePress = $event ?? []"
+            @update:long="draft.longPress = $event ?? []"
+          />
+        </section>
 
-        <Collapsible v-model:open="statesOpen" class="border-b">
-          <CollapsibleTrigger class="flex w-full items-center justify-between px-4 py-3 text-sm font-medium">
-            {{ t('editor.inspector.statesSection') }} <ChevronDown class="size-4 text-muted-foreground" />
-          </CollapsibleTrigger>
-          <CollapsibleContent class="flex flex-col gap-2 px-4 pb-4">
-            <label class="flex items-center justify-between gap-2 text-sm">
-              <span>{{ t('editor.inspector.twoStates') }} <span class="block text-[11px] text-muted-foreground">{{ t('editor.inspector.twoStatesHint') }}</span></span>
-              <Switch v-model="twoStates" :disabled="hasGestures" :aria-label="t('editor.inspector.twoStates')" />
-            </label>
-            <p v-if="hasGestures" class="text-[11px] text-muted-foreground">
-              {{ t('editor.inspector.twoStatesBlocked') }}
-            </p>
-          </CollapsibleContent>
-        </Collapsible>
+        <section v-if="state" class="flex flex-col gap-4 border-b border-emerald-950/70 bg-[#0d1410] px-4 pt-3 pb-4" data-section="look">
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="text-[11px] font-semibold tracking-wider text-emerald-200/70 uppercase">
+              {{ t('editor.inspector.look') }}
+            </h2>
+            <div v-if="thumbnails.length" class="flex gap-1.5" role="tablist" :aria-label="t('editor.inspector.states')">
+              <button
+                v-for="(look, i) in thumbnails"
+                :key="i"
+                type="button"
+                role="tab"
+                class="flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-xs transition-colors"
+                :class="editing === i ? 'border-emerald-500/70 bg-emerald-500/10 text-foreground' : 'text-muted-foreground hover:text-foreground'"
+                :aria-selected="editing === i"
+                :aria-label="t('editor.inspector.state', { number: i + 1 })"
+                @click="editing = i as 0 | 1"
+              >
+                <img :src="previewUrl(props.target.index, appearanceFrom(look), props.target.page)" alt="" class="size-5 rounded">
+                {{ t('editor.inspector.state', { number: i + 1 }) }}
+              </button>
+            </div>
+          </div>
+          <BackgroundFields v-model="state" />
+          <ImageFields v-model="state" :wide="wide" @upload="uploadImage" @pick-icon="pickIcon" />
+          <TextFields v-model="state" />
+        </section>
       </ScrollArea>
 
       <div class="flex flex-col gap-2 border-t p-3">

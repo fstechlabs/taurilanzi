@@ -9,7 +9,7 @@ import {
   clickOn,
   dialog,
   homePage,
-  node,
+  newKey,
   saved,
   shot,
   state,
@@ -35,9 +35,8 @@ async function storedKey(index: number) {
   return homePage(await state()).keys[index]
 }
 
-async function editKey(index: number) {
-  await clickOn(node(homePage(await state()).name).$(`button[aria-label="Tecla ${index + 1}"]`))
-  await button('Configurar tecla').click()
+async function newKeyOf(index: number, type: string) {
+  await newKey(homePage(await state()).name, index, type)
 }
 
 async function until(check: () => Promise<boolean>, timeoutMsg: string) {
@@ -96,7 +95,7 @@ describe('Home Assistant', () => {
 
   before(async () => {
     await hass.start()
-    keys = await emptyKeys(3)
+    keys = await emptyKeys(4)
   })
 
   after(async () => {
@@ -104,8 +103,7 @@ describe('Home Assistant', () => {
   })
 
   it('draws a curtain as open as it is on a smart tile', async () => {
-    await editKey(keys[0]!)
-    await addAction('home_assistant:tile')
+    await newKeyOf(keys[0]!, 'home_assistant:tile')
     await button('Añadir servidor de Home Assistant').click()
     const add = dialog('Nuevo servidor de Home Assistant')
     await add.$('[aria-label="Dirección"]').setValue(hass.url)
@@ -135,8 +133,7 @@ describe('Home Assistant', () => {
   })
 
   it('shows what a plug draws and switches it when pressed', async () => {
-    await editKey(keys[1]!)
-    await addAction('home_assistant:tile')
+    await newKeyOf(keys[1]!, 'home_assistant:tile')
     await chooseEntity('Entidad', 'Enchufe', 'switch.enchufe')
     expect(await widgetOf(keys[1]!, 'hass_tile')).toMatchObject({ entity: 'switch.enchufe', extra: 'sensor.enchufe_potencia' })
     await expect($('//button[normalize-space()="Encender / Apagar"]')).toHaveAttribute('data-state', 'on')
@@ -153,8 +150,7 @@ describe('Home Assistant', () => {
   })
 
   it('only shows a thermostat as a tile, without asking Home Assistant for anything', async () => {
-    await editKey(keys[2]!)
-    await addAction('home_assistant:show')
+    await newKeyOf(keys[2]!, 'home_assistant:show')
     await chooseEntity('Entidad', 'Termostato', 'climate.salon')
     expect(await widgetOf(keys[2]!, 'hass_tile')).toMatchObject({ entity: 'climate.salon', drawing: 'auto' })
     await expect(dialog().$('[data-look="tile"]')).toHaveAttribute('data-state', 'on')
@@ -175,5 +171,19 @@ describe('Home Assistant', () => {
     await browser.pause(1000)
     expect(hass.calls.length).toBe(before)
     await expect(text('No se pudo probar la tecla.')).not.toBeExisting()
+  })
+
+  it('switches a plug as one more action, without changing how the key looks', async () => {
+    await newKeyOf(keys[3]!, 'basic')
+    await addAction('home_assistant:switch')
+    await chooseEntity('Entidad', 'Enchufe', 'switch.enchufe')
+    await expect($('[data-hass-look]')).not.toBeExisting()
+    await closeAction()
+    await saved()
+    const key = (await storedKey(keys[3]!))!
+    expect(key.kind).toBe('basic')
+    expect(key.actions).toEqual([{ type: 'home_assistant', server, command: { kind: 'switch', entity: 'switch.enchufe', mode: 'toggle' } }])
+    expect(key.appearance.layers.some(l => l.type === 'widget')).toBe(false)
+    expect(key.second_state).toBeNull()
   })
 })

@@ -94,6 +94,7 @@ test('sameCommand compares the whole command', () => {
 
 function draft(): KeyDraft {
   return {
+    kind: 'action',
     background: 'gradient',
     from: '#111111',
     to: '#222222',
@@ -101,8 +102,10 @@ function draft(): KeyDraft {
     image: { asset: 'img', source: 'img', crop: null, fit: 'contain', inset: 0.2, tint: '#ffffff', icon: 'lucide:mic' },
     text: { content: 'Grabar', fontFamily: 'Inter', fontWeight: 600, size: 20, color: '#ffffff', position: 'bottom' },
     untouched: [{ type: 'border', color: { r: 1, g: 1, b: 1 }, width: 2, radius: 8 }],
-    actions: [obs({ kind: 'record', mode: 'toggle' })],
+    main: obs({ kind: 'record', mode: 'toggle' }),
+    actions: [],
     widget: { kind: 'network', graph: true, minutes: 10, style: { color: { r: 255, g: 255, b: 255 }, accent: { r: 0, g: 0, b: 255 }, font_family: 'Inter' } },
+    moreWidgets: [],
     doublePress: [],
     longPress: [],
     second: null,
@@ -123,10 +126,11 @@ describe('followInKey', () => {
     expect(second.text).toEqual(key.text)
     expect(second.untouched).toEqual(key.untouched)
     expect(second.widget).toEqual(key.widget)
-    expect(second.actions).toEqual([obs(command)])
+    expect(second.main).toEqual(obs(command))
+    expect(second.actions).toEqual([])
     expect(second.image).not.toBe(key.image)
     expect(second.widget).not.toBe(key.widget)
-    expect((second.actions[0] as Extract<Action, { type: 'obs' }>).command).not.toBe(command)
+    expect((second.main as Extract<Action, { type: 'obs' }>).command).not.toBe(command)
   })
 
   test('the preview scene is green', () => {
@@ -140,7 +144,7 @@ describe('followInKey', () => {
     followInKey(plain, { kind: 'save_replay' })
     expect(plain.second).toBeNull()
 
-    const existing: StateDraft = { ...draft(), actions: [], from: '#000000' }
+    const existing: StateDraft = { ...draft(), main: null, actions: [], from: '#000000' }
     const key = { ...draft(), second: existing }
     followInKey(key, { kind: 'record', mode: 'toggle' })
     expect(key.second).toBe(existing)

@@ -176,20 +176,23 @@ describe('screenshots for the README', () => {
     await button('Show all').click()
     const home = homePage(await state())
     await clickOn(node(home.name).$('button[aria-label="Key 1"]'))
-    await expect($('[aria-label="Action 1: Open website"]')).toBeExisting()
+    await expect($('[data-key-type-name]')).toHaveText('Open website')
     await save('editor')
   })
 
   it('live content on the wide key', async () => {
     const home = homePage(await state())
     await clickOn(node(home.name).$(`button[aria-label="Key ${WIDE + 1}"]`))
+    await $('[data-configure-type]').click()
+    await $('[data-type-dialog]').waitForDisplayed()
     await save('wide-key')
+    await browser.keys('Escape')
+    await $('[data-type-dialog]').waitForExist({ reverse: true })
   })
 
   it('the actions a key can run', async () => {
     await clickOn(node('Media').$('button[aria-label="Key 10"]'))
-    await button('Set up key').click()
-    await button('Add action').click()
+    await $('[data-change-type]').click()
     await save('actions')
     await browser.keys('Escape')
   })

@@ -4,33 +4,52 @@ import {
   AppWindow,
   ArrowLeft,
   ArrowRight,
+  Activity,
   ArrowRightLeft,
   AudioLines,
+  BatteryMedium,
   Bookmark,
+  Braces,
+  CalendarDays,
   Camera,
+  ChartLine,
+  ChartNoAxesGantt,
   ChevronLeft,
   ChevronRight,
   Circle,
   CircleStop,
   CircleX,
   Clapperboard,
+  Clock,
+  Clock3,
+  CloudSun,
+  Cpu,
+  Earth,
   Eye,
   Film,
+  GalleryHorizontal,
   Globe,
   Hash,
+  Hourglass,
   House,
   IdCard,
   Keyboard,
   Library,
   Lightbulb,
+  List,
   ListChecks,
+  ListOrdered,
   MessageSquare,
   Monitor,
+  Moon,
   Music,
+  Music2,
+  Network,
   Palette,
   Pause,
   Play,
   Power,
+  Quote,
   Radio,
   Repeat,
   Repeat2,
@@ -41,10 +60,13 @@ import {
   SkipForward,
   SlidersHorizontal,
   Sparkles,
+  Square,
   Sun,
   SunDim,
+  Tally5,
   Thermometer,
   Timer,
+  TimerReset,
   Type,
   UserRound,
   Video,
@@ -52,13 +74,17 @@ import {
   Volume2,
   VolumeX,
   Wand,
+  Watch,
   Webhook,
+  WholeWord,
   Workflow,
   Zap,
 } from '@lucide/vue'
 import { newHttpRequest } from '~/lib/actions/http'
 import { i18n, t } from '~/lib/i18n'
 import type { Action, HassCommand, MediaKey, ObsCommand } from '~/types/engine'
+import type { WidgetKind } from '~/lib/widgets'
+import { widgetLabel } from '~/lib/widgets'
 import { newCommand } from '~/lib/actions/hass'
 import { NO_SERVER } from '~/lib/integrations'
 import { os } from '~/lib/os'
@@ -67,7 +93,7 @@ import { os } from '~/lib/os'
 const KEYS_NEED_PERMISSION = os !== 'windows'
 
 /** The built in sections, and one per installed plugin, as `plugin:<id>`. */
-export type SectionId = 'system' | 'media' | 'pages' | 'sequence' | 'sound' | 'obs' | 'home_assistant' | 'lights' | 'tc002' | `plugin:${string}`
+export type SectionId = 'basic' | 'system' | 'media' | 'pages' | 'live' | 'sequence' | 'sound' | 'obs' | 'home_assistant' | 'lights' | 'tc002' | `plugin:${string}`
 
 export interface Section {
   id: SectionId
@@ -75,7 +101,7 @@ export interface Section {
   description: string
 }
 
-export const SECTIONS: Section[] = (['system', 'media', 'pages', 'sequence', 'sound', 'obs', 'home_assistant', 'lights', 'tc002'] as const).map(id => ({
+export const SECTIONS: Section[] = (['basic', 'system', 'media', 'pages', 'live', 'sequence', 'sound', 'obs', 'home_assistant', 'lights', 'tc002'] as const).map(id => ({
   id,
   get name() {
     return t(`actions.catalog.sections.${id}.name`)
@@ -91,7 +117,8 @@ export interface NewActionContext {
   profiles: string[]
 }
 
-export type KeySetup = 'switch_hotkey' | 'two_states' | 'page_indicator'
+/** Types of key that are not an action. */
+export type KeySetup = 'basic' | 'widget' | 'carousel' | 'switch_hotkey' | 'two_states' | 'page_indicator'
 
 export interface CatalogEntry {
   id: string
@@ -103,6 +130,10 @@ export interface CatalogEntry {
   image?: string
   /** An action of a plugin, which draws the key it is on. */
   plugin?: boolean
+  /** Draws the key it is on: it can only be what the key is, never one more of its actions. */
+  face?: boolean
+  /** Only makes sense among other actions: not offered as what a key is. */
+  notType?: boolean
   keywords?: string[]
   /** Not built yet: shown so nothing of Ulanzi Studio is missing, but cannot be added. */
   soon?: string
@@ -114,8 +145,10 @@ export interface CatalogEntry {
   random?: boolean
   /** Has too many fields for the list: it is set up in a dialog and the list shows a summary. */
   modal?: boolean
-  /** Sets up the key instead of adding an action: two states or a page indicator. */
+  /** A type of key that is not an action. */
   setup?: KeySetup
+  /** The live content a key of this type starts with. */
+  widget?: WidgetKind
   create?: (context: NewActionContext) => Action
   /** Whether an existing action is one of this entry; by type unless told otherwise. */
   matches?: (action: Action) => boolean
@@ -195,6 +228,7 @@ function hass(kind: HassCommand['kind'], icon: Component): CatalogEntry {
     icon,
     random: true,
     modal: true,
+    face: kind === 'tile' || kind === 'show',
     create: () => ({ type: 'home_assistant', server: NO_SERVER, command: newCommand(kind) }),
     matches: action => action.type === 'home_assistant' && action.command.kind === kind,
   }, { keywords: ['home assistant', 'hass', 'ha'], keywordsFrom: 'actions.catalog.hassKeywords' })
@@ -204,7 +238,34 @@ function lights(id: string, icon: Component): CatalogEntry {
   return localized({ id: `lights:${id}`, section: 'lights', icon }, { keywordsFrom: 'actions.catalog.lightsKeywords', needsHardware: true })
 }
 
+function camelKind(kind: WidgetKind) {
+  return kind.replace(/_(\w)/g, (_, letter: string) => letter.toUpperCase())
+}
+
+/** A type of key that shows live content. */
+function live(kind: WidgetKind, icon: Component, section: SectionId = 'live'): CatalogEntry {
+  return Object.assign({
+    get name() {
+      return widgetLabel(kind)
+    },
+    get description() {
+      return t(`widgets.descriptions.${camelKind(kind)}`)
+    },
+    get keywords() {
+      return t('actions.catalog.liveKeywords').split(',').map(word => word.trim())
+    },
+  }, { id: `widget:${kind}`, section, icon, setup: 'widget' as const, widget: kind })
+}
+
+export const BASIC: CatalogEntry = localized({
+  id: 'basic',
+  section: 'basic',
+  icon: Square,
+  setup: 'basic',
+})
+
 export const CATALOG: CatalogEntry[] = [
+  BASIC,
   localized({
     id: 'open',
     section: 'system',
@@ -313,10 +374,37 @@ export const CATALOG: CatalogEntry[] = [
     setup: 'page_indicator',
   }),
   localized({
+    id: 'carousel',
+    section: 'live',
+    icon: GalleryHorizontal,
+    setup: 'carousel',
+  }, { keywordsFrom: 'actions.catalog.liveKeywords' }),
+  live('digital_clock', Clock),
+  live('analog_clock', Clock3),
+  live('world_clocks', Earth),
+  live('word_clock', WholeWord),
+  live('calendar', CalendarDays),
+  live('countdown', Hourglass),
+  live('timer', Timer),
+  live('stopwatch', Watch),
+  live('counter', Tally5),
+  live('progress', ChartNoAxesGantt),
+  live('moon', Moon),
+  live('phrases', Quote),
+  live('system_monitor', Cpu),
+  live('top_processes', ListOrdered),
+  live('temperatures', Thermometer),
+  live('network', Network),
+  live('latency', Activity),
+  live('battery', BatteryMedium),
+  live('volume', Volume2),
+  live('now_playing', Music2),
+  localized({
     id: 'delay',
     section: 'sequence',
-    icon: Timer,
+    icon: TimerReset,
     random: false,
+    notType: true,
     create: () => ({ type: 'delay', ms: 500 }),
   }),
   localized({
@@ -375,6 +463,11 @@ export const CATALOG: CatalogEntry[] = [
   hass('assist', MessageSquare),
   hass('event', Zap),
   hass('show', Eye),
+  live('hass_graph', ChartLine, 'home_assistant'),
+  live('hass_entities', List, 'home_assistant'),
+  live('hass_picture', Camera, 'home_assistant'),
+  live('hass_weather', CloudSun, 'home_assistant'),
+  live('hass_template', Braces, 'home_assistant'),
   lights('switch', Power),
   lights('brightness', Lightbulb),
   lights('temperature', Thermometer),
@@ -396,6 +489,16 @@ export function allSections(): Section[] {
 
 export function allEntries(): CatalogEntry[] {
   return [...CATALOG, ...pluginEntries.value]
+}
+
+/** What can be the type of a key. */
+export function typeEntries(): CatalogEntry[] {
+  return allEntries().filter(entry => !entry.notType)
+}
+
+/** What can be one more action of a key: whatever does not draw it. */
+export function actionEntries(): CatalogEntry[] {
+  return allEntries().filter(entry => !entry.face && !entry.plugin && !entry.setup)
 }
 
 export function entryFor(action: Action): CatalogEntry | undefined {

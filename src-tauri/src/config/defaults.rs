@@ -6,7 +6,8 @@ use uuid::Uuid;
 use super::actions::Action;
 use super::assets::AssetStore;
 use super::model::{
-    Appearance, Config, DeviceSettings, Key, LayerConfig, Page, Position, Profile, SCHEMA_VERSION,
+    Appearance, Config, DeviceSettings, Key, KeyKind, LayerConfig, Page, Position, Profile,
+    SCHEMA_VERSION,
 };
 use super::preferences::{NewKeyStyle, Preferences};
 use crate::driver::d200::WIDE_KEY;
@@ -32,6 +33,7 @@ pub fn first_run(assets: &AssetStore) -> io::Result<Config> {
         keys.insert(
             index as u8,
             Key {
+                kind: Some(KeyKind::Action),
                 appearance: Appearance {
                     background: Background::Solid { color },
                     layers: vec![
@@ -57,6 +59,7 @@ pub fn first_run(assets: &AssetStore) -> io::Result<Config> {
     keys.insert(
         WIDE_KEY,
         Key {
+            kind: Some(KeyKind::Basic),
             appearance: Appearance {
                 background: Background::LinearGradient {
                     from: Color::rgb(20, 24, 40),
@@ -108,6 +111,7 @@ pub fn first_run(assets: &AssetStore) -> io::Result<Config> {
 pub fn back_key(assets: &AssetStore, style: &NewKeyStyle) -> io::Result<Key> {
     let arrow = assets.put(ImageFormat::Svg, BACK_ICON.as_bytes())?;
     Ok(Key {
+        kind: Some(KeyKind::Action),
         appearance: Appearance {
             background: Background::Solid {
                 color: style.background,

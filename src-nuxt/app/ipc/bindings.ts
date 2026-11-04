@@ -615,6 +615,11 @@ export type JoinOffer = {
 };
 
 export type Key = {
+	/**
+	 *  What the key is, as the editor sets it up; the engine runs keys the same whatever it is.
+	 *  Keys saved before it existed have none, and the editor works it out from the rest.
+	 */
+	kind?: KeyKind | null,
 	appearance: Appearance,
 	/**  Run in order on press. At most one of them navigates. */
 	actions: Action[],
@@ -648,6 +653,21 @@ export type KeyImageChanged = {
 	page: string,
 	index: number,
 };
+
+/**  The one type of a key, which decides what it shows; its other actions only run. */
+export type KeyKind = 
+/**  Its own look, and actions. */
+"basic" | 
+/**  Its first action is what the key is; it may draw the key. */
+"action" | 
+/**  Live content. */
+"widget" | 
+/**  Several live contents, one more on each press. */
+"carousel" | 
+/**  Two looks and two lists of actions, one every other press. */
+"two_states" | 
+/**  Shows the page the dock is on. */
+"page_indicator";
 
 /**  A place for a key: a page of the active profile and a key index on it. */
 export type KeySlot = {

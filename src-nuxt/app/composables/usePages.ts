@@ -4,6 +4,7 @@ import type { Action, Key, Page, Position } from '~/types/engine'
 import type { NewKeyStyle } from '~/lib/new-key'
 import { newKeyAppearance } from '~/lib/new-key'
 import { t } from '~/lib/i18n'
+import { kindOf } from '~/composables/useKeyEditor'
 
 const NAVIGATION = new Set<Action['type']>(['open_page', 'back', 'home', 'previous_page', 'next_page', 'switch_profile'])
 
@@ -11,11 +12,15 @@ export function isNavigation(action: Action) {
   return NAVIGATION.has(action.type)
 }
 
-/** The line drawn on the canvas replaces the key's navigation, or goes first if it had none. */
-export function withLink(actions: Action[], target: string): Action[] {
+/** The line drawn on the canvas replaces the key's navigation, or goes first if it had none:
+ * right after what the key is, on a key whose first action is its type. */
+export function withLink(actions: Action[], target: string, afterFirst = false): Action[] {
   const link: Action = { type: 'open_page', page: target }
   const at = actions.findIndex(isNavigation)
-  return at === -1 ? [link, ...actions] : actions.map((a, i) => (i === at ? link : a))
+  if (at !== -1) {
+    return actions.map((a, i) => (i === at ? link : a))
+  }
+  return afterFirst ? [actions[0]!, link, ...actions.slice(1)] : [link, ...actions]
 }
 
 /** Page and line edits from the canvas, saved straight away. */
@@ -61,15 +66,21 @@ export function usePages() {
   /** An empty key gets the look of new keys with the target's name, so the new line is visible. */
   async function link(pageId: string, index: number, target: string) {
     const existing = page(pageId)?.keys[index]
-    const key: Key = existing
-      ? { ...(structuredClone(toRaw(existing)) as Key), actions: withLink(existing.actions as Action[], target) }
-      : {
-          appearance: newKeyAppearance(newKeyStyle(), page(target)?.name ?? t('editor.newKey.page')),
-          actions: [{ type: 'open_page', page: target }],
-          double_press: [],
-          long_press: [],
-          second_state: null,
-        }
+    let key: Key
+    if (existing) {
+      const { kind, actions } = kindOf(existing)
+      key = { ...(structuredClone(toRaw(existing)) as Key), kind, actions: withLink(JSON.parse(JSON.stringify(actions)) as Action[], target, kind === 'action') }
+    }
+    else {
+      key = {
+        kind: 'action',
+        appearance: newKeyAppearance(newKeyStyle(), page(target)?.name ?? t('editor.newKey.page')),
+        actions: [{ type: 'open_page', page: target }],
+        double_press: [],
+        long_press: [],
+        second_state: null,
+      }
+    }
     await saveKey(pageId, index, key)
   }
 

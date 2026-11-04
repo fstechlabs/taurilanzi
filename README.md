@@ -56,6 +56,9 @@ for Ulanzi Studio, so you can switch without losing what you already use.
 - Back and Home keys, page indicators, and drag and drop everywhere.
 
 ### Actions for everything
+- Every key is of one type, chosen first: a basic key, a shortcut, a website, a clock, an OBS or
+  Home Assistant control, a plugin's action… It is set up in its own dialog, and the key can run
+  more actions on top.
 - Open apps, files and websites, keyboard shortcuts, typing text, media keys and volume, sounds,
   delays and random actions.
 - Keys with two states, and different actions for a press, a double press and a long press.
@@ -83,6 +86,7 @@ Twenty widgets that keep themselves up to date on the dock:
 | Now playing | Moon phase | Time progress | Phrases |
 
 Timers, stopwatches and counters answer to the key itself: press to start or add, hold to reset.
+A carousel puts several of them on one key, the next one on each press.
 
 ### Ulanzi Studio plugins, unchanged
 - The plugins published for Ulanzi Studio run as they are, with their own settings pages.
@@ -105,9 +109,9 @@ Timers, stopwatches and counters answer to the key itself: press to start or add
 
 ## Screenshots
 
-| Live content on the wide key | Every action in one place | A screensaver for the dock |
+| Live content on the wide key | Every type of key in one place | A screensaver for the dock |
 |---|---|---|
-| ![The wide key showing a clock, with its live content options](docs/screenshots/wide-key.png) | ![The catalog of actions a key can run](docs/screenshots/actions.png) | ![The lock and idle settings with the screensaver themes](docs/screenshots/settings.png) |
+| ![The wide key showing a clock, with its live content options](docs/screenshots/wide-key.png) | ![The catalog of types a key can be](docs/screenshots/actions.png) | ![The lock and idle settings with the screensaver themes](docs/screenshots/settings.png) |
 
 ## Getting started
 

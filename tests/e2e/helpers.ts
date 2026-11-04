@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { deflateSync } from 'node:zlib'
-import { $, browser } from '@wdio/globals'
+import { $, $$, browser } from '@wdio/globals'
 import type { ChainablePromiseElement } from 'webdriverio'
 import { Key } from 'webdriverio'
 import type { Page, Snapshot } from '../../src-nuxt/app/ipc/bindings'
@@ -238,11 +238,73 @@ export function dialog(name?: string) {
   return name ? $(`//*[@role="dialog"][.//h2[normalize-space()="${name}"]]`) : $('[role="dialog"]')
 }
 
-/** Opens the action catalog of the inspector and picks an action by its catalog id. */
-export async function addAction(entry: string) {
-  await button('Añadir acción').click()
+const CATALOG_SEARCH = '[aria-label="Buscar acción"]'
+
+/** Picks an entry of the catalog open now by its id, and waits for the catalog to close. */
+async function pickEntry(entry: string) {
+  await $(CATALOG_SEARCH).waitForDisplayed()
   await $(`[data-entry="${entry}"]`).click()
-  await $('[aria-label="Buscar acción"]').waitForExist({ reverse: true })
+  await $(CATALOG_SEARCH).waitForExist({ reverse: true })
+  // Its overlay fades out a moment longer, covering what is under it.
+  await browser.pause(300)
+}
+
+/** Opens the catalog of types from the card of the key's type and picks one by its id. A type
+ * with settings opens their dialog next. */
+export async function chooseType(entry: string) {
+  await $('[data-change-type]').click()
+  await pickEntry(entry)
+}
+
+/** Selects an empty key of a page and makes it of a type, by default the basic one. */
+export async function newKey(pageName: string, index: number, type = 'basic') {
+  await node(pageName).$(`button[aria-label="Tecla ${index + 1}"]`).click()
+  await $('[data-choose-type]').waitForDisplayed()
+  await chooseType(type)
+}
+
+/** Opens the action catalog of the inspector and picks an action by its catalog id. One with
+ * something to set up opens its dialog next. */
+export async function addAction(entry: string, add = 'Añadir acción') {
+  await button(add).click()
+  await pickEntry(entry)
+}
+
+/** The dialog of an action or of the key's type on top, once it is open. */
+export async function settingsDialog() {
+  const SELECTOR = '[data-action-dialog], [data-type-dialog]'
+  await $(SELECTOR).waitForDisplayed()
+  // Dialogs open over others are added after them.
+  const open = await $$(SELECTOR)
+  const top = open[open.length - 1]!
+  await top.waitForDisplayed()
+  return top
+}
+
+/** Closes the dialog of an action or of the key's type with its button. A click right after a
+ * select of the dialog closes may be lost, so it clicks again until the dialog is gone. */
+export async function done() {
+  const open = await settingsDialog()
+  const close = open.$('.//button[normalize-space()="Hecho"]')
+  await browser.waitUntil(async () => {
+    if (!(await open.isExisting()) || !(await open.isDisplayed())) {
+      return true
+    }
+    await close.click().catch(() => {})
+    return false
+  }, { timeout: 5000, interval: 300, timeoutMsg: 'the dialog did not close' })
+}
+
+/** Opens the dialog of the n-th action of the list, counting from 1. */
+export async function editAction(n: number) {
+  const rows = await $$('[data-section="actions"] [data-action-summary]')
+  await rows[n - 1]!.click()
+  return await settingsDialog()
+}
+
+/** The sentences the list of additional actions shows, in order. */
+export async function actionSummaries() {
+  return await Promise.all(await $$('[data-section="actions"] [data-summary]').map(row => row.getText()))
 }
 
 /** A silent WAV, so trying a sound key in a test makes no noise. */

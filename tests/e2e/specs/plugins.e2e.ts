@@ -84,10 +84,9 @@ describe('plugins made for Ulanzi Studio', () => {
     await details.waitForExist({ reverse: true })
   })
 
-  it('offers its actions in the catalog and opens the inspector when one is added', async () => {
+  it('offers its actions as types of key and opens the inspector when one is chosen', async () => {
     await clickOn(node(homePage(await state()).name).$(`button[aria-label="Tecla ${index + 1}"]`))
-    await button('Configurar tecla').click()
-    await button('Añadir acción').click()
+    await $('[data-change-type]').click()
     await $(`[data-section="plugin:${PLUGIN}"]`).click()
     await expect($(`[data-entry="plugin:${PLUGIN}.dial"]`)).toHaveAttribute('aria-disabled', 'true')
     await shot('plugin-catalog')
@@ -96,6 +95,7 @@ describe('plugins made for Ulanzi Studio', () => {
     await expect($('[data-plugin-inspector]')).toBeDisplayed()
     await saved()
     expect(await storedAction(index)).toMatchObject({ type: 'plugin', action: COUNT })
+    expect(homePage(await state()).keys[index]!.kind).toBe('action')
     expect(homePage(await state()).keys[index]!.appearance.layers).toEqual([])
   })
 
@@ -128,6 +128,6 @@ describe('plugins made for Ulanzi Studio', () => {
     await button('¿Quitar el plugin?', details).click()
     await $(`[data-plugin="${PLUGIN}"]`).waitForExist({ reverse: true })
     expect((await catalog()).plugins.some(p => p.id === PLUGIN)).toBe(false)
-    await expect($(`[aria-label="Acción 1: Acción de un plugin no instalado"]`)).toBeDisplayed()
+    await expect($('[data-key-type-name]')).toHaveText('Acción de un plugin no instalado')
   })
 })

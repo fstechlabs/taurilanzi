@@ -5,6 +5,10 @@
       "lightsKeywords": "luz, ulanzi connect",
       "hassKeywords": "domótica, casa, hogar, smart home",
       "sections": {
+        "basic": {
+          "name": "Básica",
+          "description": "Solo su aspecto, con las acciones que le añadas"
+        },
         "system": {
           "name": "Sistema",
           "description": "Apps, archivos, webs, texto y atajos"
@@ -16,6 +20,10 @@
         "pages": {
           "name": "Páginas",
           "description": "Moverse por las páginas y los perfiles"
+        },
+        "live": {
+          "name": "En vivo",
+          "description": "Información que se actualiza sola en la tecla"
         },
         "sequence": {
           "name": "Secuencia",
@@ -43,6 +51,11 @@
         }
       },
       "entries": {
+        "basic": {
+          "name": "Básica",
+          "description": "Muestra el icono, la imagen y el texto que le pongas; lo que haga lo eligen sus acciones",
+          "keywords": "simple, vacía, icono, imagen, texto"
+        },
         "open": {
           "name": "Abrir app, archivo o carpeta",
           "description": "Lo abre como si le dieras doble clic",
@@ -166,8 +179,8 @@
           "keywords": "azar, random, sorpresa"
         },
         "toggleSequences": {
-          "name": "Alternar entre dos secuencias",
-          "description": "Una pulsación hace una lista de acciones y la siguiente, otra",
+          "name": "Dos estados",
+          "description": "Cada pulsación alterna entre dos aspectos y dos listas de acciones, como un interruptor",
           "keywords": "toggle, acción múltiple, macro, dos estados"
         },
         "playSound": {
@@ -370,8 +383,14 @@
             "name": "Control de apps del TC002",
             "description": "Abre una app en la pantalla"
           }
+        },
+        "carousel": {
+          "name": "Carrusel",
+          "description": "Varios contenidos en vivo en la misma tecla, uno más con cada pulsación; pensado para la ventana ancha",
+          "keywords": "carrusel, rotar, varios, ventana ancha, tecla grande, pantalla"
         }
-      }
+      },
+      "liveKeywords": "en vivo, widget, información, pantalla"
     },
     "plugins": {
       "sectionBy": "Plugin de {author}",
@@ -418,10 +437,6 @@
         }
       },
       "unavailable": {
-        "pluginOnlyPress": "Las acciones de plugin solo van en la pulsación normal de la tecla",
-        "pluginTwoStates": "Una tecla de dos estados no puede llevar una acción de plugin: el plugin la dibuja",
-        "pluginTaken": "Esta tecla ya tiene una acción de plugin",
-        "setUpFromKey": "Se configura desde la tecla",
         "navigatesOnce": "Esta tecla ya mueve el dock: solo puede hacerlo una vez",
         "linesOnlyPress": "Solo la pulsación normal lleva a una página de la mesa",
         "noOtherPage": "Crea otra página en la mesa para poder ir a ella",
@@ -456,13 +471,10 @@
       },
       "grantPermission": "Dar permiso",
       "configureLabel": "Configurar {name}",
-      "configure": "Configurar…",
       "dialogDescription": "{description}. Los cambios se guardan solos.",
       "ready": "Lista para usar.",
       "done": "Hecho",
       "pluginMissing": "Plugin no instalado",
-      "pluginSettings": "Sus ajustes los guarda el propio plugin",
-      "pluginStopped": "El plugin no está en marcha",
       "address": "Dirección",
       "textPlaceholder": "El texto que se escribirá",
       "textLabel": "Texto a escribir",
@@ -998,6 +1010,22 @@
       "output": "Salida de audio",
       "defaultOutput": "Salida predeterminada del sistema",
       "disconnected": "{device} (no conectada)"
+    },
+    "summary": {
+      "openUrl": "Abre {url} en el navegador",
+      "noAddress": "Falta la dirección",
+      "open": "Abre {name}",
+      "closeApp": "Cierra {name}",
+      "typeText": "Escribe «{text}»",
+      "typeTextEnter": "Escribe «{text}» y pulsa Intro",
+      "hotkey": "Pulsa el atajo {keys}",
+      "openPage": "Va a la página {name}",
+      "switchProfile": "Cambia al perfil {name}",
+      "delay": "Espera {seconds} s",
+      "random": "Hace su única acción | Hace una de {n} acciones al azar",
+      "playSound": "Reproduce {name}",
+      "assist": "Le dice a Assist «{text}»",
+      "event": "Lanza el evento {event}"
     }
   },
   "common": {
@@ -1025,22 +1053,12 @@
       "noKey": "Selecciona una tecla de cualquier página para ver y editar su configuración.",
       "wideKey": "Ventana ancha",
       "key": "Tecla {number}",
-      "empty": "Esta tecla está vacía.",
-      "setUp": "Configurar tecla",
       "preview": "Vista previa real · {size}",
       "states": "Estados de la tecla",
       "state": "Estado {number}",
       "look": "Aspecto",
-      "lookOfState": "Aspecto del estado {number}",
-      "live": "Información en vivo",
-      "liveOfState": "Información en vivo del estado {number}",
-      "actions": "Acciones",
-      "actionsOfState": "Acciones del estado {number}",
+      "actions": "Acciones adicionales",
       "actionsHint": "Cada pulsación hace las acciones del estado en que está la tecla y pasa al otro.",
-      "statesSection": "Estados",
-      "twoStates": "Dos estados",
-      "twoStatesHint": "Alterna aspecto y acciones en cada pulsación, como un interruptor",
-      "twoStatesBlocked": "Quita la doble pulsación y la pulsación larga de sus acciones para darle dos estados.",
       "twoStatesUnavailable": "Esta tecla tiene acciones con doble pulsación o pulsación larga: quítalas para darle dos estados",
       "unsaved": "Sin guardar: {problem}",
       "saved": "Guardado",
@@ -1049,7 +1067,9 @@
       "tryGesture": "Probar un gesto de la tecla",
       "tryWait": "Espera a que se guarde para probarla",
       "tryHint": "Hace lo mismo que pulsarla en el dock",
-      "clearKey": "Vaciar tecla"
+      "clearKey": "Vaciar tecla",
+      "typeSection": "Tipo de tecla",
+      "noMoreActions": "Solo hace lo de su tipo. Añade más acciones para que haga algo más al pulsarla."
     },
     "gestures": {
       "press": "Pulsación",
@@ -1221,6 +1241,21 @@
       "semibold": "Semibold",
       "bold": "Bold",
       "black": "Black"
+    },
+    "type": {
+      "choose": "Elegir el tipo de tecla",
+      "pickerDescription": "Lo que es la tecla: decide lo que muestra. Luego puedes añadirle más acciones.",
+      "searchPlaceholder": "Básica, atajo, reloj, OBS, Home Assistant…",
+      "firstChoose": "Elige primero qué tipo de tecla es. Luego podrás configurarla, añadirle acciones y cambiar su aspecto.",
+      "unknown": "Tipo desconocido",
+      "basicSummary": "Muestra su aspecto y hace sus acciones",
+      "twoStatesSummary": "Cada pulsación pasa al otro estado",
+      "pageIndicatorSummary": "Muestra en qué página está el dock",
+      "configure": "Configurar",
+      "configureLabel": "Configurar {name}",
+      "change": "Cambiar el tipo de tecla",
+      "widgetDescription": "Se actualiza sola en el dock. Los cambios se guardan solos.",
+      "carouselDescription": "Cada pulsación de la tecla pasa al siguiente contenido. Los cambios se guardan solos."
     }
   },
   "icons": {
@@ -1638,14 +1673,12 @@
     "fields": {
       "show": "Mostrar",
       "live": "Información en vivo",
-      "none": "Ninguna",
-      "hint": "Se actualiza sola en el dock. La tecla conserva su fondo, imagen, texto y acciones; el texto queda por encima.",
       "list": "Información en vivo de la tecla",
       "add": "Añadir otra",
       "addLabel": "Añadir otra información en vivo",
       "removeWidget": "Quitar {name}",
-      "several": "Cada pulsación de la tecla pasa a la siguiente, en este orden.",
-      "alone": "El temporizador, el cronómetro y el contador usan la pulsación de la tecla, así que van solos.",
+      "several": "Se muestran en este orden: cada pulsación pasa al siguiente.",
+      "alone": "El temporizador, el cronómetro y el contador usan la pulsación de la tecla, así que no pueden ir en un carrusel.",
       "seconds": "Segundos",
       "showSeconds": "Mostrar los segundos",
       "format": "Formato",
@@ -1789,6 +1822,35 @@
       "extraRemove": "Quitar",
       "extraHint": "Se muestra junto a la entidad: el consumo de un enchufe, la humedad de una habitación…",
       "extraSuggest": "Usar {name}"
+    },
+    "descriptions": {
+      "digitalClock": "La hora en grande, con la fecha o el día debajo",
+      "analogClock": "Una esfera con agujas, y la fecha si quieres",
+      "systemMonitor": "Uso de CPU, memoria, gráfica y disco",
+      "network": "Lo que sube y baja la conexión ahora",
+      "countdown": "Lo que falta para una fecha y hora",
+      "worldClocks": "La hora en varias ciudades a la vez",
+      "calendar": "El día del mes y de la semana",
+      "timer": "Una cuenta atrás que se inicia y para con la tecla",
+      "battery": "La batería del ordenador",
+      "nowPlaying": "Lo que está sonando, con su carátula",
+      "temperatures": "Temperatura del procesador y de la gráfica",
+      "topProcesses": "Las apps que más CPU o memoria usan",
+      "latency": "El ping a un servidor",
+      "volume": "El volumen del sistema",
+      "moon": "La fase de la luna de hoy",
+      "progress": "Cuánto ha pasado del día, la semana, el mes y el año",
+      "stopwatch": "Un cronómetro que se inicia y para con la tecla",
+      "counter": "Un número que sube con cada pulsación",
+      "wordClock": "La hora escrita con palabras",
+      "phrases": "Frases tuyas, una tras otra",
+      "hassEntity": "El valor de una entidad de Home Assistant",
+      "hassGraph": "La historia de una entidad en una gráfica",
+      "hassEntities": "Varias entidades de un vistazo",
+      "hassPicture": "La imagen de una cámara o una entidad",
+      "hassWeather": "El tiempo de ahora y el pronóstico",
+      "hassTemplate": "Un texto hecho con una plantilla de Home Assistant",
+      "hassTile": "Dibuja la entidad según lo que es"
     }
   },
   "integrations": {

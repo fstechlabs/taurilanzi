@@ -5,6 +5,10 @@
       "lightsKeywords": "light, lamp, ulanzi connect",
       "hassKeywords": "home automation, house, smart home",
       "sections": {
+        "basic": {
+          "name": "Basic",
+          "description": "Just its look, with the actions you add"
+        },
         "system": {
           "name": "System",
           "description": "Apps, files, websites, text and shortcuts"
@@ -16,6 +20,10 @@
         "pages": {
           "name": "Pages",
           "description": "Move between pages and profiles"
+        },
+        "live": {
+          "name": "Live",
+          "description": "Information that updates by itself on the key"
         },
         "sequence": {
           "name": "Sequence",
@@ -43,6 +51,11 @@
         }
       },
       "entries": {
+        "basic": {
+          "name": "Basic",
+          "description": "Shows the icon, image and text you give it; what it does is up to its actions",
+          "keywords": "simple, empty, icon, image, text"
+        },
         "open": {
           "name": "Open app, file or folder",
           "description": "Opens it as if you double-clicked it",
@@ -166,8 +179,8 @@
           "keywords": "random, chance, surprise, shuffle"
         },
         "toggleSequences": {
-          "name": "Toggle between two sequences",
-          "description": "One press runs a list of actions and the next, another",
+          "name": "Two states",
+          "description": "Each press switches between two looks and two lists of actions, like a switch",
           "keywords": "toggle, multi action, macro, two states"
         },
         "playSound": {
@@ -370,8 +383,14 @@
             "name": "TC002 app control",
             "description": "Opens an app on the screen"
           }
+        },
+        "carousel": {
+          "name": "Carousel",
+          "description": "Several live contents on one key, the next one on each press; made for the wide key",
+          "keywords": "carousel, rotate, several, wide key, big key, display"
         }
-      }
+      },
+      "liveKeywords": "live, widget, information, display"
     },
     "plugins": {
       "sectionBy": "Plugin by {author}",
@@ -418,10 +437,6 @@
         }
       },
       "unavailable": {
-        "pluginOnlyPress": "Plugin actions only go on the key's normal press",
-        "pluginTwoStates": "A two-state key cannot have a plugin action: the plugin draws the key",
-        "pluginTaken": "This key already has a plugin action",
-        "setUpFromKey": "Set up from the key",
         "navigatesOnce": "This key already moves the dock: it can only do it once",
         "linesOnlyPress": "Only the normal press leads to a page on the canvas",
         "noOtherPage": "Create another page on the canvas to go to it",
@@ -456,13 +471,10 @@
       },
       "grantPermission": "Give permission",
       "configureLabel": "Set up {name}",
-      "configure": "Set up…",
       "dialogDescription": "{description}. Changes are saved as you go.",
       "ready": "Ready to use.",
       "done": "Done",
       "pluginMissing": "Plugin not installed",
-      "pluginSettings": "The plugin keeps its own settings",
-      "pluginStopped": "The plugin is not running",
       "address": "Address",
       "textPlaceholder": "The text to type",
       "textLabel": "Text to type",
@@ -998,6 +1010,22 @@
       "output": "Audio output",
       "defaultOutput": "System default output",
       "disconnected": "{device} (not connected)"
+    },
+    "summary": {
+      "openUrl": "Opens {url} in the browser",
+      "noAddress": "The address is missing",
+      "open": "Opens {name}",
+      "closeApp": "Quits {name}",
+      "typeText": "Types “{text}”",
+      "typeTextEnter": "Types “{text}” and presses Return",
+      "hotkey": "Presses the shortcut {keys}",
+      "openPage": "Goes to the page {name}",
+      "switchProfile": "Switches to the profile {name}",
+      "delay": "Waits {seconds} s",
+      "random": "Runs its only action | Runs one of {n} actions at random",
+      "playSound": "Plays {name}",
+      "assist": "Tells Assist “{text}”",
+      "event": "Fires the event {event}"
     }
   },
   "common": {
@@ -1025,22 +1053,12 @@
       "noKey": "Select a key on any page to see and edit its settings.",
       "wideKey": "Wide key",
       "key": "Key {number}",
-      "empty": "This key is empty.",
-      "setUp": "Set up key",
       "preview": "Real preview · {size}",
       "states": "Key states",
       "state": "State {number}",
       "look": "Look",
-      "lookOfState": "Look of state {number}",
-      "live": "Live info",
-      "liveOfState": "Live info of state {number}",
-      "actions": "Actions",
-      "actionsOfState": "Actions of state {number}",
+      "actions": "Additional actions",
       "actionsHint": "Each press runs the actions of the state the key is in and switches to the other.",
-      "statesSection": "States",
-      "twoStates": "Two states",
-      "twoStatesHint": "Switches look and actions on each press, like a toggle",
-      "twoStatesBlocked": "Remove the double press and long press from its actions to give it two states.",
       "twoStatesUnavailable": "This key has double press or long press actions: remove them to give it two states",
       "unsaved": "Not saved: {problem}",
       "saved": "Saved",
@@ -1049,7 +1067,9 @@
       "tryGesture": "Try a gesture of the key",
       "tryWait": "Wait until it is saved to try it",
       "tryHint": "Does the same as pressing it on the dock",
-      "clearKey": "Clear key"
+      "clearKey": "Clear key",
+      "typeSection": "Type of key",
+      "noMoreActions": "It only does what its type does. Add more actions for it to do more when pressed."
     },
     "gestures": {
       "press": "Press",
@@ -1221,6 +1241,21 @@
       "semibold": "Semibold",
       "bold": "Bold",
       "black": "Black"
+    },
+    "type": {
+      "choose": "Choose the type of key",
+      "pickerDescription": "What the key is: it decides what it shows. You can add more actions to it afterwards.",
+      "searchPlaceholder": "Basic, shortcut, clock, OBS, Home Assistant…",
+      "firstChoose": "First choose what type of key it is. Then you can set it up, add actions and change its look.",
+      "unknown": "Unknown type",
+      "basicSummary": "Shows its look and runs its actions",
+      "twoStatesSummary": "Each press switches to the other state",
+      "pageIndicatorSummary": "Shows which page the dock is on",
+      "configure": "Set up",
+      "configureLabel": "Set up {name}",
+      "change": "Change the type of key",
+      "widgetDescription": "Updates by itself on the dock. Changes are saved automatically.",
+      "carouselDescription": "Each press of the key moves on to the next content. Changes are saved automatically."
     }
   },
   "icons": {
@@ -1638,14 +1673,12 @@
     "fields": {
       "show": "Show",
       "live": "Live info",
-      "none": "None",
-      "hint": "Updates by itself on the dock. The key keeps its background, image, text and actions; the text stays on top.",
       "list": "The key's live info",
       "add": "Add another",
       "addLabel": "Add more live info",
       "removeWidget": "Remove {name}",
-      "several": "Each press of the key moves on to the next one, in this order.",
-      "alone": "The timer, the stopwatch and the counter use the key's press, so they go alone.",
+      "several": "They show in this order: each press moves on to the next.",
+      "alone": "The timer, the stopwatch and the counter use the press of the key, so they cannot be in a carousel.",
       "seconds": "Seconds",
       "showSeconds": "Show the seconds",
       "format": "Format",
@@ -1789,6 +1822,35 @@
       "extraRemove": "Remove",
       "extraHint": "Shown next to the entity: what a plug draws, the humidity of a room…",
       "extraSuggest": "Use {name}"
+    },
+    "descriptions": {
+      "digitalClock": "The time in large digits, with the date or day below",
+      "analogClock": "A face with hands, and the date if you like",
+      "systemMonitor": "CPU, memory, graphics and disk usage",
+      "network": "What the connection sends and receives right now",
+      "countdown": "How long until a date and time",
+      "worldClocks": "The time in several cities at once",
+      "calendar": "The day of the month and of the week",
+      "timer": "A countdown started and stopped with the key",
+      "battery": "The computer’s battery",
+      "nowPlaying": "What is playing, with its cover",
+      "temperatures": "Processor and graphics temperature",
+      "topProcesses": "The apps using the most CPU or memory",
+      "latency": "The ping to a server",
+      "volume": "The system volume",
+      "moon": "Today’s moon phase",
+      "progress": "How much of the day, week, month and year has gone by",
+      "stopwatch": "A stopwatch started and stopped with the key",
+      "counter": "A number that goes up with each press",
+      "wordClock": "The time written in words",
+      "phrases": "Phrases of yours, one after another",
+      "hassEntity": "The value of a Home Assistant entity",
+      "hassGraph": "The history of an entity in a graph",
+      "hassEntities": "Several entities at a glance",
+      "hassPicture": "The picture of a camera or an entity",
+      "hassWeather": "The weather now and the forecast",
+      "hassTemplate": "A text made with a Home Assistant template",
+      "hassTile": "Draws the entity as what it is"
     }
   },
   "integrations": {

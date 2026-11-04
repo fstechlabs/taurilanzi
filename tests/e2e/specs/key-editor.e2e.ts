@@ -3,6 +3,9 @@ import { Key } from 'webdriverio'
 import {
   KEY_COUNT,
   addAction,
+  chooseType,
+  done,
+  newKey,
   saved,
   setColor,
   assetBytes,
@@ -63,8 +66,12 @@ describe('the key editor', () => {
 
   it('creates a key with a gradient, an icon, a title and actions', async () => {
     await node(homeName).$(`button[aria-label="Tecla ${index + 1}"]`).click()
-    await expect(text('Esta tecla está vacía.')).toBeDisplayed()
-    await button('Configurar tecla').click()
+    await expect($('[data-choose-type]')).toBeDisplayed()
+    await expect($('[data-section="actions"]')).not.toBeExisting()
+    await expect($('[data-section="look"]')).not.toBeExisting()
+    await shot('0-choose-type')
+    await newKey(homeName, index)
+    await expect($('[data-key-type-name]')).toHaveText('Básica')
     let src = await previewSrc()
     await shot('1-new')
 
@@ -127,26 +134,33 @@ describe('the key editor', () => {
     src = await previewChange(src)
     await setColor('Color del texto', '#ffffff')
 
-    await addAction('open_url')
+    await chooseType('open_url')
     const url = $('input[aria-label="Dirección"]')
+    await url.waitForDisplayed()
     await url.setValue('ftp://example.org')
     await expect($$('//*[normalize-space()="Solo direcciones http:// o https://"]')[0]).toBeDisplayed()
     await expect($('[data-save-status]')).toHaveText(expect.stringContaining('Sin guardar'))
     await url.setValue('https://example.org')
+    await done()
+    await expect($('[data-key-type-name]')).toHaveText('Abrir web')
+    await expect($('[data-key-type]')).toHaveText(expect.stringContaining('Abre https://example.org en el navegador'))
+
     await addAction('home')
     await expect($('[aria-label="Acción 1: Ir al inicio"]')).toBeDisplayed()
     await button('Añadir acción').click()
     await expect($('[data-entry="back"]')).toHaveAttribute('aria-disabled', 'true')
     await browser.keys(Key.Escape)
     await $('[aria-label="Buscar acción"]').waitForExist({ reverse: true })
+    await addAction('stop_sounds')
     const handle = await center($('[aria-label="Arrastrar para cambiar el orden de la acción 1"]'))
-    const below = await center($('[aria-label="Acción 2: Abrir web"]'))
-    await dragPoints(handle, { x: handle.x, y: below.y + 40 })
+    const below = await center($('[aria-label="Acción 2: Parar sonidos"]'))
+    await dragPoints(handle, { x: handle.x, y: below.y + 15 })
     await expect($('[aria-label="Acción 2: Ir al inicio"]')).toBeDisplayed()
     await shot('3-icon-edited')
     await saved()
     const stored = (await storedKey(index))!
-    expect(stored.actions).toEqual([{ type: 'open_url', url: 'https://example.org' }, { type: 'home' }])
+    expect(stored.kind).toBe('action')
+    expect(stored.actions).toEqual([{ type: 'open_url', url: 'https://example.org' }, { type: 'stop_sounds' }, { type: 'home' }])
     expect(stored.appearance.background.type).toBe('linear_gradient')
     expect(stored.appearance.layers.map(l => l.type)).toEqual(['image', 'text'])
     const [icon, title] = stored.appearance.layers
@@ -262,7 +276,7 @@ describe('the key editor', () => {
     expect((await storedKey(index))!.appearance.layers.at(-1)).toMatchObject({ content: 'Cambio' })
 
     await button('Vaciar tecla').click()
-    await expect(text('Esta tecla está vacía.')).toBeDisplayed()
+    await expect($('[data-choose-type]')).toBeDisplayed()
     expect(await storedKey(index)).toBeUndefined()
   })
 })

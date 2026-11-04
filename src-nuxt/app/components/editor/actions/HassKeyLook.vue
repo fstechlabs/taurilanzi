@@ -2,6 +2,7 @@
 import { RotateCcw, Search } from '@lucide/vue'
 import type { PickedIcon } from '~/composables/useIconCatalog'
 import type { HassLook } from '~/composables/useHassKey'
+import { pressActions } from '~/composables/useKeyEditor'
 import { KEY_DRAFT } from '~/lib/actions/key-draft'
 import { followedAction, followedState, sameCommand } from '~/lib/actions/hass'
 import { preload, thumbnail } from '~/lib/iconify'
@@ -33,7 +34,7 @@ const info = computed(() => (entity.value ? hass.entity(entity.value) : undefine
 const entityName = computed(() => info.value?.name ?? entity.value)
 
 const state = computed(() => followedState(props.command))
-const followed = computed(() => (draft?.value ? followedAction(draft.value.actions, draft.value.second?.actions ?? []) : null))
+const followed = computed(() => (draft?.value ? followedAction(pressActions(draft.value), draft.value.second ? pressActions(draft.value.second) : []) : null))
 const isFollowed = computed(() => followed.value?.type === 'home_assistant' && sameCommand(followed.value.command, props.command))
 const follows = computed(() => Boolean(draft?.value?.second && isFollowed.value))
 const hasGestures = computed(() => Boolean(draft?.value?.doublePress.length || draft?.value?.longPress.length))

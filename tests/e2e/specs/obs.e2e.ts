@@ -6,11 +6,12 @@ import {
   KEY_COUNT,
   addAction,
   button,
+  chooseType,
   clickOn,
   dialog,
   fill,
   homePage,
-  node,
+  newKey,
   saved,
   shot,
   state,
@@ -27,11 +28,6 @@ async function storedKey(index: number) {
   return homePage(await state()).keys[index]
 }
 
-async function editKey(index: number) {
-  await clickOn(node(homePage(await state()).name).$(`button[aria-label="Tecla ${index + 1}"]`))
-  await button('Configurar tecla').click()
-}
-
 async function until(check: () => Promise<boolean>, timeoutMsg: string) {
   await browser.waitUntil(check, { timeoutMsg })
 }
@@ -45,7 +41,7 @@ describe('OBS', () => {
   })
 
   it('offers every action of the OBS plugin in the catalog', async () => {
-    await editKey(keys[0]!)
+    await newKey(homePage(await state()).name, keys[0]!)
     await button('Añadir acción').click()
     await $('[data-section="obs"]').click()
     const entries = await $$('[data-entry^="obs:"]')
@@ -59,7 +55,7 @@ describe('OBS', () => {
   })
 
   it('records with a key that shows when OBS is recording', async () => {
-    await addAction('obs:record')
+    await chooseType('obs:record')
     await expect($('//*[normalize-space()="No tienes ningún servidor de OBS Studio"]')).toBeDisplayed()
     await button('Añadir servidor de OBS Studio').click()
     const add = dialog('Nuevo servidor de OBS')
@@ -71,6 +67,7 @@ describe('OBS', () => {
     await add.waitForExist({ reverse: true })
     await saved()
     const record = { type: 'obs', server, command: { kind: 'record', mode: 'toggle' } }
+    expect((await storedKey(keys[0]!))!.kind).toBe('action')
     expect((await storedKey(keys[0]!))!.actions).toEqual([record])
     await expect($('//*[contains(normalize-space(), "Puedes escribir los nombres a mano")]')).toBeDisplayed()
 
@@ -83,11 +80,13 @@ describe('OBS', () => {
     await shot('obs-follow')
   })
 
-  it('switches scenes by a name typed without OBS', async () => {
-    await editKey(keys[1]!)
+  it('switches scenes, as one more action, by a name typed without OBS', async () => {
+    await newKey(homePage(await state()).name, keys[1]!)
     await addAction('obs:scene')
     await expect($('[data-save-status]')).toHaveText(expect.stringContaining('elige la escena'))
     await fill($('input[aria-label="Escena"]'), 'Juego')
+    // One more action does not change how the key looks.
+    await expect(button('Mostrar en la tecla si está activo')).not.toBeExisting()
     await saved()
     expect((await storedKey(keys[1]!))!.actions).toEqual([
       { type: 'obs', server, command: { kind: 'scene', scene: 'Juego', preview: false } },

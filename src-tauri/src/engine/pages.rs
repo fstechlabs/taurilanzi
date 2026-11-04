@@ -183,6 +183,7 @@ mod tests {
     fn moving_a_key_onto_its_target_drops_the_line() {
         let (here, there) = (Uuid::new_v4(), Uuid::new_v4());
         let mut key = Key {
+            kind: None,
             appearance: Appearance {
                 background: Background::Solid {
                     color: Color::BLACK,
