@@ -1,0 +1,127 @@
+/* Loaded first in every page of a plugin, with the shim, so a property inspector looks like the
+   rest of the app. The stylesheets most of them use (Ulanzi's uspi.css, its port of Stream Deck's,
+   udpi.css, and Stream Deck's own sdpi.css) take their colors from these variables and lay out
+   the same rows, which get the app's look here. `html:root` outranks the `:root` and `html` they
+   are set in. */
+html:root {
+  color-scheme: dark;
+
+  --uspi-bodybg: #171717;
+  --uspi-inputbg: #212121;
+  --uspi-textcolor: #fafafa;
+  --uspi-unitcolor: #a1a1a1;
+  --uspi-bordercolor: #3a3a3a;
+  --uspi-borderradius: 8px;
+  --uspi-height: 32px;
+  --uspi-theme: #e5e5e5;
+
+  --udpi-bgcolor: #171717;
+  --udpi-background: #212121;
+  --udpi-color: #fafafa;
+  --udpi-bordercolor: #3a3a3a;
+  --udpi-buttonbordercolor: #525252;
+  --udpi-borderradius: 8px;
+  --udpi-fontweight: 400;
+  --udpi-letterspacing: normal;
+
+  --sdpi-bgcolor: #171717;
+  --sdpi-background: #212121;
+  --sdpi-color: #fafafa;
+  --sdpi-bordercolor: #3a3a3a;
+  --sdpi-buttonbordercolor: #525252;
+  --sdpi-borderradius: 8px;
+  --sdpi-fontweight: 400;
+  --sdpi-letterspacing: normal;
+}
+
+/* The page is a card of the dialog: the backgrounds of the plugin go, the dark scheme above paints
+   it, with room around what it holds. */
+html:root,
+html:root body {
+  background: transparent !important;
+  font-family: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+}
+
+html:root body {
+  box-sizing: border-box;
+  padding: 16px !important;
+}
+
+/* Each setting as the app shows its own: the name above, small and muted, and the field below. */
+html:root :is(.uspi-item, .udpi-item, .sdpi-item):not([type="group"]) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  max-width: none;
+}
+
+html:root :is(.uspi-item-label, .udpi-item-label, .sdpi-item-label) {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+  color: #a1a1a1;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+html:root :is(.uspi-item-label, .udpi-item-label, .sdpi-item-label)::after {
+  content: none;
+}
+
+html:root :is(.uspi-item-label, .udpi-item-label, .sdpi-item-label).empty {
+  display: none;
+}
+
+html:root :is(.uspi-item-value, .udpi-item-value, .sdpi-item-value) {
+  width: 100%;
+  margin-left: 0;
+}
+
+html:root :is(select, input, textarea):is(.uspi-item-value, .udpi-item-value, .sdpi-item-value),
+html:root :is(.uspi-item-value, .udpi-item-value, .sdpi-item-value) :is(select, textarea, input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="button"], [type="submit"], [type="reset"], [type="image"], [type="hidden"])) {
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  background-color: #212121;
+}
+
+/* Ulanzi Studio shows these pages in Chromium, where controls nobody styled look flat; WebKit draws
+   macOS's own buttons instead. These look like the app's inputs, and `:where` leaves anything a
+   plugin sets for them above this. */
+:where(select, textarea, input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="button"], [type="submit"], [type="reset"], [type="image"], [type="hidden"])) {
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  background-color: #212121;
+  color: #fafafa;
+  font: inherit;
+}
+
+:where(select) {
+  appearance: none;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+}
+
+:where(select, textarea, input):focus-visible {
+  border-color: #737373;
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(115 115 115 / 50%);
+}
+
+/* uspi.css colors its selects but keeps the native look. */
+html:root select.uspi-item-value {
+  appearance: none;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+}

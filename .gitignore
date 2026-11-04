@@ -12,8 +12,10 @@ dist
 # Rust and Tauri (see also src-tauri/.gitignore)
 target/
 
-# The Node bundled with the app, downloaded by scripts/fetch-node.ts
+# The Node and the Python bundled with the app, downloaded by scripts/fetch-node.ts and
+# scripts/fetch-python.ts
 src-tauri/resources/node/
+src-tauri/resources/python/
 
 # Update archives served locally by scripts/serve-updates.ts, and what a release publishes
 /.updates/

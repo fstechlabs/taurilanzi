@@ -3,7 +3,8 @@
   "identifier": "com.taurilanzi.desktop",
   "bundle": {
     "resources": {
-      "resources/node/*": "node/"
+      "resources/node/*": "node/",
+      "resources/python/": "python/"
     }
   },
   "plugins": {

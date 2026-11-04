@@ -157,15 +157,15 @@
       "invalidId": "the id {id} is not valid",
       "notRemovable": "only plugins installed in the app can be removed"
     },
-    "community": {
-      "catalog": "could not read the community catalog: {reason}",
-      "unknown": "that plugin is not in the catalog",
+    "catalog": {
+      "read": "could not read the plugin store: {reason}",
+      "unknown": "that plugin is not in the store",
       "host": "that plugin cannot be downloaded from {host}",
       "download": "could not download the plugin: {reason}"
     },
     "launcher": {
-      "python": "Python plugins cannot be used yet",
-      "needsNode": "It needs Node 20 or later, or Ulanzi Studio installed"
+      "needsPython": "The Python the app comes with is missing: install the app again",
+      "needsNode": "The Node the app comes with is missing: install the app again"
     }
   },
   "widgets": {

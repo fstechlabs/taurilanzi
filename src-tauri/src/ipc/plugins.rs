@@ -9,7 +9,7 @@ use tauri::State;
 use super::error::{ErrorKind, IpcError};
 use crate::config::KnownPlugin;
 use crate::engine::EngineHandle;
-use crate::plugins::{CommunityPlugin, PluginCatalog, Plugins};
+use crate::plugins::{CatalogPlugin, PluginCatalog, Plugins};
 
 type Result<T> = std::result::Result<T, IpcError>;
 type PluginState<'a> = State<'a, Option<Arc<Plugins>>>;
@@ -85,25 +85,22 @@ async fn note_installed(
     }
 }
 
-/// The plugins of the community catalog that run here. Read again after a while, or at once
-/// with `refresh`.
+/// The plugins of the stores that run here. Read again after a while, or at once with
+/// `refresh`.
 #[tauri::command]
 #[specta::specta]
-pub async fn community_plugins(
-    state: PluginState<'_>,
-    refresh: bool,
-) -> Result<Vec<CommunityPlugin>> {
+pub async fn store_plugins(state: PluginState<'_>, refresh: bool) -> Result<Vec<CatalogPlugin>> {
     let plugins = plugins(&state)?;
-    tauri::async_runtime::spawn_blocking(move || plugins.community(refresh))
+    tauri::async_runtime::spawn_blocking(move || plugins.store(refresh))
         .await
         .map_err(|err| IpcError::new(ErrorKind::Failed, err.to_string()))?
         .map_err(|err| IpcError::new(ErrorKind::Unavailable, err.to_string()))
 }
 
-/// Downloads a plugin of the community catalog and installs it, or updates it. Returns its id.
+/// Downloads a plugin of a store and installs it, or updates it. Returns its id.
 #[tauri::command]
 #[specta::specta]
-pub async fn install_community_plugin(
+pub async fn install_store_plugin(
     state: PluginState<'_>,
     engine: State<'_, EngineHandle>,
     id: String,
@@ -111,7 +108,7 @@ pub async fn install_community_plugin(
     let plugins = plugins(&state)?;
     let shelf = plugins.clone();
     let package = id.clone();
-    let plugin = tauri::async_runtime::spawn_blocking(move || shelf.install_community(&package))
+    let plugin = tauri::async_runtime::spawn_blocking(move || shelf.install_from_store(&package))
         .await
         .map_err(|err| IpcError::new(ErrorKind::Failed, err.to_string()))?
         .map_err(|err| IpcError::new(ErrorKind::Invalid, err))?;

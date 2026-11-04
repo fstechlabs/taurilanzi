@@ -20,9 +20,9 @@ export function pluginImage(plugin: string, path: string | null | undefined) {
   return path ? `${IMAGES}/plugin/${encodeURIComponent(plugin)}/${encodePath(path)}` : undefined
 }
 
-/** An icon or screenshot of the community catalog, fetched by the engine. */
-export function communityImage(url: string | null | undefined) {
-  return url ? `${IMAGES}/community?url=${encodeURIComponent(url)}` : undefined
+/** An icon or screenshot of a plugin store, fetched by the engine. */
+export function storeImage(url: string | null | undefined) {
+  return url ? `${IMAGES}/store?url=${encodeURIComponent(url)}` : undefined
 }
 
 /** The id of a plugin is the first four segments of the ids of its actions. */

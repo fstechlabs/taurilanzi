@@ -1,0 +1,26 @@
+{
+  "UUID": "com.taurilanzi.e2e.python",
+  "Name": "Python echo",
+  "Author": "Taurilanzi",
+  "Description": "Plugin for the end-to-end tests: connects with the protocol of Ulanzi Studio from Python.",
+  "Version": "1.0.0",
+  "Icon": "images/icon.svg",
+  "Category": "Tests",
+  "CodePath": "plugin.py",
+  "Type": "Python",
+  "Actions": [
+    {
+      "UUID": "com.taurilanzi.e2e.python.echo",
+      "Name": "Echo",
+      "Icon": "images/icon.svg",
+      "States": [
+        {
+          "Image": "images/icon.svg"
+        }
+      ],
+      "Controllers": [
+        "Keypad"
+      ]
+    }
+  ]
+}

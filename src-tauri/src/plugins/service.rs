@@ -6,18 +6,20 @@ use std::sync::{Arc, PoisonError, RwLock};
 use log::{info, warn};
 use serde::Serialize;
 
-use super::community::{Community, CommunityError, CommunityPlugin};
+use super::catalog::{Catalog, CatalogError, CatalogPlugin};
 use super::desktop::Desktop;
 use super::hub::{HubSetup, PluginHost, PluginInput};
 use super::install::{self, InstallError};
 use super::launcher::{Launcher, RunState};
+use super::manifest::Runtime;
 use super::node;
+use super::python;
 use super::registry::Registry;
 use super::server;
 
 pub struct PluginsSetup {
     pub data_dir: PathBuf,
-    /// The app's resources, where its Node is.
+    /// The app's resources, where its Node and its Python are.
     pub resources: Option<PathBuf>,
     pub language: String,
     pub notify: Box<dyn Fn(PluginInput) + Send>,
@@ -29,7 +31,7 @@ pub struct Plugins {
     launcher: Launcher,
     registry: Arc<RwLock<Registry>>,
     folder: PathBuf,
-    community: Community,
+    catalog: Catalog,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -38,6 +40,8 @@ pub struct PluginCatalog {
     pub port: u16,
     /// The Node that runs plugins, if one was found.
     pub node: Option<String>,
+    /// The Python that runs plugins, if one was found.
+    pub python: Option<String>,
     pub language: String,
     pub plugins: Vec<PluginInfo>,
 }
@@ -55,10 +59,33 @@ pub struct PluginInfo {
     pub icon: Option<String>,
     /// The package folder, ending in `.ulanziPlugin`.
     pub folder: String,
+    /// What runs its main service.
+    pub runtime: PluginRuntime,
     pub run: RunState,
     /// Its main service is connected to the host.
     pub connected: bool,
     pub actions: Vec<PluginActionInfo>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginRuntime {
+    Node,
+    Html,
+    Python,
+    /// Nothing runs: images only.
+    None,
+}
+
+impl From<&Runtime> for PluginRuntime {
+    fn from(runtime: &Runtime) -> Self {
+        match runtime {
+            Runtime::Node(_) => Self::Node,
+            Runtime::Html(_) => Self::Html,
+            Runtime::Python(_) => Self::Python,
+            Runtime::None => Self::None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -94,8 +121,18 @@ impl Plugins {
             ),
             None => warn!("the bundled Node is missing: plugins written in JavaScript cannot run"),
         }
+        let python = python::find(setup.resources.as_deref());
+        match &python {
+            Some(python) => info!(
+                "plugins run with Python {} ({})",
+                python.version,
+                python.path.display()
+            ),
+            None => warn!("the bundled Python is missing: plugins written in Python cannot run"),
+        }
         let launcher = Launcher::new(
             node,
+            python,
             setup.desktop,
             port,
             setup.language.clone(),
@@ -106,7 +143,7 @@ impl Plugins {
             launcher,
             registry,
             folder,
-            community: Community::new(),
+            catalog: Catalog::new(),
         };
         plugins.start_all();
         Ok(plugins)
@@ -150,6 +187,7 @@ impl Plugins {
                         .unwrap_or_else(|| m.name.clone()),
                     icon: Some(m.icon.clone()).filter(|i| !i.is_empty()),
                     folder: plugin.folder.clone(),
+                    runtime: PluginRuntime::from(&plugin.runtime),
                     run: self.launcher.state(plugin),
                     connected: connected.contains(&m.uuid),
                     actions: m
@@ -173,6 +211,7 @@ impl Plugins {
         PluginCatalog {
             port: self.host.port(),
             node: self.launcher.node().map(|n| n.version.clone()),
+            python: self.launcher.python().map(|p| p.version.clone()),
             language: crate::i18n::current().tag().into(),
             plugins,
         }
@@ -242,26 +281,26 @@ impl Plugins {
         }
     }
 
-    /// What the community catalog offers that runs here, and which of it is installed.
-    pub fn community(&self, refresh: bool) -> Result<Vec<CommunityPlugin>, CommunityError> {
+    /// What the stores offer that runs here, and which of it is installed.
+    pub fn store(&self, refresh: bool) -> Result<Vec<CatalogPlugin>, CatalogError> {
         let registry = self.registry.read().unwrap_or_else(PoisonError::into_inner);
-        self.community
-            .catalog(refresh, &registry, crate::i18n::current().tag())
+        self.catalog
+            .plugins(refresh, &registry, crate::i18n::current().tag())
     }
 
-    /// Installs, or updates, a plugin of the community catalog. Returns its id.
-    pub fn install_community(&self, id: &str) -> Result<String, String> {
+    /// Installs, or updates, a plugin of a store. Returns its id.
+    pub fn install_from_store(&self, id: &str) -> Result<String, String> {
         let zip = self
-            .community
-            .download(id, &std::env::temp_dir())
+            .catalog
+            .download(id, crate::i18n::current().tag(), &std::env::temp_dir())
             .map_err(|err| err.to_string())?;
         let installed = self.install(&zip).map_err(|err| err.to_string());
         let _ = std::fs::remove_file(&zip);
         installed
     }
 
-    pub fn community_image(&self, url: &str) -> Option<crate::render::ImageData> {
-        self.community.image(url)
+    pub fn store_image(&self, url: &str) -> Option<crate::render::ImageData> {
+        self.catalog.image(url, crate::i18n::current().tag())
     }
 
     pub fn stop_all(&self) {

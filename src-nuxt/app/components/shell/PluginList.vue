@@ -7,14 +7,14 @@ import type { PluginInfo } from '~/types/engine'
 type Plugin = DeepReadonly<PluginInfo>
 
 const { catalog, install, reload, showFolder } = usePlugins()
-const community = useCommunityPlugins()
+const store = useStorePlugins()
 const { show } = useToasts()
 const { t } = useI18n()
 const browsing = ref(false)
 
 onMounted(() => {
-  if (!community.plugins.value) {
-    community.load()
+  if (!store.plugins.value) {
+    store.load()
   }
 })
 
@@ -74,7 +74,7 @@ async function add(kind: 'zip' | 'folder') {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" class="w-60">
           <DropdownMenuItem @select="browsing = true">
-            <Store /> {{ t('plugins.list.community') }}
+            <Store /> {{ t('plugins.list.store') }}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem @select="add('zip')">
@@ -110,11 +110,11 @@ async function add(kind: 'zip' | 'folder') {
       <img v-if="plugin.icon" :src="pluginImage(plugin.id, plugin.icon)" alt="" class="size-4 shrink-0 rounded-sm">
       <Puzzle v-else class="size-4 shrink-0 text-muted-foreground" />
       <span class="min-w-0 flex-1 truncate">{{ plugin.name }}</span>
-      <ArrowUpCircle v-if="community.entryOf(plugin.id)?.update" class="size-3.5 shrink-0 text-sky-400" :aria-label="t('plugins.updateAvailable')" />
+      <ArrowUpCircle v-if="store.entryOf(plugin.id)?.update" class="size-3.5 shrink-0 text-sky-400" :aria-label="t('plugins.updateAvailable')" />
       <span class="size-1.5 shrink-0 rounded-full" :class="status(plugin).color" :title="status(plugin).label" />
     </button>
 
-    <CommunityDialog v-model:open="browsing" />
+    <PluginStoreDialog v-model:open="browsing" />
     <PluginDialog v-if="opened" v-model:open="dialogOpen" :plugin="opened" :status="status(opened).label" />
   </div>
 </template>

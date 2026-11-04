@@ -8,7 +8,7 @@
     "dev": "nuxt dev src-nuxt",
     "generate": "nuxt generate src-nuxt",
     "preview": "nuxt preview src-nuxt",
-    "postinstall": "nuxt prepare src-nuxt && bun scripts/fetch-node.ts && (git config core.hooksPath .githooks || true)",
+    "postinstall": "nuxt prepare src-nuxt && bun scripts/fetch-node.ts && bun scripts/fetch-python.ts && (git config core.hooksPath .githooks || true)",
     "tauri": "tauri",
     "dev:no-dock": "TAURILANZI_NO_DOCK=1 tauri dev",
     "typecheck": "nuxi typecheck src-nuxt",

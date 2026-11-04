@@ -1,4 +1,4 @@
-mod community;
+mod catalog;
 mod desktop;
 mod hotkey;
 mod hub;
@@ -10,12 +10,13 @@ mod launcher;
 mod manifest;
 mod node;
 mod protocol;
+mod python;
 mod registry;
 mod server;
 mod service;
 mod synced;
 
-pub use community::CommunityPlugin;
+pub use catalog::CatalogPlugin;
 pub use desktop::Desktop;
 pub use hub::{PluginHost, PluginInput, VisualChange};
 pub use images::from_file as image_file;

@@ -1321,7 +1321,7 @@
     "list": {
       "title": "Plugins",
       "add": "Añadir plugin",
-      "community": "Plugins de la comunidad…",
+      "store": "Tienda de plugins…",
       "fromZip": "Instalar desde un ZIP…",
       "fromFolder": "Instalar desde una carpeta…",
       "reload": "Buscar plugins nuevos",
@@ -1356,14 +1356,14 @@
       "confirmRemove": "¿Quitar el plugin?",
       "remove": "Quitar"
     },
-    "community": {
-      "title": "Plugins de la comunidad",
-      "description": "Del catálogo de Ulanzi Community Store, solo los que funcionan en este ordenador. Son de otros autores y se ejecutan en tu ordenador: instala los que te fíes.",
+    "store": {
+      "title": "Tienda de plugins",
+      "description": "Del Marketplace de Ulanzi y de Ulanzi Community Store, solo los que funcionan en este ordenador. Se ejecutan en tu ordenador: instala los que te fíes.",
       "search": "Buscar",
       "searchLabel": "Buscar plugins",
-      "reload": "Volver a leer el catálogo",
-      "loadFailed": "No se ha podido leer el catálogo. Comprueba la conexión y vuelve a intentarlo.",
-      "loading": "Leyendo el catálogo…",
+      "reload": "Volver a leer la tienda",
+      "loadFailed": "No se ha podido leer la tienda. Comprueba la conexión y vuelve a intentarlo.",
+      "loading": "Leyendo la tienda…",
       "noMatch": "Ningún plugin coincide.",
       "installed": "Instalado",
       "ready": "{name} ya está en la app.",
@@ -1377,7 +1377,44 @@
       "secrets": "{n} secretos",
       "noDetail": "sin detalle",
       "dials": "También trae acciones para diales, que aún no funcionan en la app.",
-      "choose": "Elige un plugin"
+      "choose": "Elige un plugin",
+      "sourceLabel": "Origen",
+      "from": {
+        "ulanzi": "Marketplace de Ulanzi",
+        "community": "Ulanzi Community Store"
+      },
+      "filters": "Filtros",
+      "allSources": "Todos",
+      "statusLabel": "Estado",
+      "statuses": {
+        "all": "Todos",
+        "installed": "Instalados",
+        "updates": "Con actualización",
+        "available": "Sin instalar"
+      },
+      "kindLabel": "Categoría",
+      "kinds": {
+        "all": "Todas",
+        "tools": "Herramientas",
+        "streaming": "Directos",
+        "office": "Oficina",
+        "creative": "Creatividad",
+        "lighting": "Iluminación",
+        "ai": "IA"
+      },
+      "count": "Ningún plugin | 1 plugin | {n} plugins",
+      "clear": "Quitar filtros",
+      "sortLabel": "Ordenar",
+      "sorts": {
+        "popular": "Más populares",
+        "name": "Por nombre",
+        "recent": "Más recientes"
+      }
+    },
+    "runtime": {
+      "node": "Node.js",
+      "html": "HTML",
+      "python": "Python"
     }
   },
   "settings": {
@@ -1496,7 +1533,7 @@
       "elsewhereHint": "Perfiles que borraste solo aquí. Siguen en el cloud y en tus otros equipos.",
       "bringBack": "Traer a este equipo",
       "missingPlugins": "Plugins de tus otros equipos que faltan aquí",
-      "missingPluginsHint": "Los del catálogo de la comunidad se instalan solos al sincronizar. Estos no se han podido instalar:",
+      "missingPluginsHint": "Los de la tienda de plugins se instalan solos al sincronizar. Estos no se han podido instalar:",
       "missingReasons": {
         "from_file": "Se instaló desde un fichero en otro equipo: instálalo aquí a mano.",
         "not_here": "No está disponible para este sistema.",

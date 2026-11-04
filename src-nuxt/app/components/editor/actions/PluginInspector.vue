@@ -39,7 +39,7 @@ const running = computed(() => found.value?.plugin.connected ?? false)
         v-else-if="url"
         :src="url"
         :title="t('actions.pluginInspector.settingsOf', { name: found.action.name })"
-        class="h-[60vh] w-full rounded-md border bg-neutral-950"
+        class="h-[60vh] w-full rounded-lg bg-transparent"
         data-plugin-inspector
       />
     </template>

@@ -8,8 +8,8 @@ import type { Page, Snapshot } from '../../src-nuxt/app/ipc/bindings'
 
 const SCREENS = join(import.meta.dirname, 'screens')
 export const KEY_COUNT = 13
-/** The community catalog the app reads in the tests; the spec that needs it serves it. */
-export const COMMUNITY_PORT = 39072
+/** The plugin stores the app reads in the tests; the specs that need them serve them. */
+export const STORE_PORT = 39072
 /** The cloud the app syncs with in the tests; the spec that needs it serves it. */
 export const CLOUD_PORT = 39073
 

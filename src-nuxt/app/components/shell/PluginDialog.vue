@@ -8,21 +8,21 @@ const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{ plugin: DeepReadonly<PluginInfo>, status: string }>()
 
 const { restart, uninstall, showFolder } = usePlugins()
-const community = useCommunityPlugins()
+const store = useStorePlugins()
 const { show } = useToasts()
 const { t } = useI18n()
 
-onMounted(() => community.load())
+onMounted(() => store.load())
 
-const offered = computed(() => community.entryOf(props.plugin.id))
-const updating = computed(() => Boolean(offered.value && community.installing.value.has(offered.value.id)))
+const offered = computed(() => store.entryOf(props.plugin.id))
+const updating = computed(() => Boolean(offered.value && store.installing.value.has(offered.value.id)))
 
 async function update() {
   if (!offered.value) {
     return
   }
   try {
-    await community.install(offered.value.id)
+    await store.install(offered.value.id)
     const version = offered.value?.version
     show(t('plugins.updated'), version
       ? t('plugins.dialog.updatedTo', { name: props.plugin.name, version })
@@ -77,6 +77,9 @@ async function remove() {
         <div class="flex flex-wrap gap-1.5">
           <Badge variant="outline" data-plugin-status>
             {{ props.status }}
+          </Badge>
+          <Badge v-if="props.plugin.runtime !== 'none'" variant="outline" data-plugin-runtime>
+            {{ t(`plugins.runtime.${props.plugin.runtime}`) }}
           </Badge>
         </div>
         <div class="flex flex-col gap-1.5">

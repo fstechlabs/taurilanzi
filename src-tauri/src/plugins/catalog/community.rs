@@ -2,55 +2,27 @@
 //! Only what the catalog lists is fetched: its downloads and its images, nothing the UI asks for.
 
 use std::collections::HashMap;
-use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use ureq::Agent;
 
-use super::images;
-use super::registry::{PACKAGE_SUFFIX, Registry};
+use super::super::registry::{PACKAGE_SUFFIX, Registry};
+use super::entry::{
+    CATALOG_LIMIT, CatalogError, CatalogPlugin, CatalogSource, FRESH_FOR, HERE, Images, Security,
+    System, agent, host_of, installed, newer, save_package,
+};
 use crate::render::ImageData;
 
 pub const CATALOG_URL: &str = "https://narlei.github.io/ulanzicommunitystore/catalog.json";
 /// Points the catalog elsewhere, so tests never reach the real one.
 pub const CATALOG_ENV: &str = "TAURILANZI_COMMUNITY_CATALOG";
 
-const FRESH_FOR: Duration = Duration::from_secs(10 * 60);
-const CATALOG_LIMIT: u64 = 16 * 1024 * 1024;
-const PACKAGE_LIMIT: u64 = 300 * 1024 * 1024;
-const IMAGE_LIMIT: u64 = 16 * 1024 * 1024;
-const IMAGES_KEPT: usize = 96;
 /// Where the store itself accepts packages from; the catalog's own host is added to these.
 const PACKAGE_HOSTS: &[&str] = &["github.com"];
 const PACKAGE_HOST_SUFFIXES: &[&str] = &[".ulanzistudio.com"];
-
-#[derive(Debug, thiserror::Error)]
-pub enum CommunityError {
-    #[error(
-        "{}",
-        trf!("plugins.community.catalog", reason = .0)
-    )]
-    Catalog(String),
-    #[error(
-        "{}",
-        tr!("plugins.community.unknown")
-    )]
-    Unknown,
-    #[error(
-        "{}",
-        trf!("plugins.community.host", host = .0)
-    )]
-    Host(String),
-    #[error(
-        "{}",
-        trf!("plugins.community.download", reason = .0)
-    )]
-    Download(String),
-}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,49 +95,11 @@ struct RawCatalog {
     plugins: Vec<Raw>,
 }
 
-#[derive(Debug, Clone, Serialize, specta::Type)]
-pub struct CommunityPlugin {
-    /// As the catalog names it: the folder of the package.
-    pub id: String,
-    /// The id of the plugin: the one installed, or a guess from the catalog's until then, as
-    /// some packages are named apart from the plugin inside.
-    pub plugin: String,
-    pub name: String,
-    pub author: String,
-    pub version: String,
-    pub description: String,
-    pub long_description: String,
-    pub category: String,
-    pub icon: Option<String>,
-    pub screenshots: Vec<String>,
-    pub tags: Vec<String>,
-    pub changelog: String,
-    pub published_at: Option<String>,
-    pub downloads: u32,
-    pub stars: u32,
-    pub source_url: Option<String>,
-    pub security: Security,
-    /// Also has dials, which the app does not support yet.
-    pub dials: bool,
-    /// The version installed in the app, if it is.
-    pub installed: Option<String>,
-    pub update: bool,
-}
-
-#[derive(Debug, Clone, Serialize, specta::Type)]
-pub struct Security {
-    /// What the store's scanner found: `clean`, `findings` or nothing known.
-    pub status: String,
-    pub critical: u32,
-    pub high: u32,
-    pub secrets: u32,
-}
-
 pub struct Community {
     url: String,
     agent: Agent,
     cached: Mutex<Option<(Instant, Arc<Vec<Raw>>)>>,
-    images: Mutex<HashMap<String, ImageData>>,
+    images: Images,
 }
 
 impl Community {
@@ -178,22 +112,16 @@ impl Community {
         )
     }
 
-    fn at(url: String) -> Self {
-        let agent: Agent = Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(120)))
-            .timeout_connect(Some(Duration::from_secs(10)))
-            .user_agent(crate::version::user_agent())
-            .build()
-            .into();
+    pub(super) fn at(url: String) -> Self {
         Self {
             url,
-            agent,
+            agent: agent(),
             cached: Mutex::new(None),
-            images: Mutex::default(),
+            images: Images::default(),
         }
     }
 
-    fn raw(&self, refresh: bool) -> Result<Arc<Vec<Raw>>, CommunityError> {
+    fn raw(&self, refresh: bool) -> Result<Arc<Vec<Raw>>, CatalogError> {
         let mut cached = self.cached.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some((at, plugins)) = cached.as_ref()
             && !refresh
@@ -211,9 +139,9 @@ impl Community {
                     .limit(CATALOG_LIMIT)
                     .read_to_string()
             })
-            .map_err(|err| CommunityError::Catalog(err.to_string()))?;
+            .map_err(|err| CatalogError::Catalog(err.to_string()))?;
         let catalog: RawCatalog =
-            serde_json::from_str(&text).map_err(|err| CommunityError::Catalog(err.to_string()))?;
+            serde_json::from_str(&text).map_err(|err| CatalogError::Catalog(err.to_string()))?;
         let plugins = Arc::new(catalog.plugins);
         *cached = Some((Instant::now(), Arc::clone(&plugins)));
         Ok(plugins)
@@ -225,9 +153,9 @@ impl Community {
         refresh: bool,
         registry: &Registry,
         language: &str,
-    ) -> Result<Vec<CommunityPlugin>, CommunityError> {
+    ) -> Result<Vec<CatalogPlugin>, CatalogError> {
         let raw = self.raw(refresh)?;
-        let mut plugins: Vec<CommunityPlugin> = raw
+        let mut plugins: Vec<CatalogPlugin> = raw
             .iter()
             .filter(|p| runs_here(p))
             .map(|p| shape(p, registry, language))
@@ -237,52 +165,26 @@ impl Community {
     }
 
     /// Downloads the package of a plugin of the catalog into `folder`, as a ZIP file.
-    pub fn download(&self, id: &str, folder: &Path) -> Result<PathBuf, CommunityError> {
+    pub fn download(&self, id: &str, folder: &Path) -> Result<PathBuf, CatalogError> {
         let raw = self.raw(false)?;
         let plugin = raw
             .iter()
             .find(|p| p.id == id && runs_here(p))
-            .ok_or(CommunityError::Unknown)?;
+            .ok_or(CatalogError::Unknown)?;
         let url = plugin
             .download_url
             .as_deref()
-            .ok_or(CommunityError::Unknown)?;
+            .ok_or(CatalogError::Unknown)?;
         if !self.package_host(url) {
-            return Err(CommunityError::Host(host_of(url).unwrap_or_default()));
+            return Err(CatalogError::Host(host_of(url).unwrap_or_default()));
         }
-        let mut response = self
-            .agent
-            .get(url)
-            .call()
-            .map_err(|err| CommunityError::Download(err.to_string()))?;
-        fs::create_dir_all(folder).map_err(|err| CommunityError::Download(err.to_string()))?;
-        let file = folder.join(format!(".download-{}.zip", uuid::Uuid::new_v4().simple()));
-        let written = (|| -> io::Result<()> {
-            let mut reader = response
-                .body_mut()
-                .with_config()
-                .limit(PACKAGE_LIMIT)
-                .reader();
-            let mut out = fs::File::create(&file)?;
-            io::copy(&mut reader, &mut out)?;
-            Ok(())
-        })();
-        if let Err(err) = written {
-            let _ = fs::remove_file(&file);
-            return Err(CommunityError::Download(err.to_string()));
-        }
-        Ok(file)
+        save_package(&self.agent, url, folder)
     }
 
     /// An image of the catalog: icons and screenshots, never anything else.
     pub fn image(&self, url: &str) -> Option<ImageData> {
-        if let Some(found) = self
-            .images
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get(url)
-        {
-            return Some(found.clone());
+        if let Some(found) = self.images.kept(url) {
+            return Some(found);
         }
         let listed = self.raw(false).ok()?.iter().any(|p| {
             p.icon.as_deref() == Some(url) || p.screenshots.iter().flatten().any(|s| s == url)
@@ -290,19 +192,7 @@ impl Community {
         if !listed || !url.starts_with("https://") && !self.same_host(url) {
             return None;
         }
-        let bytes = self
-            .agent
-            .get(url)
-            .call()
-            .and_then(|mut r| r.body_mut().with_config().limit(IMAGE_LIMIT).read_to_vec())
-            .ok()?;
-        let image = images::from_bytes(bytes)?;
-        let mut kept = self.images.lock().unwrap_or_else(PoisonError::into_inner);
-        if kept.len() >= IMAGES_KEPT {
-            kept.clear();
-        }
-        kept.insert(url.to_owned(), image.clone());
-        Some(image)
+        self.images.fetch(&self.agent, url)
     }
 
     fn same_host(&self, url: &str) -> bool {
@@ -321,52 +211,14 @@ impl Community {
     }
 }
 
-fn host_of(url: &str) -> Option<String> {
-    let rest = url.split_once("://")?.1;
-    let authority = rest.split(['/', '?', '#']).next()?;
-    let host = authority.rsplit('@').next()?;
-    let host = host.split(':').next()?;
-    Some(host.to_ascii_lowercase()).filter(|h| !h.is_empty())
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum System {
-    Mac,
-    Windows,
-    Linux,
-}
-
-const HERE: System = if cfg!(target_os = "windows") {
-    System::Windows
-} else if cfg!(target_os = "linux") {
-    System::Linux
-} else {
-    System::Mac
-};
-
 fn runs_here(plugin: &Raw) -> bool {
     runs_on(plugin, HERE)
 }
 
-/// The catalog lists macOS and Windows only. On Linux the plugins made for both are the ones
-/// that need neither system's own tools.
 fn runs_on(plugin: &Raw, system: System) -> bool {
-    let platforms: Vec<String> = plugin
-        .platforms
-        .as_deref()
-        .unwrap_or_default()
-        .iter()
-        .map(|p| p.to_ascii_lowercase())
-        .collect();
-    let listed = |prefix: &str| platforms.iter().any(|p| p.starts_with(prefix));
     let devices = plugin.device_types.as_deref().unwrap_or_default();
-    let platform = platforms.is_empty()
-        || match system {
-            System::Mac => listed("mac"),
-            System::Windows => listed("win"),
-            System::Linux => listed("linux") || (listed("mac") && listed("win")),
-        };
-    platform && (devices.is_empty() || devices.iter().any(|d| d.eq_ignore_ascii_case("deck")))
+    super::entry::runs_on(plugin.platforms.as_deref().unwrap_or_default(), system)
+        && (devices.is_empty() || devices.iter().any(|d| d.eq_ignore_ascii_case("deck")))
 }
 
 /// The catalog names packages by folder, which is usually the plugin id and the suffix.
@@ -374,15 +226,11 @@ fn plugin_id(id: &str) -> String {
     id.strip_suffix(PACKAGE_SUFFIX).unwrap_or(id).to_owned()
 }
 
-fn shape(raw: &Raw, registry: &Registry, language: &str) -> CommunityPlugin {
+fn shape(raw: &Raw, registry: &Registry, language: &str) -> CatalogPlugin {
     let texts = localized(raw, language);
     let guess = plugin_id(&raw.id);
     let version = raw.version.clone().unwrap_or_default();
-    let found = registry
-        .plugins()
-        .iter()
-        .find(|p| p.folder == raw.id)
-        .or_else(|| registry.plugins().iter().find(|p| p.manifest.uuid == guess));
+    let found = installed(registry, Some(&raw.id), &guess);
     let plugin = found.map_or(guess, |p| p.manifest.uuid.clone());
     let installed = found.map(|p| p.manifest.version.clone());
     let update = installed
@@ -390,8 +238,9 @@ fn shape(raw: &Raw, registry: &Registry, language: &str) -> CommunityPlugin {
         .is_some_and(|have| newer(&version, have));
     let security = raw.security.clone().unwrap_or_default();
     let text = |value: &Option<String>| value.clone().unwrap_or_default();
-    CommunityPlugin {
+    CatalogPlugin {
         id: raw.id.clone(),
+        source: CatalogSource::Community,
         plugin,
         name: texts.name.unwrap_or_else(|| text(&raw.name)),
         author: text(&raw.author),
@@ -399,6 +248,7 @@ fn shape(raw: &Raw, registry: &Registry, language: &str) -> CommunityPlugin {
         description: texts.description.unwrap_or_else(|| text(&raw.description)),
         long_description: text(&raw.long_description),
         category: text(&raw.category),
+        kind: None,
         icon: raw.icon.clone().filter(|i| !i.is_empty()),
         screenshots: raw.screenshots.clone().unwrap_or_default(),
         tags: raw.tags.clone().unwrap_or_default(),
@@ -447,92 +297,19 @@ fn localized(raw: &Raw, language: &str) -> Texts {
     }
 }
 
-/// Whether `offered` is a later version than `installed`, comparing the numbers in order.
-pub fn newer(offered: &str, installed: &str) -> bool {
-    let parts = |v: &str| -> Vec<u64> {
-        v.trim()
-            .trim_start_matches(['v', 'V'])
-            .split(['.', '-', '+'])
-            .map_while(|p| p.parse().ok())
-            .collect()
-    };
-    let (a, b) = (parts(offered), parts(installed));
-    if a.is_empty() {
-        return false;
-    }
-    for i in 0..a.len().max(b.len()) {
-        let (x, y) = (
-            a.get(i).copied().unwrap_or(0),
-            b.get(i).copied().unwrap_or(0),
-        );
-        if x != y {
-            return x > y;
-        }
-    }
-    false
-}
-
 #[cfg(test)]
 mod tests {
-    use std::io::{BufRead, BufReader, Write};
-    use std::net::TcpListener;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::io::{self, Write};
 
     use serde_json::{Value, json};
 
+    use super::super::fake_store::{FakeStore, SVG, serve};
     use super::*;
 
-    const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>"#;
-
-    struct Server {
-        base: String,
-        hits: Arc<AtomicUsize>,
-    }
-
-    impl Server {
-        fn hits(&self) -> usize {
-            self.hits.load(Ordering::SeqCst)
-        }
-
+    impl FakeStore {
         fn community(&self) -> Community {
             Community::at(format!("{}/catalog.json", self.base))
         }
-    }
-
-    /// Serves the files `files` makes from the server's address, and counts the requests.
-    fn serve(files: impl FnOnce(&str) -> HashMap<String, Vec<u8>>) -> Server {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let base = format!("http://{}", listener.local_addr().unwrap());
-        let files = files(&base);
-        let hits = Arc::new(AtomicUsize::new(0));
-        let counter = Arc::clone(&hits);
-        std::thread::spawn(move || {
-            for stream in listener.incoming().flatten() {
-                counter.fetch_add(1, Ordering::SeqCst);
-                let mut reader = BufReader::new(&stream);
-                let mut line = String::new();
-                let _ = reader.read_line(&mut line);
-                let path = line.split(' ').nth(1).unwrap_or_default().to_owned();
-                loop {
-                    let mut header = String::new();
-                    if reader.read_line(&mut header).unwrap_or(0) <= 2 {
-                        break;
-                    }
-                }
-                let (status, body) = match files.get(&path) {
-                    Some(body) => ("200 OK", body.as_slice()),
-                    None => ("404 Not Found", &[][..]),
-                };
-                let mut stream = &stream;
-                let _ = write!(
-                    stream,
-                    "HTTP/1.1 {status}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
-                    body.len()
-                );
-                let _ = stream.write_all(body);
-            }
-        });
-        Server { base, hits }
     }
 
     fn catalog(plugins: Value) -> HashMap<String, Vec<u8>> {
@@ -692,7 +469,7 @@ mod tests {
         let zip = community
             .download("com.a.b.ulanziPlugin", dir.path())
             .unwrap();
-        let id = super::super::install::install(&zip, &plugins).unwrap();
+        let id = super::super::super::install::install(&zip, &plugins).unwrap();
         assert_eq!(id, "com.a.b.plugin");
 
         let registry = Registry::scan(&plugins, "es");
@@ -710,11 +487,11 @@ mod tests {
 
         assert!(matches!(
             community.download("com.a.far.ulanziPlugin", dir.path()),
-            Err(CommunityError::Host(host)) if host == "example.com"
+            Err(CatalogError::Host(host)) if host == "example.com"
         ));
         assert!(matches!(
             community.download("com.a.missing.ulanziPlugin", dir.path()),
-            Err(CommunityError::Unknown)
+            Err(CatalogError::Unknown)
         ));
 
         let icon = community
@@ -747,7 +524,7 @@ mod tests {
         assert!(community.image(&icon).is_some(), "{icon}");
         let dir = tempfile::tempdir().unwrap();
         let zip = community.download(&plugins[0].id, dir.path()).unwrap();
-        super::super::install::install(&zip, &dir.path().join("plugins")).unwrap();
+        super::super::super::install::install(&zip, &dir.path().join("plugins")).unwrap();
     }
 
     #[test]

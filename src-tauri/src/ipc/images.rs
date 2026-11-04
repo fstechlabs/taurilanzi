@@ -7,7 +7,7 @@
 //! - `/screensaver/{scene}?width={pixels}`: how the dock looks with that screensaver.
 //! - `/app-icon/{app id}`: the icon of an installed app, for the apps linked to profiles.
 //! - `/plugin/{plugin id}/{path}`: an image of a plugin's package, for its icons.
-//! - `/community?url={url}`: an icon or screenshot of the community catalog.
+//! - `/store?url={url}`: an icon or screenshot of a plugin store.
 //!
 //! Windows reaches the same paths at `http://deck.localhost/`.
 
@@ -123,7 +123,7 @@ async fn respond(
                 .body(image.bytes.to_vec())
                 .expect("plugin image response"))
         }
-        ["community"] => {
+        ["store"] => {
             let url = query_value(query, "url")
                 .ok_or_else(not_found)?
                 .into_owned();
@@ -131,14 +131,14 @@ async fn respond(
                 .try_state::<Option<Arc<Plugins>>>()
                 .and_then(|state| state.inner().clone())
                 .ok_or_else(not_found)?;
-            let image = tauri::async_runtime::spawn_blocking(move || plugins.community_image(&url))
+            let image = tauri::async_runtime::spawn_blocking(move || plugins.store_image(&url))
                 .await
                 .ok()
                 .flatten()
                 .ok_or_else(not_found)?;
             Ok(response(image.format.mime(), "max-age=86400")
                 .body(image.bytes.to_vec())
-                .expect("community image response"))
+                .expect("store image response"))
         }
         _ => Err(not_found()),
     }

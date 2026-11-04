@@ -1,9 +1,11 @@
 //! Runs the main service of each plugin as Ulanzi Studio does: Node with
-//! `<CodePath> <address> <port> <language> <version>` from the plugin folder, or the page of an
-//! HTML plugin with the same values in its query. A process that stops is started again, waiting
-//! longer each time.
+//! `<CodePath> <address> <port> <language> <version>` from the plugin folder, Python with the
+//! same arguments after the whole path of its script, or the page of an HTML plugin with those
+//! values in its query. A process that stops is started again, waiting longer each time.
 
 use std::collections::HashMap;
+use std::env;
+use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -20,6 +22,7 @@ use super::desktop::Desktop;
 use super::hub::urlencode;
 use super::manifest::Runtime;
 use super::node::Node;
+use super::python::Python;
 use super::registry::Plugin;
 
 /// The version plugins are told the host is: the Ulanzi Studio they were tested against.
@@ -28,6 +31,9 @@ const FIRST_RETRY: Duration = Duration::from_secs(1);
 const LAST_RETRY: Duration = Duration::from_secs(60);
 /// Running this long counts as working: the next failure retries quickly again.
 const STABLE: Duration = Duration::from_secs(30);
+/// Options meant for whatever started the app (a debugger, a test runner) would break the
+/// plugin; Ulanzi Studio starts them with a clean Node.
+const NODE_OPTIONS: &[&str] = &["NODE_OPTIONS", "NODE_PATH", "NODE_ENV"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(tag = "state", rename_all = "snake_case")]
@@ -53,19 +59,36 @@ struct Process {
     state: Arc<Mutex<RunState>>,
 }
 
+/// A program to start for a plugin, from its folder.
+#[derive(Debug, Clone)]
+struct Program {
+    path: PathBuf,
+    args: Vec<String>,
+    env: Vec<(String, OsString)>,
+    /// Variables of the app's environment the plugin must not see.
+    hidden: Vec<OsString>,
+}
+
 /// macOS and Linux give an orphan another parent, so a plugin whose app was killed sees its
 /// parent change; Windows keeps the old id, so the parent is also checked to be alive.
 const WATCHDOG: &str = "const parent = process.ppid;\nsetInterval(() => {\n  let gone = process.ppid !== parent;\n  try { process.kill(parent, 0); } catch { gone = true; }\n  if (gone) process.exit(0);\n}, 1000).unref();\n";
 
+/// The same for Python, which loads `sitecustomize` from its path before the plugin. Windows
+/// needs none: the job object ends plugins there.
+const PYTHON_WATCHDOG: &str = "import os, threading, time\n\nif os.name != \"nt\":\n    _parent = os.getppid()\n\n    def _watch():\n        while True:\n            time.sleep(1)\n            if os.getppid() != _parent:\n                os._exit(0)\n\n    threading.Thread(target=_watch, name=\"host-watchdog\", daemon=True).start()\n";
+
 pub struct Launcher {
     node: Option<Node>,
+    python: Option<Python>,
     desktop: Arc<dyn Desktop>,
     port: u16,
     language: String,
     logs: PathBuf,
     pids: PathBuf,
-    /// Loaded before each plugin: ends it when the app is gone.
+    /// Loaded before each Node plugin: ends it when the app is gone.
     watchdog: Option<PathBuf>,
+    /// The folder of the Python watchdog, last in the path of each Python plugin.
+    python_watchdog: Option<PathBuf>,
     processes: Arc<Mutex<HashMap<String, Process>>>,
     pages: Mutex<Vec<String>>,
 }
@@ -73,6 +96,7 @@ pub struct Launcher {
 impl Launcher {
     pub fn new(
         node: Option<Node>,
+        python: Option<Python>,
         desktop: Arc<dyn Desktop>,
         port: u16,
         language: String,
@@ -88,9 +112,21 @@ impl Launcher {
                 None
             }
         };
+        let python_watchdog = data_dir.join("plugin-python");
+        let python_watchdog = match fs::create_dir_all(&python_watchdog)
+            .and_then(|()| fs::write(python_watchdog.join("sitecustomize.py"), PYTHON_WATCHDOG))
+        {
+            Ok(()) => Some(python_watchdog),
+            Err(err) => {
+                warn!("Python plugins will outlive a crash of the app: {err}");
+                None
+            }
+        };
         Self {
             watchdog,
+            python_watchdog,
             node,
+            python,
             desktop,
             port,
             language,
@@ -105,11 +141,22 @@ impl Launcher {
         self.node.as_ref()
     }
 
+    pub fn python(&self) -> Option<&Python> {
+        self.python.as_ref()
+    }
+
     pub fn start(&self, plugin: &Plugin) {
         let id = plugin.manifest.uuid.clone();
         self.stop(&id);
         match &plugin.runtime {
-            Runtime::Node(code) => self.start_node(&id, &plugin.dir, code),
+            Runtime::Node(code) => match self.node_program(&plugin.dir, code) {
+                Some(program) => self.supervise(&id, &plugin.dir, program),
+                None => warn!("plugin {id} needs Node and none was found"),
+            },
+            Runtime::Python(code) => match self.python_program(code) {
+                Some(program) => self.supervise(&id, &plugin.dir, program),
+                None => warn!("plugin {id} needs Python and none was found"),
+            },
             Runtime::Html(page) => {
                 let url = format!(
                     "http://127.0.0.1:{port}/plugins/{folder}/{page}?address=127.0.0.1&port={port}&language={language}&uuid={id}",
@@ -125,15 +172,16 @@ impl Launcher {
                     .unwrap_or_else(PoisonError::into_inner)
                     .push(id);
             }
-            Runtime::Python(_) | Runtime::None => {}
+            Runtime::None => {}
         }
+        self.install_deps(plugin);
     }
 
     pub fn state(&self, plugin: &Plugin) -> RunState {
         match &plugin.runtime {
             Runtime::None => RunState::Passive,
-            Runtime::Python(_) => RunState::Unavailable {
-                reason: tr!("plugins.launcher.python").into(),
+            Runtime::Python(_) if self.python.is_none() => RunState::Unavailable {
+                reason: tr!("plugins.launcher.needsPython").into(),
             },
             Runtime::Node(_) if self.node.is_none() => RunState::Unavailable {
                 reason: tr!("plugins.launcher.needsNode").into(),
@@ -146,7 +194,7 @@ impl Launcher {
                     RunState::Stopped
                 }
             }
-            Runtime::Node(_) => self
+            Runtime::Node(_) | Runtime::Python(_) => self
                 .processes
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
@@ -207,11 +255,107 @@ impl Launcher {
         }
     }
 
-    fn start_node(&self, id: &str, dir: &Path, code: &Path) {
-        let Some(node) = self.node.clone() else {
-            warn!("plugin {id} needs Node and none was found");
+    fn node_program(&self, dir: &Path, code: &Path) -> Option<Program> {
+        let node = self.node.as_ref()?;
+        let mut args: Vec<String> = self
+            .watchdog
+            .iter()
+            .flat_map(|w| ["--require".into(), w.to_string_lossy().into_owned()])
+            .collect();
+        // Relative, from the plugin folder, as Ulanzi Studio starts them: some plugins only run
+        // when the path they were given is the one they resolve to.
+        args.push(
+            code.strip_prefix(dir)
+                .unwrap_or(code)
+                .to_string_lossy()
+                .into_owned(),
+        );
+        args.extend(self.host_arguments());
+        Some(Program {
+            path: node.path.clone(),
+            args,
+            env: Vec::new(),
+            hidden: NODE_OPTIONS.iter().map(OsString::from).collect(),
+        })
+    }
+
+    /// As Ulanzi Studio starts them: the whole path of the script, its folder first in the
+    /// path, and no bytecode written next to it.
+    fn python_program(&self, code: &Path) -> Option<Program> {
+        let python = self.python.as_ref()?;
+        let folders = code
+            .parent()
+            .map(Path::to_path_buf)
+            .into_iter()
+            .chain(self.python_watchdog.clone());
+        let path = env::join_paths(folders).ok()?;
+        let mut args = vec![code.to_string_lossy().into_owned()];
+        args.extend(self.host_arguments());
+        Some(Program {
+            path: python.path.clone(),
+            args,
+            env: vec![
+                ("PYTHONPATH".into(), path),
+                ("PYTHONDONTWRITEBYTECODE".into(), "1".into()),
+                // So the log has what a plugin printed before it stopped, in any language.
+                ("PYTHONUNBUFFERED".into(), "1".into()),
+                ("PYTHONIOENCODING".into(), "utf-8".into()),
+            ],
+            // A Python installed on the computer would point the bundled one at its own files.
+            hidden: env::vars_os()
+                .map(|(name, _)| name)
+                .filter(|name| name.to_string_lossy().starts_with("PYTHON"))
+                .collect(),
+        })
+    }
+
+    fn host_arguments(&self) -> [String; 4] {
+        [
+            "127.0.0.1".into(),
+            self.port.to_string(),
+            self.language.clone(),
+            HOST_VERSION.into(),
+        ]
+    }
+
+    /// Runs the `InstallToDepsApp` script of a plugin as Ulanzi Studio does, `<script> --silent`
+    /// with Node, without waiting for it.
+    fn install_deps(&self, plugin: &Plugin) {
+        let Some(script) = plugin.manifest.deps_installer(&plugin.dir) else {
             return;
         };
+        let id = plugin.manifest.uuid.clone();
+        let Some(node) = self.node.as_ref() else {
+            warn!("plugin {id} sets up its app with Node and none was found");
+            return;
+        };
+        if !script.is_file() {
+            warn!("plugin {id} names a setup script that is not there");
+            return;
+        }
+        let program = Program {
+            path: node.path.clone(),
+            args: vec![script.to_string_lossy().into_owned(), "--silent".into()],
+            env: Vec::new(),
+            hidden: NODE_OPTIONS.iter().map(OsString::from).collect(),
+        };
+        let dir = plugin.dir.clone();
+        let log = self.logs.join(format!("{id}.setup.log"));
+        let spawned = thread::Builder::new()
+            .name(format!("plugin setup {id}"))
+            .spawn(move || match spawn(&program, &dir, &log, Stdio::null()) {
+                Ok(mut child) => {
+                    info!("plugin {id} sets up its app (pid {})", child.id());
+                    let _ = child.wait();
+                }
+                Err(err) => warn!("plugin {id} could not set up its app: {err}"),
+            });
+        if let Err(err) = spawned {
+            warn!("could not set up the app of a plugin: {err}");
+        }
+    }
+
+    fn supervise(&self, id: &str, dir: &Path, program: Program) {
         let process = Process {
             child: Arc::default(),
             stop: Arc::default(),
@@ -225,23 +369,6 @@ impl Launcher {
             .unwrap_or_else(PoisonError::into_inner)
             .insert(id.to_owned(), process);
         let id = id.to_owned();
-        let mut args: Vec<String> = self
-            .watchdog
-            .iter()
-            .flat_map(|w| ["--require".into(), w.to_string_lossy().into_owned()])
-            .collect();
-        args.extend([
-            // Relative, from the plugin folder, as Ulanzi Studio starts them: some plugins only
-            // run when the path they were given is the one they resolve to.
-            code.strip_prefix(dir)
-                .unwrap_or(code)
-                .to_string_lossy()
-                .into_owned(),
-            "127.0.0.1".into(),
-            self.port.to_string(),
-            self.language.clone(),
-            HOST_VERSION.into(),
-        ]);
         let dir = dir.to_path_buf();
         let log = self.logs.join(format!("{id}.out.log"));
         let pids = self.pids.clone();
@@ -253,7 +380,10 @@ impl Launcher {
                 let mut restarts = 0;
                 while !stop.load(Ordering::SeqCst) {
                     let started = Instant::now();
-                    match spawn_node(&node.path, &args, &dir, &log) {
+                    // Open for as long as the child is kept, as Ulanzi Studio leaves it: some
+                    // plugins stop when their input closes, which also tells them when the app
+                    // is gone.
+                    match spawn(&program, &dir, &log, Stdio::piped()) {
                         Ok(spawned) => {
                             info!("plugin {id} started (pid {})", spawned.id());
                             *child.lock().unwrap_or_else(PoisonError::into_inner) = Some(spawned);
@@ -319,28 +449,25 @@ fn pids_of(processes: &Mutex<HashMap<String, Process>>) -> Vec<u32> {
         .collect()
 }
 
-fn spawn_node(node: &Path, args: &[String], dir: &Path, log: &Path) -> std::io::Result<Child> {
+fn spawn(program: &Program, dir: &Path, log: &Path, stdin: Stdio) -> std::io::Result<Child> {
     if let Some(parent) = log.parent() {
         fs::create_dir_all(parent)?;
     }
     let out = OpenOptions::new().create(true).append(true).open(log)?;
     let err = out.try_clone()?;
-    // Options meant for whatever started the app (a debugger, a test runner) would break the
-    // plugin; Ulanzi Studio starts them with a clean Node.
-    let mut command = Command::new(node);
-    command
-        .args(args)
-        .current_dir(dir)
-        .env_remove("NODE_OPTIONS")
-        .env_remove("NODE_PATH")
-        .env_remove("NODE_ENV")
-        // Open for as long as the child is kept, as Ulanzi Studio leaves it: some plugins stop
-        // when their input closes, which also tells them when the app is gone.
-        .stdin(Stdio::piped())
-        .stdout(out)
-        .stderr(err);
+    let mut command = Command::new(&program.path);
     #[cfg(target_os = "linux")]
     crate::os::linux::outside_bundle(&mut command);
+    for name in &program.hidden {
+        command.env_remove(name);
+    }
+    command
+        .args(&program.args)
+        .envs(program.env.iter().map(|(name, value)| (name, value)))
+        .current_dir(dir)
+        .stdin(stdin)
+        .stdout(out)
+        .stderr(err);
     #[cfg(target_os = "windows")]
     crate::os::windows::without_console(&mut command);
     let child = command.spawn()?;
@@ -355,7 +482,7 @@ fn write_pids(file: &Path, pids: &[u32]) {
 }
 
 /// Plugins left running by a copy of the app that did not close cleanly. Only processes still
-/// running Node with a plugin are killed, never a process that reused the id.
+/// running Node or Python with a plugin are killed, never a process that reused the id.
 fn kill_leftovers(file: &Path) {
     let Ok(text) = fs::read_to_string(file) else {
         return;
@@ -381,7 +508,8 @@ fn kill_leftovers(file: &Path) {
             .map(|arg| arg.to_string_lossy())
             .collect::<Vec<_>>()
             .join(" ");
-        if command.contains("node") && command.contains(".ulanziPlugin") {
+        let runtime = command.contains("node") || command.contains("python");
+        if runtime && command.contains(".ulanziPlugin") {
             info!("stopping plugin process {pid} left from before");
             // Windows has no signal to ask a process to end.
             if process.kill_with(Signal::Term).is_none() {
@@ -412,7 +540,160 @@ mod tests {
     }
 
     fn launcher(dir: &Path) -> Launcher {
-        Launcher::new(None, Arc::new(Headless), 0, "es".into(), dir)
+        Launcher::new(None, None, Arc::new(Headless), 0, "es".into(), dir)
+    }
+
+    fn manifest_plugin(dir: &Path, manifest: serde_json::Value) -> Plugin {
+        fs::create_dir_all(dir).unwrap();
+        fs::write(dir.join("manifest.json"), manifest.to_string()).unwrap();
+        let manifest = Manifest::read(dir).unwrap();
+        Plugin {
+            runtime: manifest.runtime(dir),
+            manifest,
+            dir: dir.to_path_buf(),
+            folder: "com.a.b.c.ulanziPlugin".into(),
+        }
+    }
+
+    /// Waits for a file a plugin writes when it starts.
+    fn written(file: &Path) -> String {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while Instant::now() < deadline {
+            if let Ok(text) = fs::read_to_string(file)
+                && !text.is_empty()
+            {
+                return text;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        panic!("{} was never written", file.display());
+    }
+
+    #[test]
+    fn python_runs_the_whole_path_of_the_script_with_its_folder_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let python = Python {
+            path: PathBuf::from("/opt/python/bin/python3"),
+            version: "3.14.10".into(),
+        };
+        let launcher = Launcher::new(
+            None,
+            Some(python),
+            Arc::new(Headless),
+            3906,
+            "es".into(),
+            dir.path(),
+        );
+        let code = dir.path().join("p.ulanziPlugin/plugin/app.py");
+        let program = launcher.python_program(&code).unwrap();
+        assert_eq!(program.path, PathBuf::from("/opt/python/bin/python3"));
+        assert_eq!(
+            program.args,
+            vec![
+                code.to_string_lossy().into_owned(),
+                "127.0.0.1".into(),
+                "3906".into(),
+                "es".into(),
+                HOST_VERSION.into()
+            ]
+        );
+        let env: HashMap<&str, &OsString> =
+            program.env.iter().map(|(k, v)| (k.as_str(), v)).collect();
+        let path: Vec<PathBuf> = env::split_paths(env["PYTHONPATH"]).collect();
+        assert_eq!(
+            path,
+            vec![
+                code.parent().unwrap().to_path_buf(),
+                dir.path().join("plugin-python")
+            ]
+        );
+        assert_eq!(env["PYTHONDONTWRITEBYTECODE"], "1");
+        assert!(
+            fs::read_to_string(dir.path().join("plugin-python/sitecustomize.py"))
+                .unwrap()
+                .contains("getppid")
+        );
+        assert!(launcher.python().is_some());
+    }
+
+    #[test]
+    fn runs_a_python_plugin_with_the_bundled_python() {
+        let Some(python) = super::super::python::find(None) else {
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let plugin = manifest_plugin(
+            &dir.path().join("p.ulanziPlugin"),
+            json!({ "UUID": "com.a.b.c", "CodePath": "plugin/main", "Type": "Python" }),
+        );
+        let script = "import json, os, sys, websockets\n\
+                      json.dump({'argv': sys.argv[1:], 'first': sys.path[0], 'watchdog': 'sitecustomize' in sys.modules}, open(os.path.join(os.path.dirname(__file__), 'ran.json'), 'w'))\n\
+                      import time\n\
+                      time.sleep(30)\n";
+        fs::create_dir_all(plugin.dir.join("plugin")).unwrap();
+        fs::write(plugin.dir.join("plugin/main"), script).unwrap();
+        let launcher = Launcher::new(
+            None,
+            Some(python),
+            Arc::new(Headless),
+            3906,
+            "es".into(),
+            dir.path(),
+        );
+        launcher.start(&plugin);
+        let ran: serde_json::Value =
+            serde_json::from_str(&written(&plugin.dir.join("plugin/ran.json"))).unwrap();
+        assert_eq!(
+            ran["argv"],
+            json!(["127.0.0.1", "3906", "es", HOST_VERSION])
+        );
+        assert_eq!(
+            PathBuf::from(ran["first"].as_str().unwrap()).file_name(),
+            Some("plugin".as_ref())
+        );
+        assert_eq!(ran["watchdog"], true);
+        assert_eq!(launcher.state(&plugin), RunState::Running);
+        launcher.stop_all();
+        assert_eq!(launcher.state(&plugin), RunState::Stopped);
+        assert!(
+            !plugin.dir.join("plugin/__pycache__").exists(),
+            "no bytecode next to the plugin"
+        );
+    }
+
+    #[test]
+    fn runs_the_setup_script_with_node_each_time_the_plugin_starts() {
+        let Some(node) = super::super::node::find(None) else {
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let plugin = manifest_plugin(
+            &dir.path().join("p.ulanziPlugin"),
+            json!({
+                "UUID": "com.a.b.c",
+                "InstallToDepsApp": { "Type": "JavaScript", "CodePath": "setup/install.js" },
+            }),
+        );
+        fs::create_dir_all(plugin.dir.join("setup")).unwrap();
+        fs::write(
+            plugin.dir.join("setup/install.js"),
+            "require('fs').writeFileSync(__dirname + '/ran.json', JSON.stringify(process.argv.slice(2)))",
+        )
+        .unwrap();
+        let launcher = Launcher::new(
+            Some(node),
+            None,
+            Arc::new(Headless),
+            0,
+            "es".into(),
+            dir.path(),
+        );
+        launcher.start(&plugin);
+        assert_eq!(
+            written(&plugin.dir.join("setup/ran.json")),
+            r#"["--silent"]"#
+        );
+        assert_eq!(launcher.state(&plugin), RunState::Passive);
     }
 
     #[test]

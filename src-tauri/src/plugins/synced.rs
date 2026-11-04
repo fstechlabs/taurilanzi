@@ -1,5 +1,5 @@
 //! What sync with the cloud needs of the plugins: which are installed and where they came from,
-//! and installing from the community catalog what the other computers have.
+//! and installing from the stores what the other computers have.
 
 use std::collections::BTreeMap;
 
@@ -16,9 +16,9 @@ impl PluginInstaller for Plugins {
     }
 
     fn catalog_of(&self, plugin: &str) -> Option<Option<String>> {
-        let community = self.community(false).ok()?;
+        let store = self.store(false).ok()?;
         Some(
-            community
+            store
                 .into_iter()
                 .find(|entry| entry.installed.is_some() && entry.plugin == plugin)
                 .map(|entry| entry.id),
@@ -26,10 +26,10 @@ impl PluginInstaller for Plugins {
     }
 
     fn install(&self, catalog: &str) -> Result<Option<String>, String> {
-        let community = self.community(false).map_err(|err| err.to_string())?;
-        if !community.iter().any(|entry| entry.id == catalog) {
+        let store = self.store(false).map_err(|err| err.to_string())?;
+        if !store.iter().any(|entry| entry.id == catalog) {
             return Ok(None);
         }
-        self.install_community(catalog).map(Some)
+        self.install_from_store(catalog).map(Some)
     }
 }

@@ -118,12 +118,12 @@ export const commands = {
 	/**  Opens the app's plugin folder in the file manager. */
 	showPluginsFolder: () => typedError<null, IpcError>(__TAURI_INVOKE("show_plugins_folder")),
 	/**
-	 *  The plugins of the community catalog that run here. Read again after a while, or at once
-	 *  with `refresh`.
+	 *  The plugins of the stores that run here. Read again after a while, or at once with
+	 *  `refresh`.
 	 */
-	communityPlugins: (refresh: boolean) => typedError<CommunityPlugin[], IpcError>(__TAURI_INVOKE("community_plugins", { refresh })),
-	/**  Downloads a plugin of the community catalog and installs it, or updates it. Returns its id. */
-	installCommunityPlugin: (id: string) => typedError<string, IpcError>(__TAURI_INVOKE("install_community_plugin", { id })),
+	storePlugins: (refresh: boolean) => typedError<CatalogPlugin[], IpcError>(__TAURI_INVOKE("store_plugins", { refresh })),
+	/**  Downloads a plugin of a store and installs it, or updates it. Returns its id. */
+	installStorePlugin: (id: string) => typedError<string, IpcError>(__TAURI_INVOKE("install_store_plugin", { id })),
 	updateOffer: () => __TAURI_INVOKE<UpdateOffer | null>("update_offer"),
 	installUpdate: () => __TAURI_INVOKE<void>("install_update"),
 	remindUpdateLater: () => __TAURI_INVOKE<void>("remind_update_later"),
@@ -235,6 +235,46 @@ export type Background = { type: "solid"; color: Color } |
 /**  `angle` in degrees, 0 = left to right, 90 = top to bottom. */
 { type: "linear_gradient"; from: Color; to: Color; angle: number };
 
+export type CatalogPlugin = {
+	/**  Unique in every store: the folder of the package in the community one. */
+	id: string,
+	source: CatalogSource,
+	/**
+	 *  The id of the plugin: the one installed, or the one the store gives until then, as some
+	 *  packages are named apart from the plugin inside.
+	 */
+	plugin: string,
+	name: string,
+	author: string,
+	version: string,
+	description: string,
+	long_description: string,
+	/**  As the store names it. */
+	category: string,
+	kind: PluginKind | null,
+	icon: string | null,
+	screenshots: string[],
+	tags: string[],
+	changelog: string,
+	published_at: string | null,
+	downloads: number,
+	stars: number,
+	source_url: string | null,
+	security: Security,
+	/**  Also has dials, which the app does not support yet. */
+	dials: boolean,
+	/**  The version installed in the app, if it is. */
+	installed: string | null,
+	update: boolean,
+};
+
+/**  The store a plugin comes from. */
+export type CatalogSource = 
+/**  Ulanzi's own Marketplace, the one in Ulanzi Studio. */
+"ulanzi" | 
+/**  The Ulanzi Community Store. */
+"community";
+
 /**  What a digital clock shows under the time. */
 export type ClockLine = "none" | "date" | "weekday" | "weekday_date";
 
@@ -278,36 +318,6 @@ export type Color = {
 	r: number,
 	g: number,
 	b: number,
-};
-
-export type CommunityPlugin = {
-	/**  As the catalog names it: the folder of the package. */
-	id: string,
-	/**
-	 *  The id of the plugin: the one installed, or a guess from the catalog's until then, as
-	 *  some packages are named apart from the plugin inside.
-	 */
-	plugin: string,
-	name: string,
-	author: string,
-	version: string,
-	description: string,
-	long_description: string,
-	category: string,
-	icon: string | null,
-	screenshots: string[],
-	tags: string[],
-	changelog: string,
-	published_at: string | null,
-	downloads: number,
-	stars: number,
-	source_url: string | null,
-	security: Security,
-	/**  Also has dials, which the app does not support yet. */
-	dials: boolean,
-	/**  The version installed in the app, if it is. */
-	installed: string | null,
-	update: boolean,
 };
 
 /**
@@ -830,6 +840,8 @@ export type PluginCatalog = {
 	port: number,
 	/**  The Node that runs plugins, if one was found. */
 	node: string | null,
+	/**  The Python that runs plugins, if one was found. */
+	python: string | null,
 	language: string,
 	plugins: PluginInfo[],
 };
@@ -846,11 +858,20 @@ export type PluginInfo = {
 	icon: string | null,
 	/**  The package folder, ending in `.ulanziPlugin`. */
 	folder: string,
+	/**  What runs its main service. */
+	runtime: PluginRuntime,
 	run: RunState,
 	/**  Its main service is connected to the host. */
 	connected: boolean,
 	actions: PluginActionInfo[],
 };
+
+/**  What a plugin is for, in the categories every store's are brought to. */
+export type PluginKind = "tools" | "streaming" | "office" | "creative" | "lighting" | "ai";
+
+export type PluginRuntime = "node" | "html" | "python" | 
+/**  Nothing runs: images only. */
+"none";
 
 /**  A plugin wants to tell the user something. */
 export type PluginToast = {

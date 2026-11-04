@@ -29,6 +29,8 @@ const BODY_LIMIT: usize = 32 * 1024 * 1024;
 const READ_TIMEOUT: Duration = Duration::from_millis(30);
 const SHIM: &str = include_str!("shim.js");
 const SHIM_PATH: &str = "/__taurilanzi/shim.js";
+const THEME: &str = include_str!("theme.css");
+const THEME_PATH: &str = "/__taurilanzi/theme.css";
 const PROXY_PATH: &str = "/__taurilanzi/proxy";
 const TOKEN_HEADER: &str = "x-taurilanzi-token";
 const TARGET_HEADER: &str = "x-taurilanzi-target";
@@ -89,6 +91,8 @@ fn serve(mut stream: TcpStream, host: &PluginHost, token: &str, port: u16) {
         proxy(&mut stream, request, token)
     } else if request.path == SHIM_PATH {
         respond(&mut stream, 200, "text/javascript", SHIM.as_bytes())
+    } else if request.path == THEME_PATH {
+        respond(&mut stream, 200, "text/css", THEME.as_bytes())
     } else if let Some(rest) = request.path.strip_prefix("/plugins/") {
         let registry = host.registry();
         file(&mut stream, &registry, rest, token)
@@ -235,11 +239,12 @@ fn file(
     }
 }
 
-/// The token and the shim go first in the page, before any script of the plugin runs.
+/// The token and the shim go first in the page, before any script of the plugin runs, and the
+/// app's colors for its stylesheets with them.
 fn with_shim(html: &[u8], token: &str) -> Vec<u8> {
     let text = String::from_utf8_lossy(html);
     let tag = format!(
-        r#"<script>window.__TAURILANZI__={{proxy:"{PROXY_PATH}",token:"{token}"}};</script><script src="{SHIM_PATH}"></script>"#
+        r#"<script>window.__TAURILANZI__={{proxy:"{PROXY_PATH}",token:"{token}"}};</script><script src="{SHIM_PATH}"></script><link rel="stylesheet" href="{THEME_PATH}">"#
     );
     let lower = text.to_ascii_lowercase();
     let at = lower
@@ -936,7 +941,7 @@ mod tests {
         let token = token(host.port);
         assert_eq!(token.len(), 32);
         let tag = format!(
-            r#"<script>window.__TAURILANZI__={{proxy:"/__taurilanzi/proxy",token:"{token}"}};</script><script src="/__taurilanzi/shim.js"></script>"#
+            r#"<script>window.__TAURILANZI__={{proxy:"/__taurilanzi/proxy",token:"{token}"}};</script><script src="/__taurilanzi/shim.js"></script><link rel="stylesheet" href="/__taurilanzi/theme.css">"#
         );
         assert_eq!(
             String::from_utf8(body).unwrap(),
@@ -953,6 +958,10 @@ mod tests {
         let (status, _, body) = get(host.port, "/__taurilanzi/shim.js");
         assert_eq!(status, 200);
         assert_eq!(body, SHIM.as_bytes());
+        let (status, headers, body) = get(host.port, "/__taurilanzi/theme.css");
+        assert_eq!(status, 200);
+        assert!(headers["content-type"].starts_with("text/css"));
+        assert_eq!(body, THEME.as_bytes());
 
         for path in [
             format!("/plugins/{FOLDER}/../{FOLDER}/manifest.json"),
@@ -974,7 +983,7 @@ mod tests {
             page.starts_with("<html><HEAD lang=\"es\"><script>window.__TAURILANZI__="),
             "{page}"
         );
-        assert!(page.ends_with("</script><title>x</title>"), "{page}");
+        assert!(page.ends_with(r#"theme.css"><title>x</title>"#), "{page}");
         let bare = String::from_utf8(with_shim(b"<p>x</p>", "t")).unwrap();
         assert!(
             bare.starts_with("<script>") && bare.ends_with("<p>x</p>"),

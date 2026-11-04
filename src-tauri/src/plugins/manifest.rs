@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_json::Value;
 
-/// Main service of the plugin: the file extension of `CodePath` decides how it runs.
+/// Main service of the plugin. As in Ulanzi Studio, the extension of `CodePath` decides how it
+/// runs, and `Type` tells Python apart when the extension does not.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Runtime {
     Node(PathBuf),
@@ -37,8 +38,24 @@ pub struct Manifest {
     pub category: String,
     #[serde(default)]
     pub code_path: String,
+    /// `JavaScript` or `Python`.
+    #[serde(rename = "Type", default)]
+    pub kind: String,
     #[serde(default)]
     pub actions: Vec<ActionManifest>,
+    /// A script that sets up the app the plugin works with, such as a remote script for a music
+    /// app. Ulanzi Studio runs it each time the plugin starts.
+    #[serde(default)]
+    pub install_to_deps_app: Option<DepsInstaller>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct DepsInstaller {
+    #[serde(rename = "Type", default)]
+    pub kind: String,
+    #[serde(default)]
+    pub code_path: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -117,11 +134,26 @@ impl Manifest {
         let lower = path.to_ascii_lowercase();
         if lower.ends_with(".html") || lower.ends_with(".htm") {
             Runtime::Html(path.to_owned())
-        } else if lower.ends_with(".py") {
+        } else if lower.ends_with(".py")
+            || lower.ends_with(".pyw")
+            || (self.kind.trim().eq_ignore_ascii_case("python") && !lower.ends_with(".js"))
+        {
             Runtime::Python(dir.join(path))
         } else {
             Runtime::Node(dir.join(path))
         }
+    }
+
+    /// The script of `InstallToDepsApp`, which Ulanzi Studio only runs when it is JavaScript.
+    pub fn deps_installer(&self, dir: &Path) -> Option<PathBuf> {
+        let installer = self.install_to_deps_app.as_ref()?;
+        let path = installer.code_path.trim();
+        let kind = installer.kind.trim();
+        let javascript = kind.is_empty() || kind.eq_ignore_ascii_case("javascript");
+        if !javascript || !path.to_ascii_lowercase().ends_with(".js") {
+            return None;
+        }
+        super::registry::inside(dir, path)
     }
 
     /// Names and descriptions in the user's language when the plugin has them. Ulanzi uses
@@ -302,6 +334,69 @@ mod tests {
         assert_eq!(runtime("   "), Runtime::None);
         let missing: Manifest = serde_json::from_value(json!({})).unwrap();
         assert_eq!(missing.runtime(dir), Runtime::None);
+    }
+
+    #[test]
+    fn the_type_tells_python_apart_when_the_extension_does_not() {
+        let dir = Path::new("/plugins/x.ulanziPlugin");
+        let runtime = |code: &str, kind: &str| {
+            let manifest: Manifest =
+                serde_json::from_value(json!({ "CodePath": code, "Type": kind })).unwrap();
+            manifest.runtime(dir)
+        };
+        assert_eq!(
+            runtime("plugin/app.py", "Python"),
+            Runtime::Python(dir.join("plugin/app.py"))
+        );
+        assert_eq!(
+            runtime("plugin/app.pyw", "JavaScript"),
+            Runtime::Python(dir.join("plugin/app.pyw"))
+        );
+        assert_eq!(
+            runtime("plugin/main", " python "),
+            Runtime::Python(dir.join("plugin/main"))
+        );
+        assert_eq!(
+            runtime("plugin/app.js", "Python"),
+            Runtime::Node(dir.join("plugin/app.js")),
+            "a script of Node is run by Node whatever the type says"
+        );
+        assert_eq!(
+            runtime("plugin/app.html", "Python"),
+            Runtime::Html("plugin/app.html".into())
+        );
+    }
+
+    #[test]
+    fn the_setup_script_runs_only_when_it_is_javascript_inside_the_plugin() {
+        let dir = Path::new("/plugins/x.ulanziPlugin");
+        let installer = |value: Value| {
+            let manifest: Manifest =
+                serde_json::from_value(json!({ "InstallToDepsApp": value })).unwrap();
+            manifest.deps_installer(dir)
+        };
+        assert_eq!(
+            installer(json!({ "Type": "JavaScript", "CodePath": "./dist/install.js" })),
+            Some(dir.join("dist/install.js"))
+        );
+        assert_eq!(
+            installer(json!({ "CodePath": "install.js" })),
+            Some(dir.join("install.js"))
+        );
+        assert_eq!(
+            installer(json!({ "Type": "Python", "CodePath": "install.py" })),
+            None
+        );
+        assert_eq!(
+            installer(json!({ "Type": "JavaScript", "CodePath": "install.py" })),
+            None
+        );
+        assert_eq!(
+            installer(json!({ "Type": "JavaScript", "CodePath": "../../evil.js" })),
+            None
+        );
+        let none: Manifest = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(none.deps_installer(dir), None);
     }
 
     #[test]

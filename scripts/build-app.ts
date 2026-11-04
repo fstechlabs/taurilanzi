@@ -1,4 +1,5 @@
-// Builds the app for this system, with the Node that runs plugins, and signs its update files:
+// Builds the app for this system, with the Node and the Python that run plugins, and signs its
+// update files:
 // the .app and a .dmg on macOS (the .dmg from scripts/build-dmg.py, through uv), the NSIS
 // installer on Windows, and an AppImage, a .deb and an .rpm on Linux. Bundle targets per system
 // are in src-tauri/tauri.<system>.conf.json.
@@ -41,16 +42,19 @@ if (!key) {
   config.plugins = { updater: { pubkey: (await Bun.file(`${TEST_KEY}.pub`).text()).trim() } }
 }
 
-async function fetchNode(node: string) {
-  const fetched = await $`bun scripts/fetch-node.ts --target ${node}`.cwd(ROOT).nothrow()
-  if (fetched.exitCode !== 0) {
-    process.exit(fetched.exitCode)
+/** The Node and the Python that run plugins, both named by target as fetch-node.ts names it. */
+async function fetchRuntimes(runtime: string) {
+  for (const script of ['fetch-node.ts', 'fetch-python.ts']) {
+    const fetched = await $`bun scripts/${script} --target ${runtime}`.cwd(ROOT).nothrow()
+    if (fetched.exitCode !== 0) {
+      process.exit(fetched.exitCode)
+    }
   }
 }
 
-await fetchNode(nodeTarget(target))
+await fetchRuntimes(nodeTarget(target))
 
-// Only release builds carry Node: dev builds and tests find it in the source tree.
+// Only release builds carry Node and Python: dev builds and tests find them in the source tree.
 const build = await $`bun run tauri build --config src-tauri/tauri.bundle.json --config ${JSON.stringify(config)} ${args}`
   .cwd(ROOT)
   .env({
@@ -64,9 +68,9 @@ const build = await $`bun run tauri build --config src-tauri/tauri.bundle.json -
   })
   .nothrow()
 
-// Development builds and tests run plugins with the Node of this computer again.
+// Development builds and tests run plugins with the Node and the Python of this computer again.
 if (nodeTarget(target) !== nodeTarget(host)) {
-  await fetchNode(nodeTarget(host))
+  await fetchRuntimes(nodeTarget(host))
 }
 if (build.exitCode !== 0) {
   process.exit(build.exitCode)

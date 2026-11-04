@@ -1,0 +1,19 @@
+{
+  "version": "3.14.10",
+  "release": "20261026",
+  "archives": {
+    "darwin-arm64": { "file": "cpython-3.14.10+20261026-aarch64-apple-darwin-install_only_stripped.tar.gz", "sha256": "95eb8c87d16af37c54e9765e31d8c56c0d8ffa9968ea0f704f73a9b83f84e9f9" },
+    "darwin-x64": { "file": "cpython-3.14.10+20261026-x86_64-apple-darwin-install_only_stripped.tar.gz", "sha256": "2fd8becd48cf0ff5f0a15df3c0db7cae7aa708dcaacf901bd30d6cdd6229370b" },
+    "linux-arm64": { "file": "cpython-3.14.10+20261026-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz", "sha256": "90f48337bc3dd4ae6eda81e001e4c981236d403b6b5a07778bbdf94ee423dc00" },
+    "linux-x64": { "file": "cpython-3.14.10+20261026-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz", "sha256": "4d3c16c59ed0802a3d1d34d8bce504b15ceeaff39d62dadecc6a9fa803412aed" },
+    "win32-arm64": { "file": "cpython-3.14.10+20261026-aarch64-pc-windows-msvc-install_only_stripped.tar.gz", "sha256": "2b6cf82a67cb99ef0db0932dd69ee24080077add6f98435cea5de850c144327d" },
+    "win32-x64": { "file": "cpython-3.14.10+20261026-x86_64-pc-windows-msvc-install_only_stripped.tar.gz", "sha256": "c1876a9795d3a94ee49a1499a69cd91e26ca3e2829593f93fa6e4db90d05402b" }
+  },
+  "packages": [
+    {
+      "file": "websockets-16.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/6f/28/258ebab549c2bf3e64d2b0217b973467394a9cea8c42f70418ca2c5d0d2e/websockets-16.0-py3-none-any.whl",
+      "sha256": "1637db62fad1dc833276dded54215f2c7fa46912301a24bd94d45d46a011ceec"
+    }
+  ]
+}

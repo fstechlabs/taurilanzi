@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { $, browser, expect } from '@wdio/globals'
 import type { CloudStatus, PluginCatalog } from '../../../src-nuxt/app/ipc/bindings'
 import { FakeCloud, SETTINGS_ID } from '../fake-cloud'
-import { CLOUD_PORT, COMMUNITY_PORT, button, clickOn, dialog, engine, menuItem, shot, state } from '../helpers'
+import { CLOUD_PORT, STORE_PORT, button, clickOn, dialog, engine, menuItem, shot, state } from '../helpers'
 
 const cloud = new FakeCloud(CLOUD_PORT)
 const PLUGIN = 'com.taurilanzi.e2e.counter'
@@ -20,7 +20,7 @@ function catalogServer() {
   execFileSync('/usr/bin/zip', ['-qr', join(work, 'package.zip'), PACKAGE], { cwd: work })
   const zip = readFileSync(join(work, 'package.zip'))
   rmSync(work, { recursive: true, force: true })
-  const base = `http://127.0.0.1:${COMMUNITY_PORT}`
+  const base = `http://127.0.0.1:${STORE_PORT}`
   const catalog = { plugins: [{ id: PACKAGE, name: 'Counter', version: '1.0.0', platforms: [], downloadUrl: `${base}/package.zip` }] }
   return createServer((req, res) => {
     const body = req.url === '/catalog.json' ? JSON.stringify(catalog) : req.url === '/package.zip' ? zip : null
@@ -108,7 +108,7 @@ describe('the cloud', () => {
 
   before(async () => {
     await cloud.start()
-    await new Promise<void>(resolve => catalog.listen(COMMUNITY_PORT, '127.0.0.1', resolve))
+    await new Promise<void>(resolve => catalog.listen(STORE_PORT, '127.0.0.1', resolve))
   })
 
   after(async () => {
@@ -270,7 +270,7 @@ describe('the cloud', () => {
     expect(await pluginHere()).toBe(false)
     expect(cloud.head(SETTINGS_ID)!.content.plugins[PLUGIN]).toEqual({ name: 'Test counter', catalog: PACKAGE })
 
-    await engine('install_community_plugin', { id: PACKAGE })
+    await engine('install_store_plugin', { id: PACKAGE })
     expect(await pluginHere()).toBe(true)
   })
 

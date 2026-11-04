@@ -50,7 +50,8 @@ Node ≥ 24.11 (nvm), or Nuxt warns about an unsupported version.
 ## Commands
 
 ```bash
-bun install                      # also downloads the Node that runs plugins (scripts/fetch-node.ts)
+bun install                      # also downloads the Node and the Python that run plugins
+                                 # (scripts/fetch-node.ts, scripts/fetch-python.ts)
 bun run tauri dev                # full app: Nuxt on :1420 + window, with the dock
 make dev                         # same, quitting the installed Taurilanzi first so the dock is free
 bun run dev:no-dock              # same without touching the dock (TAURILANZI_NO_DOCK=1), to work
@@ -120,8 +121,9 @@ App environment variables:
   the single-instance lock. Without it, `tauri dev` uses the development app's own data folder,
   apart from the released app's.
 - `TAURILANZI_NODE=<path>` runs plugins with another Node.
-- `TAURILANZI_COMMUNITY_CATALOG=<url>` reads another community plugin catalog (the e2e tests serve
-  their own).
+- `TAURILANZI_PYTHON=<path>` runs Python plugins with another Python.
+- `TAURILANZI_COMMUNITY_CATALOG=<url>` reads another community plugin catalog, and
+  `TAURILANZI_ULANZI_MARKETPLACE=<url>` another Ulanzi Marketplace (the e2e tests serve their own).
 - `TAURILANZI_LANGUAGE=es|en` stands in for the system's language.
 - `TAURILANZI_CLOUD=<url>` syncs with another cloud. Without it the released app syncs with
   `https://taurilanzi.com` and development builds with `taurilanzi-cloud` running locally
@@ -194,10 +196,17 @@ Commits, versions and releases:
   asked; the scripts are next to their code in `src/foreground/linux/`.
 - Keys are drawn on the computer as whole images (layers → SVG → PNG with `resvg`); the legacy
   mode (title drawn by the firmware) only for compatibility.
-- Ulanzi plugins run on Node, never on Bun: the app's own Node, pinned in
-  `scripts/node-runtime.json` for each system and processor and bundled only by `build-app.ts`
+- Ulanzi plugins run as Ulanzi Studio runs them: the extension of `CodePath` (or `Type: Python`)
+  picks Node, a page or Python. JavaScript runs on Node, never on Bun: the app's own Node, pinned
+  in `scripts/node-runtime.json` for each system and processor and bundled only by `build-app.ts`
   (`tauri.bundle.json`). To change its version, update the version and the nodejs.org SHA-256
-  checksums in that file.
+  checksums in that file. Python plugins run on the app's own CPython, the same minor version
+  Ulanzi Studio bundles (their native modules are built for it), from python-build-standalone,
+  with the packages Ulanzi's carries (`websockets`): pinned in `scripts/python-runtime.json`,
+  fetched and trimmed by `scripts/fetch-python.ts`. Never a Python installed on the computer.
+- Plugins come from the stores in `src/plugins/catalog`, one file per store (Ulanzi's own
+  Marketplace, the Ulanzi Community Store) shown as one catalog; a new source of plugins is one
+  more file there.
 - The logo and icons come from the SVGs in `docs/brand/`. App icons: `bun run tauri icon
   docs/brand/app-icon.svg`, then delete the `android/`, `ios/` and `64x64.png` it also writes, and
   copy `icon.ico` to `src-nuxt/public/favicon.ico`. `src-tauri/icons/tray.png` is
@@ -217,7 +226,7 @@ Commits, versions and releases:
   profile, and the settings every computer shares (secrets included), is a document whose versions
   the cloud keeps forever: the most recent edit wins and the other stays as a branch. Profiles in
   `local_profiles` stay on this computer. The settings also list the plugins each computer has
-  (`plugins`): the others install those of the community catalog by themselves, never code from
+  (`plugins`): the others install those of the plugin stores by themselves, never code from
   the cloud, and only name those installed from a file. Uninstalling stays on that computer
   (`declined_plugins`). Only the engine talks to the cloud, never the UI, and
   its API is a contract with installed versions: change it only in ways they still understand.

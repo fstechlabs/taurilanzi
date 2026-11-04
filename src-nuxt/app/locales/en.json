@@ -1321,7 +1321,7 @@
     "list": {
       "title": "Plugins",
       "add": "Add plugin",
-      "community": "Community plugins…",
+      "store": "Plugin store…",
       "fromZip": "Install from a ZIP…",
       "fromFolder": "Install from a folder…",
       "reload": "Look for new plugins",
@@ -1356,14 +1356,14 @@
       "confirmRemove": "Remove the plugin?",
       "remove": "Remove"
     },
-    "community": {
-      "title": "Community plugins",
-      "description": "From the Ulanzi Community Store catalog, only those that work on this computer. They are made by other authors and run on your computer: install the ones you trust.",
+    "store": {
+      "title": "Plugin store",
+      "description": "From the Ulanzi Marketplace and the Ulanzi Community Store, only those that work on this computer. They run on your computer: install the ones you trust.",
       "search": "Search",
       "searchLabel": "Search plugins",
-      "reload": "Read the catalog again",
-      "loadFailed": "The catalog could not be read. Check the connection and try again.",
-      "loading": "Reading the catalog…",
+      "reload": "Read the store again",
+      "loadFailed": "The store could not be read. Check the connection and try again.",
+      "loading": "Reading the store…",
       "noMatch": "No plugin matches.",
       "installed": "Installed",
       "ready": "{name} is now in the app.",
@@ -1377,7 +1377,44 @@
       "secrets": "{n} secrets",
       "noDetail": "no details",
       "dials": "It also has actions for dials, which do not work in the app yet.",
-      "choose": "Choose a plugin"
+      "choose": "Choose a plugin",
+      "sourceLabel": "Source",
+      "from": {
+        "ulanzi": "Ulanzi Marketplace",
+        "community": "Ulanzi Community Store"
+      },
+      "filters": "Filters",
+      "allSources": "All",
+      "statusLabel": "Status",
+      "statuses": {
+        "all": "All",
+        "installed": "Installed",
+        "updates": "With an update",
+        "available": "Not installed"
+      },
+      "kindLabel": "Category",
+      "kinds": {
+        "all": "All",
+        "tools": "Tools",
+        "streaming": "Streaming",
+        "office": "Office",
+        "creative": "Creative",
+        "lighting": "Lighting",
+        "ai": "AI"
+      },
+      "count": "No plugins | 1 plugin | {n} plugins",
+      "clear": "Clear filters",
+      "sortLabel": "Sort",
+      "sorts": {
+        "popular": "Most popular",
+        "name": "By name",
+        "recent": "Most recent"
+      }
+    },
+    "runtime": {
+      "node": "Node.js",
+      "html": "HTML",
+      "python": "Python"
     }
   },
   "settings": {
@@ -1496,7 +1533,7 @@
       "elsewhereHint": "Profiles you deleted here only. They are still in the cloud and on your other computers.",
       "bringBack": "Bring to this computer",
       "missingPlugins": "Plugins of your other computers missing here",
-      "missingPluginsHint": "Those of the community catalog install by themselves when syncing. These could not be installed:",
+      "missingPluginsHint": "Those of the plugin store install by themselves when syncing. These could not be installed:",
       "missingReasons": {
         "from_file": "It was installed from a file on another computer: install it here by hand.",
         "not_here": "It is not available for this system.",
