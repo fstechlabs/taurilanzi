@@ -19,6 +19,8 @@ export const commands = {
 	setHomePage: (page: string) => typedError<null, IpcError>(__TAURI_INVOKE("set_home_page", { page })),
 	/**  Sends the dock to a page, as if a key leading there had been pressed. */
 	showPage: (page: string) => typedError<null, IpcError>(__TAURI_INVOKE("show_page", { page })),
+	/**  Tells the engine which page the editor shows, so the keys of plugins on it draw. */
+	editPage: (page: string | null) => typedError<null, IpcError>(__TAURI_INVOKE("edit_page", { page })),
 	setDevice: (settings: DeviceSettings) => typedError<null, IpcError>(__TAURI_INVOKE("set_device", { settings })),
 	/**  Gesture timing, the look of new keys and the screensaver. */
 	setPreferences: (preferences: Preferences) => typedError<null, IpcError>(__TAURI_INVOKE("set_preferences", { preferences })),
@@ -273,7 +275,9 @@ export type CatalogSource =
 /**  Ulanzi's own Marketplace, the one in Ulanzi Studio. */
 "ulanzi" | 
 /**  The Ulanzi Community Store. */
-"community";
+"community" | 
+/**  Mirabox Space, the store of Mirabox's Stream Dock. */
+"mirabox";
 
 /**  What a digital clock shows under the time. */
 export type ClockLine = "none" | "date" | "weekday" | "weekday_date";
@@ -833,6 +837,8 @@ export type PluginActionInfo = {
 	inspector: string | null,
 	/**  Can go on a key of the D200: dials and other models are not supported yet. */
 	supported: boolean,
+	/**  What a new key of it starts with. */
+	settings: any,
 };
 
 export type PluginCatalog = {
@@ -856,8 +862,10 @@ export type PluginInfo = {
 	category: string,
 	/**  Relative to the plugin folder. */
 	icon: string | null,
-	/**  The package folder, ending in `.ulanziPlugin`. */
+	/**  The package folder, ending in `.ulanziPlugin` or `.sdPlugin`. */
 	folder: string,
+	/**  How it talks to the host. */
+	protocol: PluginProtocol,
 	/**  What runs its main service. */
 	runtime: PluginRuntime,
 	run: RunState,
@@ -867,9 +875,19 @@ export type PluginInfo = {
 };
 
 /**  What a plugin is for, in the categories every store's are brought to. */
-export type PluginKind = "tools" | "streaming" | "office" | "creative" | "lighting" | "ai";
+export type PluginKind = "tools" | "streaming" | "office" | "creative" | "lighting" | "audio" | "gaming" | "social" | "smart_home" | "ai";
+
+export type PluginProtocol = 
+/**  Made for Ulanzi Studio. */
+"ulanzi" | 
+/**  Made for the Stream Deck or for Mirabox's Stream Dock. */
+"stream_deck";
 
 export type PluginRuntime = "node" | "html" | "python" | 
+/**  A program of its own. */
+"native" | 
+/**  Keyboard shortcuts the host presses, in Stream Dock plugins that run nothing. */
+"shortcuts" | 
 /**  Nothing runs: images only. */
 "none";
 

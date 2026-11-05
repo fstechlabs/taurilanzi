@@ -16,12 +16,16 @@ use std::thread;
 use std::time::Duration;
 
 use log::{info, warn};
+use serde_json::{Value, json};
 use tungstenite::handshake::derive_accept_key;
 use tungstenite::protocol::Role;
 use tungstenite::{Message, WebSocket};
 
 use super::hub::PluginHost;
+use super::manifest::Protocol;
+use super::protocol::Instance;
 use super::registry::Registry;
+use super::streamdeck;
 
 pub const PREFERRED_PORT: u16 = 3906;
 const HEAD_LIMIT: usize = 64 * 1024;
@@ -32,6 +36,7 @@ const SHIM_PATH: &str = "/__taurilanzi/shim.js";
 const THEME: &str = include_str!("theme.css");
 const THEME_PATH: &str = "/__taurilanzi/theme.css";
 const PROXY_PATH: &str = "/__taurilanzi/proxy";
+const PICK_PATH: &str = "/__taurilanzi/pick";
 const TOKEN_HEADER: &str = "x-taurilanzi-token";
 const TARGET_HEADER: &str = "x-taurilanzi-target";
 
@@ -66,6 +71,8 @@ pub fn start(host: PluginHost) -> io::Result<u16> {
 struct Request {
     method: String,
     path: String,
+    /// What follows the `?`, as it came.
+    query: String,
     headers: HashMap<String, String>,
     /// What came after the head in the same read.
     rest: Vec<u8>,
@@ -89,13 +96,36 @@ fn serve(mut stream: TcpStream, host: &PluginHost, token: &str, port: u16) {
     }
     let result = if request.path == PROXY_PATH {
         proxy(&mut stream, request, token)
+    } else if request.path == PICK_PATH {
+        pick(&mut stream, &request, host, token)
     } else if request.path == SHIM_PATH {
         respond(&mut stream, 200, "text/javascript", SHIM.as_bytes())
     } else if request.path == THEME_PATH {
         respond(&mut stream, 200, "text/css", THEME.as_bytes())
     } else if let Some(rest) = request.path.strip_prefix("/plugins/") {
+        if let (Some(action), Some(actionid)) = (
+            query_value(&request.query, "uuid"),
+            query_value(&request.query, "actionid"),
+        ) {
+            host.opened_inspector(Instance {
+                action,
+                key: query_value(&request.query, "key").unwrap_or_default(),
+                actionid,
+            });
+        }
         let registry = host.registry();
-        file(&mut stream, &registry, rest, token)
+        file(&mut stream, &registry, rest, token, port)
+    } else if let Some(folder) = referring_plugin(&request, port) {
+        // Ulanzi Studio opens pages from their files, so some take the root of the server they
+        // are served from for the root of the plugin: `/en.json`, `/images/a.png`.
+        let registry = host.registry();
+        file(
+            &mut stream,
+            &registry,
+            &format!("{folder}{}", request.path),
+            token,
+            port,
+        )
     } else {
         respond(&mut stream, 404, "text/plain", b"not found")
     };
@@ -126,7 +156,7 @@ fn read_head(stream: &mut TcpStream) -> Option<Request> {
     let mut first = lines.next()?.split_whitespace();
     let method = first.next()?.to_owned();
     let target = first.next()?;
-    let path = target.split_once('?').map_or(target, |(path, _)| path);
+    let (path, query) = target.split_once('?').unwrap_or((target, ""));
     let headers = lines
         .filter_map(|line| line.split_once(':'))
         .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_owned()))
@@ -136,9 +166,40 @@ fn read_head(stream: &mut TcpStream) -> Option<Request> {
         path: percent_encoding::percent_decode_str(path)
             .decode_utf8_lossy()
             .into_owned(),
+        query: query.to_owned(),
         headers,
         rest,
     })
+}
+
+/// A value of the query of a request, if it is there and not empty.
+fn query_value(query: &str, name: &str) -> Option<String> {
+    query
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find(|(key, _)| *key == name)
+        .map(|(_, value)| {
+            percent_encoding::percent_decode_str(&value.replace('+', " "))
+                .decode_utf8_lossy()
+                .into_owned()
+        })
+        .filter(|value| !value.is_empty())
+}
+
+/// The package folder of the page of a plugin a request comes from.
+fn referring_plugin(request: &Request, port: u16) -> Option<String> {
+    let referer = request.headers.get("referer")?;
+    let rest = [
+        format!("http://127.0.0.1:{port}/plugins/"),
+        format!("http://localhost:{port}/plugins/"),
+    ]
+    .iter()
+    .find_map(|prefix| referer.strip_prefix(prefix.as_str()))?;
+    let folder = rest.split(['/', '?', '#']).next()?;
+    let folder = percent_encoding::percent_decode_str(folder)
+        .decode_utf8_lossy()
+        .into_owned();
+    (!folder.is_empty()).then_some(folder)
 }
 
 /// Plugins written for Node send no origin; pages the host served come from its own. A page of
@@ -217,15 +278,23 @@ fn file(
     registry: &RwLock<Registry>,
     rest: &str,
     token: &str,
+    port: u16,
 ) -> io::Result<()> {
     let (folder, relative) = rest.split_once('/').unwrap_or((rest, ""));
-    let path = {
+    let (path, stream_deck) = {
         let registry = registry.read().unwrap_or_else(PoisonError::into_inner);
-        registry
-            .plugins()
-            .iter()
-            .find(|p| p.folder == folder)
-            .and_then(|p| p.file(relative))
+        let plugin = registry.plugins().iter().find(|p| p.folder == folder);
+        let stream_deck = plugin
+            .filter(|p| p.protocol == Protocol::StreamDeck)
+            .map(|p| {
+                json!({
+                    "port": port,
+                    "plugin": p.manifest.uuid,
+                    "device": streamdeck::DEVICE_ID,
+                    "info": streamdeck::info(p, crate::i18n::current().tag()),
+                })
+            });
+        (plugin.and_then(|p| p.file(relative)), stream_deck)
     };
     let Some(path) = path.filter(|p| p.is_file()) else {
         return respond(stream, 404, "text/plain", b"not found");
@@ -233,18 +302,25 @@ fn file(
     let bytes = std::fs::read(&path)?;
     let kind = content_type(relative);
     if kind.starts_with("text/html") {
-        respond(stream, 200, kind, &with_shim(&bytes, token))
+        respond(stream, 200, kind, &with_shim(&bytes, token, stream_deck))
     } else {
         respond(stream, 200, kind, &bytes)
     }
 }
 
 /// The token and the shim go first in the page, before any script of the plugin runs, and the
-/// app's colors for its stylesheets with them.
-fn with_shim(html: &[u8], token: &str) -> Vec<u8> {
+/// app's colors for its stylesheets with them. Pages of Stream Deck plugins also get what the
+/// shim connects them with.
+fn with_shim(html: &[u8], token: &str, stream_deck: Option<Value>) -> Vec<u8> {
     let text = String::from_utf8_lossy(html);
+    let mut config = json!({ "proxy": PROXY_PATH, "pick": PICK_PATH, "token": token });
+    if let Some(stream_deck) = stream_deck {
+        config["streamDeck"] = stream_deck;
+    }
+    // Nothing in the configuration may close the script it goes in.
+    let config = config.to_string().replace("</", "<\\/");
     let tag = format!(
-        r#"<script>window.__TAURILANZI__={{proxy:"{PROXY_PATH}",token:"{token}"}};</script><script src="{SHIM_PATH}"></script><link rel="stylesheet" href="{THEME_PATH}">"#
+        r#"<script>window.__TAURILANZI__={config};</script><script src="{SHIM_PATH}"></script><link rel="stylesheet" href="{THEME_PATH}">"#
     );
     let lower = text.to_ascii_lowercase();
     let at = lower
@@ -256,6 +332,49 @@ fn with_shim(html: &[u8], token: &str) -> Vec<u8> {
     out.push_str(&tag);
     out.push_str(&text[at..]);
     out.into_bytes()
+}
+
+/// A file picker for the pages that ask the host for one, as Stream Dock's inspectors do: the
+/// paths chosen, as a JSON list.
+fn pick(
+    stream: &mut TcpStream,
+    request: &Request,
+    host: &PluginHost,
+    token: &str,
+) -> io::Result<()> {
+    if request.headers.get(TOKEN_HEADER).map(String::as_str) != Some(token) {
+        return respond(stream, 403, "text/plain", b"not allowed");
+    }
+    let accept = query_value(&request.query, "accept").unwrap_or_default();
+    let chosen: Vec<String> = host
+        .pick("file", &file_filter(&accept))
+        .into_iter()
+        .collect();
+    respond(
+        stream,
+        200,
+        "application/json",
+        Value::from(chosen).to_string().as_bytes(),
+    )
+}
+
+/// The `accept` of a file input as a filter of the host's dialogs, `files(*.png *.jpg)`.
+fn file_filter(accept: &str) -> String {
+    let mut extensions: Vec<&str> = Vec::new();
+    for part in accept.split(',').map(str::trim) {
+        if let Some(ext) = part.strip_prefix('.') {
+            extensions.push(ext);
+        } else if part == "image/*" {
+            extensions.extend(["png", "jpg", "jpeg", "gif", "svg", "webp"]);
+        } else if let Some(ext) = part.strip_prefix("image/") {
+            extensions.push(if ext == "svg+xml" { "svg" } else { ext });
+        }
+    }
+    if extensions.is_empty() {
+        return String::new();
+    }
+    let patterns: Vec<String> = extensions.iter().map(|e| format!("*.{e}")).collect();
+    format!("files({})", patterns.join(" "))
 }
 
 fn proxy(stream: &mut TcpStream, request: Request, token: &str) -> io::Result<()> {
@@ -397,13 +516,16 @@ mod tests {
     use super::super::desktop::Headless;
     use super::super::hub::{HubSetup, PluginInput, VisualChange};
     use super::super::install;
-    use super::super::protocol::Instance;
+    use super::super::protocol::{Instance, event, key_fields};
     use super::*;
     use crate::render::ImageFormat;
 
     const PLUGIN: &str = "com.taurilanzi.e2e.counter";
     const ACTION: &str = "com.taurilanzi.e2e.counter.count";
     const FOLDER: &str = "com.taurilanzi.e2e.ulanziPlugin";
+    const SD_PLUGIN: &str = "com.taurilanzi.streamdock";
+    const SD_ACTION: &str = "com.taurilanzi.streamdock.count";
+    const SD_FOLDER: &str = "com.taurilanzi.streamdock.sdPlugin";
     const WAIT: Duration = Duration::from_secs(5);
 
     type Socket = WebSocket<TcpStream>;
@@ -449,7 +571,7 @@ mod tests {
                 json!({ "cmd": "connected", "uuid": ACTION, "key": "2_1", "actionid": actionid }),
             );
             match self.input() {
-                PluginInput::InspectorConnected { conn, instance } => {
+                PluginInput::InspectorConnected { conn, instance, .. } => {
                     assert_eq!(
                         instance,
                         Instance {
@@ -475,6 +597,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let own = dir.path().join("plugins");
         install::install(&fixture(), &own).unwrap();
+        install::install(&fixture().with_file_name(SD_FOLDER), &own).unwrap();
         let registry = Registry::scan(&own, "es");
         let (tx, inputs) = mpsc::channel();
         let host = PluginHost::new(HubSetup {
@@ -599,7 +722,7 @@ mod tests {
         let (status, _, body) = get(port, &format!("/plugins/{FOLDER}/inspector/inspector.html"));
         assert_eq!(status, 200);
         let body = String::from_utf8(body).unwrap();
-        let start = body.find("token:\"").unwrap() + "token:\"".len();
+        let start = body.find("\"token\":\"").unwrap() + "\"token\":\"".len();
         body[start..start + body[start..].find('"').unwrap()].to_owned()
     }
 
@@ -768,7 +891,9 @@ mod tests {
         ));
 
         request(&mut main, json!({ "cmd": "showAlert", "actionid": "A1" }));
-        assert!(matches!(host.input(), PluginInput::Alert { actionid } if actionid == "A1"));
+        assert!(
+            matches!(host.input(), PluginInput::Result { actionid, ok: false } if actionid == "A1")
+        );
         host.no_input();
     }
 
@@ -837,6 +962,7 @@ mod tests {
         request(&mut first, no_uuid.clone());
         let mut with_uuid = no_uuid;
         with_uuid["uuid"] = PLUGIN.into();
+        with_uuid["key"] = "2_1".into();
         assert_eq!(drain(&mut main), vec![to_plugin, with_uuid]);
         assert!(drain(&mut second).is_empty());
 
@@ -849,6 +975,7 @@ mod tests {
         request(&mut first, global.clone());
         let mut expected = global;
         expected["cmd"] = "didReceiveGlobalSettings".into();
+        expected["key"] = "2_1".into();
         for field in ["param", "payload"] {
             expected[field] = json!({ "token": "t" });
         }
@@ -941,7 +1068,7 @@ mod tests {
         let token = token(host.port);
         assert_eq!(token.len(), 32);
         let tag = format!(
-            r#"<script>window.__TAURILANZI__={{proxy:"/__taurilanzi/proxy",token:"{token}"}};</script><script src="/__taurilanzi/shim.js"></script><link rel="stylesheet" href="/__taurilanzi/theme.css">"#
+            r#"<script>window.__TAURILANZI__={{"pick":"/__taurilanzi/pick","proxy":"/__taurilanzi/proxy","token":"{token}"}};</script><script src="/__taurilanzi/shim.js"></script><link rel="stylesheet" href="/__taurilanzi/theme.css">"#
         );
         assert_eq!(
             String::from_utf8(body).unwrap(),
@@ -977,14 +1104,18 @@ mod tests {
 
     #[test]
     fn the_shim_goes_right_after_the_head_tag() {
-        let page =
-            String::from_utf8(with_shim(b"<html><HEAD lang=\"es\"><title>x</title>", "t")).unwrap();
+        let page = String::from_utf8(with_shim(
+            b"<html><HEAD lang=\"es\"><title>x</title>",
+            "t",
+            None,
+        ))
+        .unwrap();
         assert!(
             page.starts_with("<html><HEAD lang=\"es\"><script>window.__TAURILANZI__="),
             "{page}"
         );
         assert!(page.ends_with(r#"theme.css"><title>x</title>"#), "{page}");
-        let bare = String::from_utf8(with_shim(b"<p>x</p>", "t")).unwrap();
+        let bare = String::from_utf8(with_shim(b"<p>x</p>", "t", None)).unwrap();
         assert!(
             bare.starts_with("<script>") && bare.ends_with("<p>x</p>"),
             "{bare}"
@@ -1077,5 +1208,291 @@ mod tests {
         for header in ["x-taurilanzi-", "cookie:", "origin:"] {
             assert!(!lower.contains(header), "{header} in {forwarded}");
         }
+    }
+
+    fn stream_deck_main(host: &Host) -> Socket {
+        let mut socket = connect(host.port, None).unwrap();
+        send(
+            &mut socket,
+            json!({ "event": "registerPlugin", "uuid": SD_PLUGIN }),
+        );
+        assert_eq!(next(&mut socket)["event"], "deviceDidConnect");
+        match host.input() {
+            PluginInput::MainConnected { plugin } => assert_eq!(plugin, SD_PLUGIN),
+            other => panic!("{other:?}"),
+        }
+        socket
+    }
+
+    fn sd_instance() -> Instance {
+        Instance {
+            action: SD_ACTION.into(),
+            key: "2_1".into(),
+            actionid: "A1".into(),
+        }
+    }
+
+    fn visual(host: &Host) -> VisualChange {
+        match host.input() {
+            PluginInput::Visual { actionid, change } => {
+                assert_eq!(actionid, "A1");
+                change
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn stream_deck_plugins_hear_the_engine_in_their_own_protocol() {
+        let host = host();
+        let mut main = stream_deck_main(&host);
+        let fields = key_fields(&json!({ "step": 1 }));
+        host.host
+            .to_main(SD_PLUGIN, &event("add", &sd_instance(), fields.clone()));
+        let appeared = next(&mut main);
+        assert_eq!(appeared["event"], "willAppear");
+        assert_eq!(appeared["context"], "A1");
+        assert_eq!(
+            appeared["payload"]["coordinates"],
+            json!({ "column": 2, "row": 1 })
+        );
+        assert_eq!(appeared["payload"]["settings"], json!({ "step": 1 }));
+
+        host.host
+            .to_main(SD_PLUGIN, &event("keydown", &sd_instance(), fields.clone()));
+        host.host
+            .to_main(SD_PLUGIN, &event("keyup", &sd_instance(), fields.clone()));
+        assert_eq!(next(&mut main)["event"], "keyDown");
+        let up = next(&mut main);
+        assert_eq!(
+            (up["event"].as_str(), up["payload"]["state"].as_u64()),
+            (Some("keyUp"), Some(0))
+        );
+        assert!(
+            matches!(visual(&host), VisualChange::SetState(1)),
+            "two states switch as the key is let go"
+        );
+        host.host
+            .to_main(SD_PLUGIN, &event("run", &sd_instance(), fields.clone()));
+        host.host
+            .to_main(SD_PLUGIN, &event("keydown", &sd_instance(), fields));
+        let down = next(&mut main);
+        assert_eq!(
+            down["event"], "keyDown",
+            "the run of that press is not told again"
+        );
+        assert_eq!(down["payload"]["state"], 1);
+    }
+
+    #[test]
+    fn stream_deck_commands_draw_the_key() {
+        let host = host();
+        let mut main = stream_deck_main(&host);
+        send(
+            &mut main,
+            json!({ "event": "setTitle", "context": "A1", "payload": { "title": "3", "target": 0 } }),
+        );
+        assert!(matches!(visual(&host), VisualChange::Title(Some(t)) if t == "3"));
+        let svg = "data:image/svg+xml;charset=utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"4\"/>";
+        send(
+            &mut main,
+            json!({ "event": "setImage", "context": "A1", "payload": { "image": svg, "state": 1 } }),
+        );
+        assert!(matches!(
+            visual(&host),
+            VisualChange::StateImage { state: 1, image } if image.format == ImageFormat::Svg
+        ));
+        send(
+            &mut main,
+            json!({ "event": "setImage", "context": "A1", "payload": { "image": "" } }),
+        );
+        assert!(matches!(visual(&host), VisualChange::ClearImages));
+        send(
+            &mut main,
+            json!({ "event": "setState", "context": "A1", "payload": { "state": 1 } }),
+        );
+        assert!(matches!(visual(&host), VisualChange::SetState(1)));
+        send(
+            &mut main,
+            json!({ "event": "setFeedback", "context": "A1" }),
+        );
+        send(&mut main, json!({ "event": "showOk", "context": "A1" }));
+        assert!(matches!(
+            host.input(),
+            PluginInput::Result { actionid, ok: true } if actionid == "A1"
+        ));
+    }
+
+    #[test]
+    fn stream_deck_inspectors_talk_with_their_plugin() {
+        let host = host();
+        let mut main = stream_deck_main(&host);
+        let mut inspector = connect(host.port, None).unwrap();
+        send(
+            &mut inspector,
+            json!({
+                "event": "registerPropertyInspector",
+                "uuid": "A1",
+                "taurilanzi": { "action": SD_ACTION, "key": "2_1", "settings": { "step": 1 } },
+            }),
+        );
+        match host.input() {
+            PluginInput::InspectorConnected {
+                instance, settings, ..
+            } => {
+                assert_eq!(instance, sd_instance());
+                assert_eq!(
+                    settings,
+                    Some(json!({ "step": 1 })),
+                    "what the page was opened with"
+                );
+            }
+            other => panic!("{other:?}"),
+        }
+
+        let ping = json!({ "event": "sendToPlugin", "action": SD_ACTION, "context": "A1", "payload": { "ping": 1 } });
+        send(&mut inspector, ping.clone());
+        assert_eq!(next(&mut main), ping);
+        let pong = json!({ "event": "sendToPropertyInspector", "action": SD_ACTION, "context": "A1", "payload": { "pong": 1 } });
+        send(&mut main, pong.clone());
+        assert_eq!(next(&mut inspector), pong);
+
+        send(
+            &mut inspector,
+            json!({ "event": "setSettings", "context": "A1", "payload": { "a": 1 } }),
+        );
+        assert!(matches!(
+            host.input(),
+            PluginInput::SaveSettings { actionid, settings, forward: "didReceiveSettings", .. }
+                if actionid == "A1" && settings == json!({ "a": 1 })
+        ));
+        send(
+            &mut inspector,
+            json!({ "event": "setGlobalSettings", "context": "A1", "payload": { "token": "t" } }),
+        );
+        assert_eq!(
+            next(&mut main),
+            json!({ "event": "didReceiveGlobalSettings", "payload": { "settings": { "token": "t" } } })
+        );
+        assert!(matches!(
+            host.input(),
+            PluginInput::SaveGlobalSettings { plugin, .. } if plugin == SD_PLUGIN
+        ));
+
+        drop(inspector);
+        assert_eq!(
+            next(&mut main),
+            json!({
+                "event": "propertyInspectorDidDisappear",
+                "action": SD_ACTION,
+                "context": "A1",
+                "device": streamdeck::DEVICE_ID,
+            })
+        );
+    }
+
+    #[test]
+    fn stream_deck_pages_are_handed_their_connection() {
+        let host = host();
+        let (status, _, body) = get(
+            host.port,
+            &format!("/plugins/{SD_FOLDER}/inspector/index.html"),
+        );
+        assert_eq!(status, 200);
+        let page = String::from_utf8(body).unwrap();
+        let start = page.find("window.__TAURILANZI__=").unwrap() + "window.__TAURILANZI__=".len();
+        let end = start + page[start..].find(";</script>").unwrap();
+        let config: Value = serde_json::from_str(&page[start..end]).unwrap();
+        assert_eq!(config["streamDeck"]["plugin"], SD_PLUGIN);
+        assert_eq!(config["streamDeck"]["port"], host.port);
+        assert_eq!(
+            config["streamDeck"]["info"]["application"]["language"],
+            "es"
+        );
+        let (_, _, ulanzi) = get(
+            host.port,
+            &format!("/plugins/{FOLDER}/inspector/inspector.html"),
+        );
+        assert!(!String::from_utf8(ulanzi).unwrap().contains("streamDeck"));
+        assert_eq!(file_filter(".png, image/svg+xml"), "files(*.png *.svg)");
+        assert_eq!(file_filter(""), "");
+    }
+
+    #[test]
+    fn pages_that_take_the_root_for_their_plugin_get_its_files() {
+        let host = host();
+        let from = |referer: &str, path: &str| {
+            http(
+                host.port,
+                &format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nReferer: {referer}\r\n\r\n"),
+            )
+            .0
+        };
+        let page = format!(
+            "http://127.0.0.1:{}/plugins/{FOLDER}/inspector/inspector.html?uuid=x",
+            host.port
+        );
+        assert_eq!(from(&page, "/manifest.json"), 200);
+        assert_eq!(from(&page, "/images/icon.svg"), 200);
+        assert_eq!(from(&page, "/../secret"), 404);
+        assert_eq!(
+            from("https://example.com/plugins/x/", "/manifest.json"),
+            404
+        );
+        assert_eq!(
+            get(host.port, "/manifest.json").0,
+            404,
+            "only from a page of a plugin"
+        );
+    }
+
+    #[test]
+    fn an_inspector_that_does_not_say_its_key_is_the_one_it_was_opened_for() {
+        let host = host();
+        let (status, _, _) = get(
+            host.port,
+            &format!(
+                "/plugins/{FOLDER}/inspector/inspector.html?uuid={ACTION}&key=1_0&actionid=A9"
+            ),
+        );
+        assert_eq!(status, 200);
+        let mut inspector = connect(host.port, None).unwrap();
+        send(
+            &mut inspector,
+            json!({ "cmd": "connected", "uuid": ACTION, "code": 0 }),
+        );
+        match host.input() {
+            PluginInput::InspectorConnected { instance, .. } => assert_eq!(
+                instance,
+                Instance {
+                    action: ACTION.into(),
+                    key: "1_0".into(),
+                    actionid: "A9".into(),
+                }
+            ),
+            other => panic!("{other:?}"),
+        }
+        request(
+            &mut inspector,
+            json!({ "cmd": "paramfromplugin", "uuid": ACTION, "actionid": "", "param": { "a": 1 } }),
+        );
+        assert!(matches!(
+            host.input(),
+            PluginInput::SaveSettings { actionid, .. } if actionid == "A9"
+        ));
+
+        let mut silent = connect(host.port, None).unwrap();
+        request(
+            &mut silent,
+            json!({ "cmd": "getSettings", "uuid": ACTION, "actionid": "" }),
+        );
+        assert!(
+            matches!(host.input(), PluginInput::InspectorConnected { instance, .. } if instance.actionid == "A9"),
+            "one that never said it connected"
+        );
+        assert!(matches!(
+            host.input(),
+            PluginInput::GetSettings { actionid, .. } if actionid == "A9"
+        ));
     }
 }

@@ -16,7 +16,8 @@
 **A fast, free desktop app for Ulanzi stream docks.**
 
 Design your keys, wire up pages on a canvas, put live information on the wide key and keep using the
-plugins made for Ulanzi Studio, all from a native app that lives in your menu bar or system tray.
+plugins made for Ulanzi Studio and for Mirabox's Stream Dock, all from a native app that lives in
+your menu bar or system tray.
 
 **[taurilanzi.com](https://taurilanzi.com)**
 
@@ -39,8 +40,9 @@ The D200 is a great piece of hardware. Taurilanzi gives it software to match: a 
 that starts with your computer, draws every key on your computer with real fonts, emoji and
 transparency, and never needs an account or a connection to work.
 
-It is not affiliated with Ulanzi. It talks to the dock directly and reads the plugins published
-for Ulanzi Studio, so you can switch without losing what you already use.
+It is not affiliated with Ulanzi or Mirabox. It talks to the dock directly and runs the plugins
+published for Ulanzi Studio and the Stream Dock, so you can switch without losing what you already
+use.
 
 ## Features
 
@@ -88,11 +90,12 @@ Twenty widgets that keep themselves up to date on the dock:
 Timers, stopwatches and counters answer to the key itself: press to start or add, hold to reset.
 A carousel puts several of them on one key, the next one on each press.
 
-### Ulanzi Studio plugins, unchanged
-- The plugins published for Ulanzi Studio run as they are, with their own settings pages.
-- Install them from a ZIP or a folder, or browse the community catalog and install in one click,
-  with update notices.
-- Plugins run on a Node bundled with the app: nothing else to install.
+### Plugins of Ulanzi Studio and the Stream Dock, unchanged
+- The plugins published for Ulanzi Studio and for Mirabox's Stream Dock run as they are, with their
+  own settings pages: written in JavaScript, Python or HTML, or programs of their own.
+- One store for the Ulanzi Marketplace, the Ulanzi Community Store and Mirabox Space, with filters
+  and update notices; or install them from a file or a folder.
+- Plugins run on a Node and a Python bundled with the app: nothing else to install.
 
 ### In your language
 - Spanish and English, following your system's language, or the one you pick in the settings. Even
@@ -125,7 +128,7 @@ sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
 ```
 
 ```bash
-bun install            # dependencies, and the Node that runs plugins
+bun install            # dependencies, and the Node and the Python that run plugins
 bun run tauri dev      # the app, talking to the dock
 ```
 
@@ -147,15 +150,16 @@ bun run e2e                        # end-to-end tests against the real app
 │        │  Tauri IPC                          │
 │  Engine (Rust) ── renderer (resvg) ──► USB   │──► Ulanzi D200
 │        │                                     │
-│  Plugin host ── WebSocket :3906 ── Node      │──► Ulanzi Studio plugins
+│  Plugin host ── WebSocket :3906 ── Node      │──► Ulanzi Studio and
+│                                    Python    │    Stream Dock plugins
 └──────────────────────────────────────────────┘
 ```
 
 - **Engine**: one Rust thread owns the configuration, the pages on the dock and every key press.
 - **Renderer**: keys are composed as SVG and rasterized with `resvg`, then sent to the dock.
 - **Driver**: speaks the D200's HID protocol directly, with no vendor library.
-- **Plugin host**: implements the Ulanzi Studio plugin protocol, serves the plugins' pages and
-  runs them on the bundled Node.
+- **Plugin host**: speaks the plugin protocols of Ulanzi Studio and of the Stream Deck, which the
+  Stream Dock shares, serves the plugins' pages and runs them on the bundled Node and Python.
 
 ## Contributing
 

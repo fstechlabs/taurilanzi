@@ -1,4 +1,5 @@
 import { commands } from '~/ipc/bindings'
+import type { StoreSort } from '~/lib/store-filters'
 import type { CatalogPlugin } from '~/types/engine'
 
 const plugins = ref<CatalogPlugin[] | null>(null)
@@ -6,6 +7,8 @@ const loading = ref(false)
 const failure = ref<string | null>(null)
 /** Ids of the store entries being installed right now. */
 const installing = ref<Set<string>>(new Set())
+/** How the user last sorted the store, kept while the app runs. */
+const sort = ref<StoreSort>('popular')
 
 async function load(refresh = false) {
   loading.value = true
@@ -50,6 +53,7 @@ export function useStorePlugins() {
     loading: readonly(loading),
     failure: readonly(failure),
     installing: readonly(installing),
+    sort,
     load,
     install,
     entryOf,

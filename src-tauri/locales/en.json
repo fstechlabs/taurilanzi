@@ -165,7 +165,8 @@
     },
     "launcher": {
       "needsPython": "The Python the app comes with is missing: install the app again",
-      "needsNode": "The Node the app comes with is missing: install the app again"
+      "needsNode": "The Node the app comes with is missing: install the app again",
+      "otherSystem": "This plugin is a program for another system"
     }
   },
   "widgets": {

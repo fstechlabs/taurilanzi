@@ -1320,15 +1320,13 @@
   "plugins": {
     "list": {
       "title": "Plugins",
-      "add": "Add plugin",
-      "store": "Plugin store…",
-      "fromZip": "Install from a ZIP…",
+      "add": "Install plugin",
+      "fromZip": "Install from a file…",
       "fromFolder": "Install from a folder…",
       "reload": "Look for new plugins",
       "openFolder": "Open the plugins folder",
       "failed": "The plugins could not start.",
-      "none": "None installed",
-      "zipFilter": "Ulanzi plugin"
+      "zipFilter": "Plugin package"
     },
     "status": {
       "running": "Running",
@@ -1358,10 +1356,11 @@
     },
     "store": {
       "title": "Plugin store",
-      "description": "From the Ulanzi Marketplace and the Ulanzi Community Store, only those that work on this computer. They run on your computer: install the ones you trust.",
+      "description": "From the Ulanzi Marketplace, the Ulanzi Community Store and Mirabox Space, only those that work on this computer. They run on your computer: install the ones you trust.",
       "search": "Search",
       "searchLabel": "Search plugins",
-      "reload": "Read the store again",
+      "reload": "Reload listings",
+      "manual": "Install by hand",
       "loadFailed": "The store could not be read. Check the connection and try again.",
       "loading": "Reading the store…",
       "noMatch": "No plugin matches.",
@@ -1381,7 +1380,8 @@
       "sourceLabel": "Source",
       "from": {
         "ulanzi": "Ulanzi Marketplace",
-        "community": "Ulanzi Community Store"
+        "community": "Ulanzi Community Store",
+        "mirabox": "Mirabox Space"
       },
       "filters": "Filters",
       "allSources": "All",
@@ -1400,12 +1400,19 @@
         "office": "Office",
         "creative": "Creative",
         "lighting": "Lighting",
-        "ai": "AI"
+        "audio": "Audio and music",
+        "gaming": "Gaming",
+        "social": "Social",
+        "smart_home": "Smart home",
+        "ai": "AI",
+        "other": "Other"
       },
       "count": "No plugins | 1 plugin | {n} plugins",
       "clear": "Clear filters",
       "sortLabel": "Sort",
+      "clearSearch": "Clear the search",
       "sorts": {
+        "relevance": "Best match",
         "popular": "Most popular",
         "name": "By name",
         "recent": "Most recent"
@@ -1414,7 +1421,9 @@
     "runtime": {
       "node": "Node.js",
       "html": "HTML",
-      "python": "Python"
+      "python": "Python",
+      "native": "Program",
+      "shortcuts": "Keyboard shortcuts"
     }
   },
   "settings": {

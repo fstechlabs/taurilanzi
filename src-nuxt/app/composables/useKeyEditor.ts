@@ -384,6 +384,14 @@ function clean(value: unknown): unknown {
 export function useKeyEditor(target: Ref<KeyRef | null>) {
   const { snapshot, upload, previewUrl, redraws } = useEngine()
 
+  // Plugins draw the keys of the page being edited too, so their previews are live off the dock.
+  watch(() => target.value?.page ?? null, (page) => {
+    call(commands.editPage(page)).catch(() => {})
+  }, { immediate: true })
+  onScopeDispose(() => {
+    call(commands.editPage(null)).catch(() => {})
+  })
+
   const stored = computed(() => {
     const ref = target.value
     if (!ref) {

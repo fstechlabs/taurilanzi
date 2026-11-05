@@ -12,6 +12,7 @@ permissions = [
   "allow-delete-page",
   "allow-set-home-page",
   "allow-show-page",
+  "allow-edit-page",
   "allow-set-device",
   "allow-set-preferences",
   "allow-try-screensaver",

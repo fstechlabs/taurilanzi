@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+</head>
+<body>
+  <p>Cuenta: <span id="count">?</span></p>
+  <p>Idioma: <span id="language">?</span></p>
+  <script>
+    // Connects as Stream Dock's inspectors do, when the host calls it, and acts on its own:
+    // shows the settings it is handed, asks the plugin for a pong and saves what it learnt.
+    let settings = {}
+    function connectElgatoStreamDeckSocket(port, uuid, registerEvent, info, actionInfo) {
+      const action = JSON.parse(actionInfo)
+      const language = JSON.parse(info).application.language
+      document.getElementById('language').textContent = language
+      const ws = new WebSocket(`ws://127.0.0.1:${port}`)
+      const send = message => ws.send(JSON.stringify(message))
+      ws.onopen = () => send({ event: registerEvent, uuid })
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data)
+        if (message.event === 'didReceiveSettings') {
+          settings = message.payload.settings
+          document.getElementById('count').textContent = settings.count ?? 0
+          send({ event: 'sendToPlugin', action: action.action, context: uuid, payload: { ping: 7 } })
+        }
+        if (message.event === 'sendToPropertyInspector' && message.payload.pong !== undefined) {
+          send({ event: 'setSettings', context: uuid, payload: { ...settings, inspector: 'conectado', language, pong: message.payload.pong, column: action.payload.coordinates.column } })
+        }
+      }
+    }
+  </script>
+</body>
+</html>

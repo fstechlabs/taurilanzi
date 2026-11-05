@@ -165,7 +165,8 @@
     },
     "launcher": {
       "needsPython": "Falta el Python que trae la app: vuelve a instalarla",
-      "needsNode": "Falta el Node que trae la app: vuelve a instalarla"
+      "needsNode": "Falta el Node que trae la app: vuelve a instalarla",
+      "otherSystem": "Este plugin es un programa para otro sistema"
     }
   },
   "widgets": {

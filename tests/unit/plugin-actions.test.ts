@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { Puzzle } from '@lucide/vue'
 import type { PluginActionInfo, PluginCatalog, PluginInfo } from '../../src-nuxt/app/ipc/bindings'
-import { catalogOf, findAction, inspectorUrl, keyName, newPluginAction, pluginImage, pluginOf } from '../../src-nuxt/app/lib/actions/plugins'
+import { catalogOf, findAction, inspectorUrl, keyName, newPluginAction, pluginImage } from '../../src-nuxt/app/lib/actions/plugins'
 
 function action(changes: Partial<PluginActionInfo> = {}): PluginActionInfo {
   return {
@@ -11,6 +11,7 @@ function action(changes: Partial<PluginActionInfo> = {}): PluginActionInfo {
     icon: 'images/icon.svg',
     inspector: 'inspector/inspector.html',
     supported: true,
+    settings: {},
     ...changes,
   }
 }
@@ -25,6 +26,8 @@ function plugin(changes: Partial<PluginInfo> = {}): PluginInfo {
     category: 'Pruebas',
     icon: 'images/plugin icon.svg',
     folder: 'com.taurilanzi.e2e.ulanziPlugin',
+    protocol: 'ulanzi',
+    runtime: 'node',
     run: { state: 'running' },
     connected: true,
     actions: [action()],
@@ -33,14 +36,8 @@ function plugin(changes: Partial<PluginInfo> = {}): PluginInfo {
 }
 
 function catalog(plugins: PluginInfo[] = [plugin()]): PluginCatalog {
-  return { port: 3906, node: 'v20.0.0', language: 'es', plugins }
+  return { port: 3906, node: 'v20.0.0', python: null, language: 'es', plugins }
 }
-
-test('a plugin is the first four segments of its actions', () => {
-  expect(pluginOf('com.taurilanzi.e2e.counter.count')).toBe('com.taurilanzi.e2e.counter')
-  expect(pluginOf('com.taurilanzi.e2e.counter.count.more')).toBe('com.taurilanzi.e2e.counter')
-  expect(pluginOf('com.taurilanzi.e2e.counter')).toBe('com.taurilanzi.e2e.counter')
-})
 
 test('keys are named by column and row like the engine', () => {
   expect(keyName(0)).toBe('0_0')
@@ -56,9 +53,11 @@ test('the inspector opens from the host with the query of Ulanzi Studio', () => 
   expect(Object.fromEntries(url.searchParams)).toEqual({
     address: '127.0.0.1',
     port: '3906',
+    wsport: '3906',
     uuid: 'com.taurilanzi.e2e.counter.count',
     key: '2_1',
     actionid: 'abc',
+    actionId: 'abc',
     language: 'es',
     controller: 'Keypad',
     device: 'D200',
@@ -74,6 +73,8 @@ test('finds an action and its plugin in the catalog', () => {
   expect(findAction(list, 'com.taurilanzi.e2e.counter.missing')).toBeNull()
   expect(findAction(list, 'com.other.plugin.id.count')).toBeNull()
   expect(findAction(null, 'com.taurilanzi.e2e.counter.count')).toBeNull()
+  const stream = catalog([plugin({ id: 'com.mutedeck.plugin', protocol: 'stream_deck', actions: [action({ uuid: 'com.mutedeck.plugin.togglemute' })] })])
+  expect(findAction(stream, 'com.mutedeck.plugin.togglemute')?.plugin.id).toBe('com.mutedeck.plugin')
 })
 
 test('a new plugin action has a placement of its own and no settings', () => {
@@ -132,4 +133,15 @@ test('images of plugins encode their paths', () => {
   expect(pluginImage('a b', '/x.png')).toBe('deck://localhost/plugin/a%20b/x.png')
   expect(pluginImage('com.taurilanzi.e2e.counter', null)).toBeUndefined()
   expect(pluginImage('com.taurilanzi.e2e.counter', '')).toBeUndefined()
+})
+
+test('Stream Deck inspectors get the settings of their key, and new keys those of the manifest', () => {
+  const stream = plugin({ protocol: 'stream_deck' })
+  const url = new URL(inspectorUrl(catalog([stream]), stream, action(), 0, 'x', { step: 2 })!)
+  expect(JSON.parse(url.searchParams.get('settings')!)).toEqual({ step: 2 })
+  expect(new URL(inspectorUrl(catalog(), plugin(), action(), 0, 'x', { step: 2 })!).searchParams.has('settings')).toBe(false)
+  const settings = { step: 1 }
+  const created = newPluginAction('com.a.b.act', settings)
+  expect(created).toMatchObject({ type: 'plugin', action: 'com.a.b.act', settings: { step: 1 } })
+  expect(created.type === 'plugin' && created.settings).not.toBe(settings)
 })

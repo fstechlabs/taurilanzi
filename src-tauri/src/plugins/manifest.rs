@@ -1,6 +1,8 @@
-//! A plugin package as Ulanzi Studio reads it: `manifest.json` at the root of a folder ending in
-//! `.ulanziPlugin`, with optional `<language>.json` translations next to it.
+//! A plugin package: `manifest.json` at the root of a folder ending in `.ulanziPlugin`, as Ulanzi
+//! Studio reads it, or in `.sdPlugin`, as the Stream Deck and Mirabox's Stream Dock read theirs,
+//! with optional `<language>.json` translations next to it.
 
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -8,13 +10,25 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_json::Value;
 
+/// How a plugin talks to its host, which the ending of its folder tells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Protocol {
+    /// Ulanzi Studio's: commands named `cmd`, keys named `column_row`.
+    Ulanzi,
+    /// Elgato's Stream Deck one, which Mirabox's Stream Dock speaks too: `event`s about a
+    /// `context`, the plugin started with `-port`, `-pluginUUID`, `-registerEvent` and `-info`.
+    StreamDeck,
+}
+
 /// Main service of the plugin. As in Ulanzi Studio, the extension of `CodePath` decides how it
-/// runs, and `Type` tells Python apart when the extension does not.
+/// runs, and `Type` tells Python apart when the extension does not. Stream Deck plugins may also
+/// be a program of their own for each system.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Runtime {
     Node(PathBuf),
     Html(String),
     Python(PathBuf),
+    Native(PathBuf),
     /// Nothing runs: a plugin made only of images, or one of Ulanzi's built in ones.
     None,
 }
@@ -22,6 +36,7 @@ pub enum Runtime {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Manifest {
+    /// Stream Dock plugins leave it out: their folder names them.
     #[serde(rename = "UUID", default)]
     pub uuid: String,
     #[serde(default)]
@@ -36,11 +51,22 @@ pub struct Manifest {
     pub icon: String,
     #[serde(default)]
     pub category: String,
+    /// Only in Stream Deck manifests, which tells them apart in a package without its folder.
+    #[serde(rename = "SDKVersion", default)]
+    pub sdk_version: Value,
     #[serde(default)]
     pub code_path: String,
+    /// What runs on each system, over `CodePath`, in Stream Deck plugins.
+    #[serde(default)]
+    pub code_path_mac: String,
+    #[serde(default)]
+    pub code_path_win: String,
     /// `JavaScript` or `Python`.
     #[serde(rename = "Type", default)]
     pub kind: String,
+    /// The inspector of the actions that name none, in Stream Deck plugins.
+    #[serde(default)]
+    pub property_inspector_path: String,
     #[serde(default)]
     pub actions: Vec<ActionManifest>,
     /// A script that sets up the app the plugin works with, such as a remote script for a music
@@ -81,6 +107,12 @@ pub struct ActionManifest {
     /// Empty means every model; a leading `~` excludes one.
     #[serde(default)]
     pub devices: Vec<String>,
+    /// Stream Deck plugins: the host does not switch between two states on each press.
+    #[serde(default)]
+    pub disable_automatic_states: bool,
+    /// The settings a new key starts with, in Stream Dock plugins.
+    #[serde(default)]
+    pub settings: Value,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -95,6 +127,7 @@ fn keypad() -> Vec<String> {
 }
 
 /// The texts of a `<language>.json` file that the host shows; the rest is for the plugin.
+/// Ulanzi's list the actions in order; Stream Deck's key them by their id.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct Translation {
@@ -106,6 +139,8 @@ struct Translation {
     category: Option<String>,
     #[serde(default)]
     actions: Vec<ActionTranslation>,
+    #[serde(flatten)]
+    by_id: HashMap<String, Value>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -126,22 +161,58 @@ impl Manifest {
         serde_json::from_str(text).map_err(io::Error::other)
     }
 
-    pub fn runtime(&self, dir: &Path) -> Runtime {
-        let path = self.code_path.trim().trim_start_matches("./");
+    pub fn runtime(&self, dir: &Path, protocol: Protocol) -> Runtime {
+        let code = match protocol {
+            Protocol::Ulanzi => self.code_path.as_str(),
+            Protocol::StreamDeck => self.stream_deck_code(),
+        };
+        let path = code.trim().trim_start_matches("./");
         if path.is_empty() {
             return Runtime::None;
         }
         let lower = path.to_ascii_lowercase();
+        let script = [".js", ".mjs", ".cjs"].iter().any(|e| lower.ends_with(e));
         if lower.ends_with(".html") || lower.ends_with(".htm") {
             Runtime::Html(path.to_owned())
         } else if lower.ends_with(".py")
             || lower.ends_with(".pyw")
-            || (self.kind.trim().eq_ignore_ascii_case("python") && !lower.ends_with(".js"))
+            || (self.kind.trim().eq_ignore_ascii_case("python") && !script)
         {
             Runtime::Python(dir.join(path))
+        } else if protocol == Protocol::StreamDeck && !script {
+            // Windows programs are named without their `.exe` too, as that system finds them.
+            let program = dir.join(path);
+            let exe = dir.join(format!("{path}.exe"));
+            Runtime::Native(if !program.is_file() && exe.is_file() {
+                exe
+            } else {
+                program
+            })
         } else {
             Runtime::Node(dir.join(path))
         }
+    }
+
+    /// The code for this system, as the Stream Deck picks it; Linux, which neither knows, takes
+    /// what is shared.
+    fn stream_deck_code(&self) -> &str {
+        let own = if cfg!(target_os = "windows") {
+            &self.code_path_win
+        } else if cfg!(target_os = "macos") {
+            &self.code_path_mac
+        } else {
+            &self.code_path
+        };
+        [
+            own,
+            &self.code_path,
+            &self.code_path_mac,
+            &self.code_path_win,
+        ]
+        .into_iter()
+        .map(|c| c.trim())
+        .find(|c| !c.is_empty())
+        .unwrap_or_default()
     }
 
     /// The script of `InstallToDepsApp`, which Ulanzi Studio only runs when it is JavaScript.
@@ -171,22 +242,54 @@ impl Manifest {
         if let Some(category) = translation.category.filter(|c| !c.trim().is_empty()) {
             self.category = category;
         }
-        for (action, text) in self.actions.iter_mut().zip(translation.actions) {
-            if let Some(name) = text.name.filter(|n| !n.trim().is_empty()) {
+        let mut listed = translation.actions.into_iter();
+        for action in &mut self.actions {
+            let text = listed.next().unwrap_or_default();
+            let keyed = translation
+                .by_id
+                .get(&action.uuid)
+                .and_then(|value| serde_json::from_value::<ActionTranslation>(value.clone()).ok())
+                .unwrap_or_default();
+            if let Some(name) = text.name.or(keyed.name).filter(|n| !n.trim().is_empty()) {
                 action.name = name;
             }
-            if let Some(tooltip) = text.tooltip.filter(|t| !t.trim().is_empty()) {
+            if let Some(tooltip) = text
+                .tooltip
+                .or(keyed.tooltip)
+                .filter(|t| !t.trim().is_empty())
+            {
                 action.tooltip = tooltip;
             }
         }
     }
+
+    /// Stream Deck plugins with no id of their own are named by their folder or, failing that,
+    /// by what their actions start with.
+    pub fn fill_id(&mut self, folder: &str) {
+        if !self.uuid.trim().is_empty() {
+            return;
+        }
+        let stem = super::registry::package_stem(folder);
+        self.uuid = if super::registry::valid_plugin_id(stem) {
+            stem.to_owned()
+        } else {
+            self.actions
+                .first()
+                .and_then(|a| a.uuid.rsplit_once('.'))
+                .map(|(prefix, _)| prefix.to_owned())
+                .unwrap_or_default()
+        };
+    }
 }
 
 impl ActionManifest {
+    /// An empty list means keys too: Stream Dock's own examples leave it so.
     pub fn supports_keys(&self) -> bool {
-        self.controllers
-            .iter()
-            .any(|c| c.eq_ignore_ascii_case("keypad"))
+        self.controllers.is_empty()
+            || self
+                .controllers
+                .iter()
+                .any(|c| c.eq_ignore_ascii_case("keypad"))
     }
 
     /// Whether the action can go on a dock of this model, as the `Devices` list says.
@@ -317,7 +420,7 @@ mod tests {
         let dir = Path::new("/plugins/x.ulanziPlugin");
         let runtime = |code: &str| {
             let manifest: Manifest = serde_json::from_value(json!({ "CodePath": code })).unwrap();
-            manifest.runtime(dir)
+            manifest.runtime(dir, Protocol::Ulanzi)
         };
         assert_eq!(
             runtime("./plugin/app.js"),
@@ -333,7 +436,7 @@ mod tests {
         assert_eq!(runtime(""), Runtime::None);
         assert_eq!(runtime("   "), Runtime::None);
         let missing: Manifest = serde_json::from_value(json!({})).unwrap();
-        assert_eq!(missing.runtime(dir), Runtime::None);
+        assert_eq!(missing.runtime(dir, Protocol::Ulanzi), Runtime::None);
     }
 
     #[test]
@@ -342,7 +445,7 @@ mod tests {
         let runtime = |code: &str, kind: &str| {
             let manifest: Manifest =
                 serde_json::from_value(json!({ "CodePath": code, "Type": kind })).unwrap();
-            manifest.runtime(dir)
+            manifest.runtime(dir, Protocol::Ulanzi)
         };
         assert_eq!(
             runtime("plugin/app.py", "Python"),

@@ -10,6 +10,7 @@ const COMMANDS: &[&str] = &[
     "delete_page",
     "set_home_page",
     "show_page",
+    "edit_page",
     "set_device",
     "set_preferences",
     "try_screensaver",

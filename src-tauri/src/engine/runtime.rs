@@ -349,6 +349,10 @@ impl Engine {
                 let result = self.show_page(id);
                 self.respond(reply, result);
             }
+            Command::EditPage { id, reply } => {
+                self.edit_page(id);
+                self.respond(reply, Ok(()));
+            }
             Command::MoveKey { from, to, reply } => {
                 let result = self.edit(Target::Other, |e| e.move_key(from, to));
                 self.respond(reply, result);

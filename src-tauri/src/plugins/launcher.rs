@@ -20,10 +20,11 @@ use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, Signal, System, Update
 
 use super::desktop::Desktop;
 use super::hub::urlencode;
-use super::manifest::Runtime;
+use super::manifest::{Protocol, Runtime};
 use super::node::Node;
 use super::python::Python;
 use super::registry::Plugin;
+use super::streamdeck;
 
 /// The version plugins are told the host is: the Ulanzi Studio they were tested against.
 pub const HOST_VERSION: &str = "3.3.9";
@@ -148,15 +149,30 @@ impl Launcher {
     pub fn start(&self, plugin: &Plugin) {
         let id = plugin.manifest.uuid.clone();
         self.stop(&id);
+        let args = match plugin.protocol {
+            Protocol::Ulanzi => self.host_arguments().to_vec(),
+            Protocol::StreamDeck => streamdeck::arguments(self.port, plugin, &self.language),
+        };
         match &plugin.runtime {
-            Runtime::Node(code) => match self.node_program(&plugin.dir, code) {
+            Runtime::Node(code) => match self.node_program(&plugin.dir, code, args) {
                 Some(program) => self.supervise(&id, &plugin.dir, program),
                 None => warn!("plugin {id} needs Node and none was found"),
             },
-            Runtime::Python(code) => match self.python_program(code) {
+            Runtime::Python(code) => match self.python_program(code, args) {
                 Some(program) => self.supervise(&id, &plugin.dir, program),
                 None => warn!("plugin {id} needs Python and none was found"),
             },
+            Runtime::Native(code) if runs_here(code) => {
+                make_runnable(code);
+                let program = Program {
+                    path: code.clone(),
+                    args,
+                    env: Vec::new(),
+                    hidden: Vec::new(),
+                };
+                self.supervise(&id, &plugin.dir, program);
+            }
+            Runtime::Native(_) => warn!("plugin {id} is a program for another system"),
             Runtime::Html(page) => {
                 let url = format!(
                     "http://127.0.0.1:{port}/plugins/{folder}/{page}?address=127.0.0.1&port={port}&language={language}&uuid={id}",
@@ -186,6 +202,9 @@ impl Launcher {
             Runtime::Node(_) if self.node.is_none() => RunState::Unavailable {
                 reason: tr!("plugins.launcher.needsNode").into(),
             },
+            Runtime::Native(code) if !runs_here(code) => RunState::Unavailable {
+                reason: tr!("plugins.launcher.otherSystem").into(),
+            },
             Runtime::Html(_) => {
                 let pages = self.pages.lock().unwrap_or_else(PoisonError::into_inner);
                 if pages.contains(&plugin.manifest.uuid) {
@@ -194,7 +213,7 @@ impl Launcher {
                     RunState::Stopped
                 }
             }
-            Runtime::Node(_) | Runtime::Python(_) => self
+            Runtime::Node(_) | Runtime::Python(_) | Runtime::Native(_) => self
                 .processes
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
@@ -255,7 +274,7 @@ impl Launcher {
         }
     }
 
-    fn node_program(&self, dir: &Path, code: &Path) -> Option<Program> {
+    fn node_program(&self, dir: &Path, code: &Path, host: Vec<String>) -> Option<Program> {
         let node = self.node.as_ref()?;
         let mut args: Vec<String> = self
             .watchdog
@@ -270,7 +289,7 @@ impl Launcher {
                 .to_string_lossy()
                 .into_owned(),
         );
-        args.extend(self.host_arguments());
+        args.extend(host);
         Some(Program {
             path: node.path.clone(),
             args,
@@ -281,7 +300,7 @@ impl Launcher {
 
     /// As Ulanzi Studio starts them: the whole path of the script, its folder first in the
     /// path, and no bytecode written next to it.
-    fn python_program(&self, code: &Path) -> Option<Program> {
+    fn python_program(&self, code: &Path, host: Vec<String>) -> Option<Program> {
         let python = self.python.as_ref()?;
         let folders = code
             .parent()
@@ -290,7 +309,7 @@ impl Launcher {
             .chain(self.python_watchdog.clone());
         let path = env::join_paths(folders).ok()?;
         let mut args = vec![code.to_string_lossy().into_owned()];
-        args.extend(self.host_arguments());
+        args.extend(host);
         Some(Program {
             path: python.path.clone(),
             args,
@@ -481,8 +500,43 @@ fn write_pids(file: &Path, pids: &[u32]) {
     let _ = fs::write(file, text);
 }
 
+/// A program for this system: Windows runs `.exe` files, macOS the others. Linux runs neither,
+/// as the stores only have them for those two.
+fn runs_here(code: &Path) -> bool {
+    if !code.is_file() {
+        return false;
+    }
+    let exe = code
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("exe"));
+    if cfg!(target_os = "windows") {
+        exe
+    } else {
+        cfg!(target_os = "macos") && !exe
+    }
+}
+
+/// Packages made on Windows lose the mark that lets a program run.
+fn make_runnable(code: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = fs::metadata(code)
+            && meta.permissions().mode() & 0o111 == 0
+        {
+            let _ = fs::set_permissions(
+                code,
+                fs::Permissions::from_mode(meta.permissions().mode() | 0o755),
+            );
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = code;
+}
+
 /// Plugins left running by a copy of the app that did not close cleanly. Only processes still
-/// running Node or Python with a plugin are killed, never a process that reused the id.
+/// running a plugin, from its folder or with its path, are killed, never a process that reused the
+/// id.
 fn kill_leftovers(file: &Path) {
     let Ok(text) = fs::read_to_string(file) else {
         return;
@@ -496,7 +550,9 @@ fn kill_leftovers(file: &Path) {
     system.refresh_processes_specifics(
         ProcessesToUpdate::Some(&pids),
         true,
-        ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always),
+        ProcessRefreshKind::nothing()
+            .with_cmd(UpdateKind::Always)
+            .with_cwd(UpdateKind::Always),
     );
     for pid in pids {
         let Some(process) = system.process(pid) else {
@@ -508,8 +564,15 @@ fn kill_leftovers(file: &Path) {
             .map(|arg| arg.to_string_lossy())
             .collect::<Vec<_>>()
             .join(" ");
-        let runtime = command.contains("node") || command.contains("python");
-        if runtime && command.contains(".ulanziPlugin") {
+        let place = process
+            .cwd()
+            .map(|dir| dir.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default();
+        let lower = command.to_ascii_lowercase();
+        let plugin = [&lower, &place]
+            .iter()
+            .any(|s| s.contains(".ulanziplugin") || s.contains(".sdplugin"));
+        if plugin {
             info!("stopping plugin process {pid} left from before");
             // Windows has no signal to ask a process to end.
             if process.kill_with(Signal::Term).is_none() {
@@ -532,7 +595,8 @@ mod tests {
         let manifest: Manifest =
             serde_json::from_value(json!({ "UUID": "com.a.b.c", "CodePath": code })).unwrap();
         Plugin {
-            runtime: manifest.runtime(dir),
+            runtime: manifest.runtime(dir, Protocol::Ulanzi),
+            protocol: Protocol::Ulanzi,
             manifest,
             dir: dir.to_path_buf(),
             folder: "com.a.b.c.ulanziPlugin".into(),
@@ -548,7 +612,8 @@ mod tests {
         fs::write(dir.join("manifest.json"), manifest.to_string()).unwrap();
         let manifest = Manifest::read(dir).unwrap();
         Plugin {
-            runtime: manifest.runtime(dir),
+            runtime: manifest.runtime(dir, Protocol::Ulanzi),
+            protocol: Protocol::Ulanzi,
             manifest,
             dir: dir.to_path_buf(),
             folder: "com.a.b.c.ulanziPlugin".into(),
@@ -585,7 +650,9 @@ mod tests {
             dir.path(),
         );
         let code = dir.path().join("p.ulanziPlugin/plugin/app.py");
-        let program = launcher.python_program(&code).unwrap();
+        let program = launcher
+            .python_program(&code, launcher.host_arguments().to_vec())
+            .unwrap();
         assert_eq!(program.path, PathBuf::from("/opt/python/bin/python3"));
         assert_eq!(
             program.args,
@@ -737,5 +804,124 @@ mod tests {
         assert_eq!(fs::read_to_string(&pids).unwrap(), "");
         let _ = launcher(dir.path());
         assert!(pids.is_file());
+    }
+
+    /// A Stream Deck package as the registry loads it.
+    fn stream_deck_plugin(dir: &Path, manifest: serde_json::Value) -> Plugin {
+        fs::create_dir_all(dir).unwrap();
+        fs::write(dir.join("manifest.json"), manifest.to_string()).unwrap();
+        let mut manifest = Manifest::read(dir).unwrap();
+        manifest.fill_id(dir.file_name().unwrap().to_str().unwrap());
+        Plugin {
+            runtime: manifest.runtime(dir, Protocol::StreamDeck),
+            protocol: Protocol::StreamDeck,
+            manifest,
+            dir: dir.to_path_buf(),
+            folder: dir.file_name().unwrap().to_string_lossy().into_owned(),
+        }
+    }
+
+    #[test]
+    fn stream_deck_plugins_get_their_arguments_in_pairs_from_their_folder() {
+        let Some(node) = super::super::node::find(None) else {
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let plugin = stream_deck_plugin(
+            &dir.path().join("com.a.sd.sdPlugin"),
+            json!({ "CodePathMac": "plugin/index.js", "CodePathWin": "plugin/index.js", "CodePath": "plugin/index.js", "Version": "2.0" }),
+        );
+        fs::create_dir_all(plugin.dir.join("plugin")).unwrap();
+        fs::write(
+            plugin.dir.join("plugin/index.js"),
+            "require('fs').writeFileSync('ran.json', JSON.stringify({ argv: process.argv.slice(2) }))\nsetTimeout(() => {}, 30000)\n",
+        )
+        .unwrap();
+        let launcher = Launcher::new(
+            Some(node),
+            None,
+            Arc::new(Headless),
+            3906,
+            "es".into(),
+            dir.path(),
+        );
+        launcher.start(&plugin);
+        let ran: serde_json::Value =
+            serde_json::from_str(&written(&plugin.dir.join("ran.json"))).unwrap();
+        let argv = ran["argv"].as_array().unwrap();
+        assert_eq!(
+            argv[..7],
+            [
+                json!("-port"),
+                json!("3906"),
+                json!("-pluginUUID"),
+                json!("com.a.sd"),
+                json!("-registerEvent"),
+                json!("registerPlugin"),
+                json!("-info"),
+            ],
+            "the id from the folder, the file written in the folder"
+        );
+        let info: serde_json::Value = serde_json::from_str(argv[7].as_str().unwrap()).unwrap();
+        assert_eq!(
+            info["plugin"],
+            json!({ "uuid": "com.a.sd", "version": "2.0" })
+        );
+        launcher.stop_all();
+    }
+
+    #[test]
+    fn programs_of_their_own_run_only_on_their_system() {
+        let dir = tempfile::tempdir().unwrap();
+        let launcher = Launcher::new(
+            None,
+            None,
+            Arc::new(Headless),
+            3906,
+            "es".into(),
+            dir.path(),
+        );
+        let windows = stream_deck_plugin(
+            &dir.path().join("com.a.win.sdPlugin"),
+            json!({ "CodePath": "bin/plugin" }),
+        );
+        fs::create_dir_all(windows.dir.join("bin")).unwrap();
+        fs::write(windows.dir.join("bin/plugin.exe"), "MZ").unwrap();
+        let windows = stream_deck_plugin(&windows.dir, json!({ "CodePath": "bin/plugin" }));
+        assert_eq!(
+            windows.runtime,
+            Runtime::Native(windows.dir.join("bin/plugin.exe")),
+            "named without its .exe"
+        );
+        let state = launcher.state(&windows);
+        if cfg!(target_os = "windows") {
+            assert!(!matches!(state, RunState::Unavailable { .. }), "{state:?}");
+        } else {
+            assert!(matches!(state, RunState::Unavailable { .. }), "{state:?}");
+        }
+        let missing = stream_deck_plugin(
+            &dir.path().join("com.a.gone.sdPlugin"),
+            json!({ "CodePathMac": "gone", "CodePathWin": "gone.exe" }),
+        );
+        assert!(matches!(
+            launcher.state(&missing),
+            RunState::Unavailable { .. }
+        ));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_program_that_lost_its_mark_runs_again() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let program = dir.path().join("program");
+        fs::write(&program, "#!/bin/sh\n").unwrap();
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(runs_here(&program));
+        make_runnable(&program);
+        assert_eq!(
+            fs::metadata(&program).unwrap().permissions().mode() & 0o111,
+            0o111
+        );
     }
 }

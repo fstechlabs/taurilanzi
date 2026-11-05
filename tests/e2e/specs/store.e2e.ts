@@ -11,6 +11,8 @@ const PLUGIN = 'com.taurilanzi.e2e.counter'
 const FOLDER = 'com.taurilanzi.e2e.ulanziPlugin'
 const PYTHON = 'com.taurilanzi.e2e.python'
 const PYTHON_FOLDER = 'com.taurilanzi.e2e.python.ulanziPlugin'
+const STREAM_DOCK = 'com.taurilanzi.streamdock'
+const STREAM_DOCK_FOLDER = 'com.taurilanzi.streamdock.sdPlugin'
 const FIXTURES = join(import.meta.dirname, '..', 'fixtures')
 const BASE = `http://127.0.0.1:${STORE_PORT}`
 const ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#38bdf8"/></svg>'
@@ -35,6 +37,7 @@ describe('plugins of the stores', () => {
   const work = mkdtempSync(join(tmpdir(), 'taurilanzi-store-'))
   const packages = { '1.0.0': packageOf(FOLDER, '1.0.0', work), '1.1.0': packageOf(FOLDER, '1.1.0', work) }
   const python = packageOf(PYTHON_FOLDER, '1.0.0', work)
+  const streamDock = packageOf(STREAM_DOCK_FOLDER, '1.0.0', work)
   let offered: keyof typeof packages = '1.0.0'
   const catalog = () => ({
     plugins: [
@@ -113,10 +116,45 @@ describe('plugins of the stores', () => {
       },
     ],
   }
+  const space = {
+    code: 200,
+    data: {
+      list: [
+        {
+          id: '77',
+          name: 'Contador de Mirabox',
+          author: 'MiraBox',
+          version: '1.0.0',
+          overview: 'Suma con el protocolo de Stream Deck.',
+          type: '12',
+          types: [{ name: 'Video' }],
+          headUrl: `${BASE}/icon.svg`,
+          download: `${BASE}/${STREAM_DOCK_FOLDER}`,
+          mac: 1,
+          win: 1,
+          downloads: 10,
+          price: 0,
+          priceRmb: 0,
+          freeMembership: '0',
+        },
+        {
+          id: '78',
+          name: 'De pago',
+          version: '1.0.0',
+          download: `${BASE}/${STREAM_DOCK_FOLDER}`,
+          mac: 1,
+          win: 1,
+          price: 6,
+        },
+      ],
+    },
+  }
   const server = createServer((req, res) => {
     const files: Record<string, [string, string | Buffer]> = {
       '/catalog.json': ['application/json', JSON.stringify(catalog())],
       '/marketplace/product/list': ['application/json', JSON.stringify(marketplace)],
+      '/space/interface/user/productInfo/list': ['application/json', JSON.stringify(space)],
+      [`/${STREAM_DOCK_FOLDER}`]: ['application/zip', streamDock],
       '/icon.svg': ['image/svg+xml', ICON],
       '/shot.svg': ['image/svg+xml', SHOT],
       '/package.zip': ['application/zip', packages[offered]],
@@ -134,7 +172,7 @@ describe('plugins of the stores', () => {
   })
 
   after(async () => {
-    for (const id of [PLUGIN, PYTHON]) {
+    for (const id of [PLUGIN, PYTHON, STREAM_DOCK]) {
       if (await installed(id)) {
         await engine('uninstall_plugin', { id })
       }
@@ -143,30 +181,47 @@ describe('plugins of the stores', () => {
     rmSync(work, { recursive: true, force: true })
   })
 
-  it('lists what runs on a Mac with a D200 from every store, in Spanish', async () => {
-    await button('Añadir plugin').click()
-    await menuItem('Tienda de plugins…').click()
+  it('lists what runs on a Mac with a D200 from every store, the free ones, in Spanish', async () => {
+    await button('Instalar plugin').click()
     await expect($('[data-store-dialog]')).toBeDisplayed()
+    await expect($('[aria-label="Buscar plugins"]')).toBeFocused()
     const counter = $(`[data-store-plugin="${FOLDER}"]`)
     await counter.waitForDisplayed({ timeout: 15_000 })
     await expect(counter).toHaveText(expect.stringContaining('Contador de la comunidad'))
     await expect($('[data-store-plugin="ulanzi:7"]')).toHaveText(expect.stringContaining('Marketplace de Ulanzi'))
     await expect($('[data-store-plugin="com.taurilanzi.risky.ulanziPlugin"]')).toBeDisplayed()
+    await expect($('[data-store-plugin="mirabox:77"]')).toHaveText(expect.stringContaining('Mirabox Space'))
+    await expect($('[data-store-plugin="mirabox:78"]')).not.toBeExisting()
     await expect($('[data-store-plugin="ulanzi:8"]')).not.toBeExisting()
     await expect($('[data-store-plugin="com.taurilanzi.windows.ulanziPlugin"]')).not.toBeExisting()
     await expect($('[data-store-plugin="com.taurilanzi.dial.ulanziPlugin"]')).not.toBeExisting()
-    await expect(count()).toHaveText('3 plugins')
+    await expect(count()).toHaveText('4 plugins')
     const order = await $$('[data-store-plugin]').map(p => p.getAttribute('data-store-plugin'))
-    expect(order).toEqual(['ulanzi:7', FOLDER, 'com.taurilanzi.risky.ulanziPlugin'])
+    // The first of each store, then by name.
+    expect(order).toEqual([FOLDER, 'mirabox:77', 'ulanzi:7', 'com.taurilanzi.risky.ulanziPlugin'])
     await browser.waitUntil(async () => await counter.$('img').getProperty('naturalWidth') as number > 0, { timeoutMsg: 'the icon did not load' })
+    await button('Recargar listados').click()
+    await expect(count()).toHaveText('4 plugins')
+    await button('Instalar a mano').click()
+    for (const item of ['Instalar desde un archivo…', 'Instalar desde una carpeta…', 'Buscar plugins nuevos', 'Abrir la carpeta de plugins']) {
+      await expect(menuItem(item)).toBeDisplayed()
+    }
+    await browser.keys('Escape')
+    await expect($('[data-store-dialog]')).toBeDisplayed()
     await shot('store-catalog')
   })
 
-  it('filters by store, category and words, counting each choice', async () => {
+  it('filters by status, store, category and words, counting each choice', async () => {
     await expect($('[data-store-source="ulanzi"]')).toHaveText(expect.stringContaining('1'))
     await expect($('[data-store-source="community"]')).toHaveText(expect.stringContaining('2'))
+    await expect($('[data-store-source="mirabox"]')).toHaveText(expect.stringContaining('1'))
+    // Its place in the sidebar, which clicking may scroll.
+    const place = () => browser.execute(() => (document.querySelector('[data-store-source="community"]') as HTMLElement).offsetTop)
+    const before = await place()
     await $('[data-store-source="community"]').click()
     await expect(count()).toHaveText('2 plugins')
+    // The filters stay where they were as the button to clear them shows.
+    expect(await place()).toBe(before)
     await expect($('[data-store-plugin="ulanzi:7"]')).not.toBeExisting()
     await expect($('[data-store-kind="tools"]')).toBeDisabled()
     await $('[data-store-source="all"]').click()
@@ -174,10 +229,22 @@ describe('plugins of the stores', () => {
     await expect(count()).toHaveText('1 plugin')
     await shot('store-filtered')
     await button('Quitar filtros').click()
-    await $('[aria-label="Buscar plugins"]').setValue('pulsaciones')
+    await expect($('[data-store-status="updates"]')).toBeDisabled()
+    const search = $('[aria-label="Buscar plugins"]')
+    await search.setValue('pulsaciones')
     await expect(count()).toHaveText('1 plugin')
+    await expect($('[data-store-sort]')).toHaveText('Más relevantes')
+    await search.setValue('creatividad')
+    await expect(count()).toHaveText('1 plugin')
+    await expect($('[data-store-plugin="mirabox:77"]')).toBeDisplayed()
+    await button('Borrar la búsqueda').click()
+    await expect($('[data-store-sort]')).toHaveText('Más populares')
+    await $('[data-store-kind="creative"]').click()
+    await expect(count()).toHaveText('1 plugin')
+    await expect($('[data-store-plugin="mirabox:77"]')).toBeDisplayed()
     await button('Quitar filtros').click()
-    await expect(count()).toHaveText('3 plugins')
+    await expect(count()).toHaveText('4 plugins')
+    await expect($('[data-store-clear]')).not.toBeDisplayed()
   })
 
   it('warns about findings and only downloads from the stores\' hosts', async () => {
@@ -198,6 +265,16 @@ describe('plugins of the stores', () => {
     await browser.waitUntil(async () => (await installed(PYTHON))?.connected === true, { timeout: 20_000, timeoutMsg: 'the Python plugin did not connect' })
     expect((await installed(PYTHON))?.runtime).toBe('python')
     await expect($('[data-store-status="installed"]')).toHaveText(expect.stringContaining('1'))
+  })
+
+  it('installs a Stream Dock plugin of Mirabox Space, which connects', async () => {
+    await $('[data-store-plugin="mirabox:77"]').click()
+    await expect(details().$('[data-store-origin]')).toHaveText('Mirabox Space')
+    await button('Instalar', details()).click()
+    await details().$('[data-store-installed]').waitForDisplayed({ timeout: 20_000 })
+    await browser.waitUntil(async () => (await installed(STREAM_DOCK))?.connected === true, { timeout: 20_000, timeoutMsg: 'the Stream Dock plugin did not connect' })
+    const plugin = await installed(STREAM_DOCK)
+    expect(plugin).toMatchObject({ protocol: 'stream_deck', runtime: 'node', name: 'Contador Stream Dock' })
   })
 
   it('installs a plugin of the community in one click', async () => {

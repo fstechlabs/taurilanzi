@@ -7,17 +7,22 @@ use std::path::{Component, Path, PathBuf};
 
 use log::warn;
 
-use super::manifest::{ActionManifest, Manifest, Runtime};
+use super::manifest::{ActionManifest, Manifest, Protocol, Runtime};
 
-/// The folder of a package ends like this; the SDKs look for it to find the plugin root.
+/// The folder of an Ulanzi package ends like this; the SDKs look for it to find the plugin root.
 pub const PACKAGE_SUFFIX: &str = ".ulanziPlugin";
+/// And that of a Stream Deck or Stream Dock one like this, in any case.
+pub const STREAM_DECK_SUFFIX: &str = ".sdPlugin";
+/// Images Stream Deck manifests name without their extension, tried in this order.
+const IMAGE_EXTENSIONS: [&str; 5] = [".svg", "@2x.png", ".png", ".jpg", ".gif"];
 
 #[derive(Debug, Clone)]
 pub struct Plugin {
     pub manifest: Manifest,
     pub dir: PathBuf,
-    /// The folder name, which ends in `.ulanziPlugin`.
+    /// The folder name, which ends in `.ulanziPlugin` or `.sdPlugin`.
     pub folder: String,
+    pub protocol: Protocol,
     pub runtime: Runtime,
 }
 
@@ -92,6 +97,12 @@ pub fn is_plugin_id(uuid: &str) -> bool {
 }
 
 /// What a plugin may be called: reverse-DNS, two parts or more, letters, digits, `-` and `_`.
+/// What an action may be called: a plugin id and one part more at least. Ulanzi's have five or
+/// more; Stream Deck ones, three or four.
+pub fn valid_action_id(uuid: &str) -> bool {
+    uuid.split('.').count() >= 3 && valid_plugin_id(uuid)
+}
+
 pub fn valid_plugin_id(uuid: &str) -> bool {
     uuid.split('.').count() >= 2
         && uuid.split('.').all(|part| {
@@ -139,30 +150,93 @@ fn packages(root: &Path) -> Vec<PathBuf> {
                 && path
                     .file_name()
                     .and_then(|n| n.to_str())
-                    .is_some_and(|n| n.ends_with(PACKAGE_SUFFIX))
+                    .is_some_and(|n| protocol_of(n).is_some())
         })
         .collect();
     dirs.sort();
     dirs
 }
 
+/// What a package folder speaks, by how its name ends; `None` if it is not one.
+pub fn protocol_of(folder: &str) -> Option<Protocol> {
+    let lower = folder.to_ascii_lowercase();
+    if lower.ends_with(&PACKAGE_SUFFIX.to_ascii_lowercase()) {
+        Some(Protocol::Ulanzi)
+    } else if lower.ends_with(&STREAM_DECK_SUFFIX.to_ascii_lowercase()) {
+        Some(Protocol::StreamDeck)
+    } else {
+        None
+    }
+}
+
+/// The name of a package folder without its ending.
+pub fn package_stem(folder: &str) -> &str {
+    let suffix = match protocol_of(folder) {
+        Some(Protocol::Ulanzi) => PACKAGE_SUFFIX.len(),
+        Some(Protocol::StreamDeck) => STREAM_DECK_SUFFIX.len(),
+        None => 0,
+    };
+    &folder[..folder.len() - suffix]
+}
+
+/// The manifest of a package, with the id Stream Dock plugins leave to their folder.
+pub fn read_manifest(dir: &Path) -> std::io::Result<Manifest> {
+    let mut manifest = Manifest::read(dir)?;
+    let folder = dir.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    manifest.fill_id(folder);
+    Ok(manifest)
+}
+
 fn load(dir: &Path, language: &str) -> Result<Plugin, String> {
-    let mut manifest = Manifest::read(dir).map_err(|err| err.to_string())?;
+    let folder = dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default()
+        .to_owned();
+    let protocol = protocol_of(&folder).ok_or("its folder is not a package")?;
+    let mut manifest = read_manifest(dir).map_err(|err| err.to_string())?;
     if !valid_plugin_id(&manifest.uuid) {
         return Err(format!("its id {:?} is not a plugin id", manifest.uuid));
     }
     manifest.localize(dir, language);
-    let runtime = manifest.runtime(dir);
+    with_image_files(&mut manifest, dir);
+    let runtime = manifest.runtime(dir, protocol);
     Ok(Plugin {
-        folder: dir
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or_default()
-            .to_owned(),
+        folder,
         dir: dir.to_path_buf(),
+        protocol,
         runtime,
         manifest,
     })
+}
+
+/// Stream Deck manifests name images without an extension: the host finds the file.
+fn with_image_files(manifest: &mut Manifest, dir: &Path) {
+    let found = |path: &mut String| {
+        let given = path.trim();
+        if given.is_empty() || inside(dir, given).is_some_and(|p| p.is_file()) {
+            return;
+        }
+        if let Some(file) = IMAGE_EXTENSIONS
+            .iter()
+            .map(|ext| format!("{given}{ext}"))
+            .find(|name| inside(dir, name).is_some_and(|p| p.is_file()))
+        {
+            *path = file;
+        }
+    };
+    found(&mut manifest.icon);
+    for action in &mut manifest.actions {
+        found(&mut action.icon);
+        for state in &mut action.states {
+            found(&mut state.image);
+        }
+        if action.property_inspector_path.trim().is_empty() {
+            action
+                .property_inspector_path
+                .clone_from(&manifest.property_inspector_path);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -307,5 +381,56 @@ mod tests {
         assert_eq!(inside(root, "images/../../a.png"), None);
         assert_eq!(inside(root, ""), None);
         assert_eq!(inside(root, "  "), None);
+    }
+
+    #[test]
+    fn stream_deck_packages_are_named_by_their_folder_and_find_their_images() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = package(
+            root.path(),
+            "com.mirabox.demo.SDPlugin",
+            &json!({
+                "Name": "Demo",
+                "Icon": "images/icon",
+                "PropertyInspectorPath": "pi/index.html",
+                "Actions": [
+                    { "UUID": "com.mirabox.demo.one", "Name": "One", "States": [{ "Image": "images/one" }] },
+                    { "UUID": "com.mirabox.demo.two", "Name": "Two", "PropertyInspectorPath": "pi/two.html" },
+                ],
+            }),
+        );
+        fs::create_dir_all(dir.join("images")).unwrap();
+        fs::write(dir.join("images/icon@2x.png"), "png").unwrap();
+        fs::write(dir.join("images/one.svg"), "<svg/>").unwrap();
+        fs::write(
+            dir.join("es.json"),
+            json!({ "Name": "Demostración", "com.mirabox.demo.two": { "Name": "Dos" } })
+                .to_string(),
+        )
+        .unwrap();
+        let numbered = package(
+            root.path(),
+            "20250118000451.sdPlugin",
+            &json!({ "Actions": [{ "UUID": "com.hotspot.discord.mute" }] }),
+        );
+
+        let registry = Registry::scan(root.path(), "es");
+        let demo = registry.plugin("com.mirabox.demo").unwrap();
+        assert_eq!(demo.protocol, Protocol::StreamDeck);
+        assert_eq!(demo.manifest.name, "Demostración");
+        assert_eq!(demo.manifest.icon, "images/icon@2x.png");
+        let [one, two] = &demo.manifest.actions[..] else {
+            panic!("two actions");
+        };
+        assert_eq!(one.states[0].image, "images/one.svg");
+        assert_eq!(one.property_inspector_path, "pi/index.html", "the plugin's");
+        assert_eq!(two.property_inspector_path, "pi/two.html");
+        assert_eq!(two.name, "Dos");
+        assert!(one.supports_keys(), "no controllers named is keys");
+        let discord = registry.plugin("com.hotspot.discord").unwrap();
+        assert_eq!(discord.dir, numbered, "by what its actions start with");
+        assert_eq!(package_stem("a.b.sdPlugin"), "a.b");
+        assert_eq!(protocol_of("a.b.ulanziPlugin"), Some(Protocol::Ulanzi));
+        assert_eq!(protocol_of("a.b.zip"), None);
     }
 }

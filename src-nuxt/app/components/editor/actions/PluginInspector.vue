@@ -3,7 +3,7 @@ import { TriangleAlert } from '@lucide/vue'
 import { KEY_TARGET } from '~/lib/actions/key-draft'
 import { findAction, inspectorUrl } from '~/lib/actions/plugins'
 
-const props = defineProps<{ action: string, id: string }>()
+const props = defineProps<{ action: string, id: string, settings?: unknown }>()
 
 const { t } = useI18n()
 const { catalog } = usePlugins()
@@ -16,7 +16,7 @@ watchEffect(() => {
   const value = catalog.value
   const action = found.value
   if (!url.value && value && action) {
-    url.value = inspectorUrl(value, action.plugin, action.action, target?.value?.index ?? 0, props.id)
+    url.value = inspectorUrl(value, action.plugin, action.action, target?.value?.index ?? 0, props.id, props.settings)
   }
 })
 const running = computed(() => found.value?.plugin.connected ?? false)

@@ -5,6 +5,9 @@ import { catalogOf } from '~/lib/actions/plugins'
 import { t } from '~/lib/i18n'
 import type { PluginCatalog } from '~/types/engine'
 
+/** What plugin packages come as: ZIP files, renamed by the Stream Dock and the Stream Deck. */
+const PACKAGE_FILES = ['zip', 'sdPlugin', 'streamDockPlugin', 'streamDeckPlugin']
+
 /** Whether they run changes on its own: checked again every few seconds while the app is in view. */
 const POLL_MS = 5000
 
@@ -36,11 +39,11 @@ export function usePlugins() {
     }, POLL_MS)
   }
 
-  /** A ZIP from a store, or the `.ulanziPlugin` folder itself. Returns the id, or null if the
+  /** A package from a store, or the `.ulanziPlugin` or `.sdPlugin` folder itself. Returns the id, or null if the
    * user gave up. */
   async function install(kind: 'zip' | 'folder') {
     const path = await open(kind === 'zip'
-      ? { filters: [{ name: t('plugins.list.zipFilter'), extensions: ['zip'] }] }
+      ? { filters: [{ name: t('plugins.list.zipFilter'), extensions: PACKAGE_FILES }] }
       : { directory: true })
     if (typeof path !== 'string') {
       return null

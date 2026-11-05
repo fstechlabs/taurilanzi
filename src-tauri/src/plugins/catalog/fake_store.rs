@@ -1,7 +1,7 @@
 //! A store on a local port for the tests: it serves the files it is given and counts requests.
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -34,12 +34,20 @@ pub fn serve(files: impl FnOnce(&str) -> HashMap<String, Vec<u8>>) -> FakeStore 
             let mut line = String::new();
             let _ = reader.read_line(&mut line);
             let target = line.split(' ').nth(1).unwrap_or_default().to_owned();
+            let mut length = 0;
             loop {
                 let mut header = String::new();
                 if reader.read_line(&mut header).unwrap_or(0) <= 2 {
                     break;
                 }
+                if let Some((name, value)) = header.split_once(':')
+                    && name.eq_ignore_ascii_case("content-length")
+                {
+                    length = value.trim().parse().unwrap_or(0);
+                }
             }
+            let mut body = vec![0; length];
+            let _ = reader.read_exact(&mut body);
             let path = target.split('?').next().unwrap_or_default();
             let (status, body) = match files.get(&target).or_else(|| files.get(path)) {
                 Some(body) => ("200 OK", body.as_slice()),

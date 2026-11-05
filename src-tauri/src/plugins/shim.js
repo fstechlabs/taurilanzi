@@ -51,3 +51,94 @@
     return send.call(this, body)
   }
 })()
+
+// Pages of Stream Deck and Stream Dock plugins are handed their connection by the host, which
+// calls a function the page defines once it has loaded: the inspector of a key with five
+// arguments, the main service with four.
+;(() => {
+  const config = window.__TAURILANZI__
+  const deck = config && config.streamDeck
+  if (!deck) {
+    return
+  }
+  const query = new URLSearchParams(location.search)
+  const context = query.get('actionid')
+  // Looked up as the page's own scripts see them: some declare these with `const`.
+  const global = name => {
+    try {
+      return (0, eval)(`typeof ${name} === 'function' ? ${name} : null`)
+    }
+    catch {
+      return null
+    }
+  }
+
+  if (context) {
+    const action = query.get('uuid') || ''
+    const key = query.get('key') || '0_0'
+    const [column, row] = key.split('_').map(Number)
+    let settings = {}
+    try {
+      settings = JSON.parse(query.get('settings') || '{}')
+    }
+    catch {}
+    // The host learns which key an inspector is for from its registration.
+    const send = WebSocket.prototype.send
+    WebSocket.prototype.send = function (data) {
+      if (typeof data === 'string' && data.includes('registerPropertyInspector')) {
+        try {
+          const message = JSON.parse(data)
+          if (message.event === 'registerPropertyInspector') {
+            message.taurilanzi = { action, key, settings }
+            data = JSON.stringify(message)
+          }
+        }
+        catch {}
+      }
+      return send.call(this, data)
+    }
+    // Stream Dock's inspectors ask the host for files and wait for their paths, which a page
+    // cannot read from its own inputs.
+    document.addEventListener('click', (event) => {
+      const input = event.target instanceof Element && event.target.closest('input[type="file"]')
+      const answer = global('onFilePickerReturn')
+      if (!input || !answer) {
+        return
+      }
+      event.preventDefault()
+      fetch(`${config.pick}?accept=${encodeURIComponent(input.accept || '')}`, { headers: { 'X-Taurilanzi-Token': config.token } })
+        .then(response => response.json())
+        .then((paths) => {
+          if (paths.length) {
+            answer(JSON.stringify(paths))
+          }
+        })
+        .catch(() => {})
+    }, true)
+    const actionInfo = {
+      action,
+      context,
+      device: deck.device,
+      payload: { settings, coordinates: { column, row }, controller: 'Keypad', state: 0, isInMultiAction: false },
+    }
+    connect(context, 'registerPropertyInspector', JSON.stringify(actionInfo))
+  }
+  else {
+    connect(deck.plugin, 'registerPlugin')
+  }
+
+  function connect(uuid, register, actionInfo) {
+    window.addEventListener('load', () => {
+      const names = ['connectMiraBoxSDSocket', 'connectElgatoStreamDeckSocket', 'connectSocket', 'connectSDSocket']
+      const found = names.map(global).find(Boolean)
+      if (!found) {
+        return
+      }
+      const args = [String(deck.port), uuid, register, JSON.stringify(deck.info)]
+      if (actionInfo) {
+        args.push(actionInfo)
+      }
+      found(...args)
+    })
+  }
+})()

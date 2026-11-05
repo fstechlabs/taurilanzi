@@ -36,8 +36,11 @@ pub struct PluginKeys {
     registry: Arc<RwLock<Registry>>,
     /// Every placement of a plugin action in the configuration, by its id.
     known: HashMap<String, Instance>,
-    /// Those on the page the dock shows, which their plugins know are active.
+    /// Those on the page the dock shows, and on the one the editor shows, which their plugins
+    /// know are active.
     visible: HashMap<String, Instance>,
+    /// The page open in the editor: its keys draw for their previews, even off the dock.
+    edited: Option<Uuid>,
     visuals: HashMap<String, Visual>,
     /// Settings a plugin saved for a key the editor has not saved yet: its inspector opens as the
     /// action is added, before the key reaches the engine.
@@ -53,6 +56,7 @@ impl PluginKeys {
             registry,
             known: HashMap::new(),
             visible: HashMap::new(),
+            edited: None,
             visuals: HashMap::new(),
             pending: HashMap::new(),
             images: Mutex::default(),
@@ -102,7 +106,12 @@ impl Engine {
         let showing = !self.paused && self.screen.showing_keys();
         let mut visible = HashMap::new();
         let mut settings = HashMap::new();
-        if showing && let Some(page) = self.current_page() {
+        let on_dock = self.current_page().filter(|_| showing);
+        let edited = self
+            .plugin_keys
+            .edited
+            .and_then(|id| self.config.active_profile()?.page(id));
+        for page in on_dock.into_iter().chain(edited) {
             for (&index, key) in &page.keys {
                 if let Some((action, id, values)) = plugin_action(key) {
                     visible.insert(id.to_string(), instance(action, index, id));
@@ -162,6 +171,14 @@ impl Engine {
         self.plugin_keys.visible = visible;
     }
 
+    /// The editor shows another page, or none.
+    pub(super) fn edit_page(&mut self, id: Option<Uuid>) {
+        if self.plugin_keys.edited != id {
+            self.plugin_keys.edited = id;
+            self.sync_plugins();
+        }
+    }
+
     /// The physical press and release of a key go to its plugin as they happen.
     pub(super) fn plugin_key(&self, index: u8, pressed: bool) {
         let Some(host) = &self.plugin_keys.host else {
@@ -173,6 +190,12 @@ impl Engine {
         let Some((action, id, settings)) = plugin_action(key) else {
             return;
         };
+        // Stream Deck plugins act as their key goes down and up; when the key also tells gestures
+        // apart, they hear the press once it is told, from its run.
+        let gestures = !key.double_press.is_empty() || !key.long_press.is_empty();
+        if gestures && host.stream_deck(action) {
+            return;
+        }
         let cmd = if pressed { "keydown" } else { "keyup" };
         host.to_main(
             &host.plugin_id(action),
@@ -203,8 +226,16 @@ impl Engine {
                 }
                 self.changed = true;
             }
-            PluginInput::InspectorConnected { conn, instance } => {
-                let settings = self.plugin_settings(&instance.actionid).unwrap_or_default();
+            PluginInput::InspectorConnected {
+                conn,
+                instance,
+                settings: opened_with,
+            } => {
+                let settings = self
+                    .plugin_settings(&instance.actionid)
+                    .or_else(|| self.plugin_keys.pending.get(&instance.actionid).cloned())
+                    .or(opened_with)
+                    .unwrap_or_default();
                 let fields = key_fields(&settings);
                 host.to_conn(conn, &event("add", &instance, fields.clone()));
                 host.to_conn(conn, &event("paramfromapp", &instance, fields.clone()));
@@ -231,6 +262,10 @@ impl Engine {
                 from,
                 forward,
             } => {
+                // Settings of no instance would reach whichever inspector comes next without one.
+                if actionid.is_empty() {
+                    return;
+                }
                 let Some((instance, _)) = self.plugin_instance(&actionid) else {
                     self.plugin_keys.pending.insert(actionid, settings);
                     return;
@@ -244,9 +279,9 @@ impl Engine {
                 );
             }
             PluginInput::Visual { actionid, change } => self.plugin_visual(&actionid, change),
-            PluginInput::Alert { actionid } => {
+            PluginInput::Result { actionid, ok } => {
                 if let Some(slot) = self.plugin_slot(&actionid) {
-                    self.on_key_result(slot, false);
+                    self.on_key_result(slot, ok);
                 }
             }
             PluginInput::SaveGlobalSettings { plugin, settings } => {
@@ -295,6 +330,12 @@ impl Engine {
             VisualChange::StateImages(images) => {
                 visual.state_images = images.into_iter().collect();
                 visual.image = None;
+            }
+            VisualChange::StateImage { state, image } => {
+                if visual.state == Some(state) {
+                    visual.image = None;
+                }
+                visual.state_images.insert(state, image);
             }
             VisualChange::ClearImages => {
                 visual.state_images.clear();
@@ -847,6 +888,34 @@ mod tests {
             added(7, x, json!({ "n": 3 })),
             "a restarted plugin hears again"
         );
+    }
+
+    #[test]
+    fn the_page_open_in_the_editor_draws_too() {
+        let (x, z) = (Uuid::new_v4(), Uuid::new_v4());
+        let mut setup = setup(x, z);
+        let mut main = setup.main();
+        setup.engine.sync_plugins();
+        assert_eq!(drain(&mut main), added(7, x, json!({ "n": 3 })));
+
+        let other = setup.other;
+        setup.engine.edit_page(Some(other));
+        assert_eq!(
+            drain(&mut main),
+            added(0, z, json!({})),
+            "off the dock, for its preview"
+        );
+        setup.engine.paused = true;
+        setup.engine.sync_plugins();
+        assert_eq!(drain(&mut main), vec![left(7, x)], "the editor's stays");
+        setup.engine.paused = false;
+        setup.engine.sync_plugins();
+        drain(&mut main);
+
+        setup.engine.edit_page(None);
+        assert_eq!(drain(&mut main), vec![left(0, z)]);
+        setup.engine.edit_page(None);
+        assert!(drain(&mut main).is_empty(), "only changes are sent");
     }
 
     #[test]

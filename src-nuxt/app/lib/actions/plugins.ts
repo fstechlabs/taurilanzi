@@ -25,42 +25,50 @@ export function storeImage(url: string | null | undefined) {
   return url ? `${IMAGES}/store?url=${encodeURIComponent(url)}` : undefined
 }
 
-/** The id of a plugin is the first four segments of the ids of its actions. */
-export function pluginOf(action: string) {
-  return action.split('.').slice(0, 4).join('.')
-}
-
 /** Key 7 of the D200 is `2_1` for plugins: column and row. */
 export function keyName(index: number) {
   return `${index % 5}_${Math.floor(index / 5)}`
 }
 
 /** The property inspector page of an action, with the query Ulanzi Studio gives it. */
-export function inspectorUrl(catalog: Catalog, plugin: Plugin, action: PluginAction, index: number, actionid: string) {
+export function inspectorUrl(catalog: Catalog, plugin: Plugin, action: PluginAction, index: number, actionid: string, settings: unknown = {}) {
   if (!action.inspector) {
     return null
   }
   const query = new URLSearchParams({
     address: '127.0.0.1',
     port: String(catalog.port),
+    // Some inspectors read the port by this name, or assume Ulanzi Studio's.
+    wsport: String(catalog.port),
     uuid: action.uuid,
     key: keyName(index),
     actionid,
+    // Some SDKs copied from Ulanzi's read it with a capital I.
+    actionId: actionid,
     language: catalog.language,
     controller: 'Keypad',
     device: 'D200',
   })
+  // Stream Deck inspectors are handed the settings of their key as they connect.
+  if (plugin.protocol === 'stream_deck') {
+    query.set('settings', JSON.stringify(settings ?? {}))
+  }
   return `http://127.0.0.1:${catalog.port}/plugins/${encodeURIComponent(plugin.folder)}/${encodePath(action.inspector)}?${query}`
 }
 
+/** By the actions each plugin has: their ids do not always start with the plugin's. */
 export function findAction(catalog: Catalog | null, uuid: string) {
-  const plugin = catalog?.plugins.find(p => p.id === pluginOf(uuid))
-  const action = plugin?.actions.find(a => a.uuid === uuid)
-  return plugin && action ? { plugin, action } : null
+  for (const plugin of catalog?.plugins ?? []) {
+    const action = plugin.actions.find(a => a.uuid === uuid)
+    if (action) {
+      return { plugin, action }
+    }
+  }
+  return null
 }
 
-export function newPluginAction(uuid: string): Action {
-  return { type: 'plugin', action: uuid, id: crypto.randomUUID(), settings: {} }
+export function newPluginAction(uuid: string, settings: unknown = {}): Action {
+  return { type: 'plugin', action: uuid, id: crypto.randomUUID(), settings: structuredClone(settings) }
 }
 
 /** One section per plugin, with its actions; those it cannot run here show why. */
@@ -87,7 +95,7 @@ export function catalogOf(catalog: Catalog): { sections: Section[], entries: Cat
     get soon() {
       return unavailable(plugin, action)
     },
-    create: () => newPluginAction(action.uuid),
+    create: () => newPluginAction(action.uuid, action.settings),
     matches: candidate => candidate.type === 'plugin' && candidate.action === action.uuid,
   })))
   return { sections, entries }

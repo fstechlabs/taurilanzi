@@ -1,5 +1,6 @@
-//! Installing a plugin from the ZIP the stores hand out, `<id>.ulanziPlugin/manifest.json` inside,
-//! or from a package folder; and removing one installed in the app's folder.
+//! Installing a plugin from the ZIP the stores hand out, `<id>.ulanziPlugin/manifest.json` or
+//! `<id>.sdPlugin/manifest.json` inside, or from a package folder; and removing one installed in
+//! the app's folder.
 
 use std::fs::{self, File};
 use std::io;
@@ -7,7 +8,9 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use super::manifest::Manifest;
-use super::registry::{PACKAGE_SUFFIX, valid_plugin_id};
+use super::registry::{
+    PACKAGE_SUFFIX, STREAM_DECK_SUFFIX, protocol_of, read_manifest, valid_plugin_id,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum InstallError {
@@ -44,7 +47,7 @@ pub fn install(source: &Path, plugins: &Path) -> Result<String, InstallError> {
             unzip(source, &staging)?
         };
         let manifest =
-            Manifest::read(&package).map_err(|e| InstallError::BadManifest(e.to_string()))?;
+            read_manifest(&package).map_err(|e| InstallError::BadManifest(e.to_string()))?;
         if !valid_plugin_id(&manifest.uuid) {
             return Err(InstallError::BadManifest(trf!(
                 "plugins.install.invalidId",
@@ -95,8 +98,8 @@ fn copies_of(id: &str, plugins: &Path) -> Vec<PathBuf> {
         .filter(|dir| {
             dir.file_name()
                 .and_then(|n| n.to_str())
-                .is_some_and(|n| n.ends_with(PACKAGE_SUFFIX))
-                && Manifest::read(dir).is_ok_and(|m| m.uuid == id)
+                .is_some_and(|n| protocol_of(n).is_some())
+                && read_manifest(dir).is_ok_and(|m| m.uuid == id)
         })
         .collect()
 }
@@ -129,7 +132,7 @@ fn is_package(path: &Path) -> bool {
         && path
             .file_name()
             .and_then(|n| n.to_str())
-            .is_some_and(|n| n.ends_with(PACKAGE_SUFFIX))
+            .is_some_and(|n| protocol_of(n).is_some())
 }
 
 fn copy_dir(from: &Path, to: &Path) -> io::Result<()> {
@@ -148,10 +151,9 @@ fn copy_dir(from: &Path, to: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Every entry must sit under one `<id>.ulanziPlugin/` folder, without absolute paths or `..`.
-/// Leftovers of macOS archiving are skipped.
-/// A ZIP holds the `.ulanziPlugin` folder, or (as some packages do) its contents with the
-/// manifest at the top, which then go into a folder named after the plugin.
+/// Every entry must sit under one package folder, without absolute paths or `..`. Leftovers of
+/// macOS archiving are skipped. A ZIP holds the package folder, or (as some packages do) its
+/// contents with the manifest at the top, which then go into a folder named after the plugin.
 fn unzip(source: &Path, staging: &Path) -> Result<PathBuf, InstallError> {
     let mut archive = zip::ZipArchive::new(File::open(source)?)?;
     let flat = archive
@@ -176,7 +178,7 @@ fn unzip(source: &Path, staging: &Path) -> Result<PathBuf, InstallError> {
             staging.join(FLAT_ROOT).join(path)
         } else {
             let first = name.split('/').next().unwrap_or_default().to_owned();
-            if !first.ends_with(PACKAGE_SUFFIX) {
+            if protocol_of(&first).is_none() {
                 return Err(InstallError::NotAPlugin);
             }
             match &root {
@@ -208,17 +210,28 @@ fn unzip(source: &Path, staging: &Path) -> Result<PathBuf, InstallError> {
     if !flat {
         return Ok(package);
     }
-    let manifest =
-        Manifest::read(&package).map_err(|e| InstallError::BadManifest(e.to_string()))?;
+    let manifest = read_manifest(&package).map_err(|e| InstallError::BadManifest(e.to_string()))?;
     if !valid_plugin_id(&manifest.uuid) {
-        return Err(InstallError::BadManifest(format!(
-            "el id {:?} no es válido",
-            manifest.uuid
+        return Err(InstallError::BadManifest(trf!(
+            "plugins.install.invalidId",
+            id = format!("{:?}", manifest.uuid)
         )));
     }
-    let named = staging.join(format!("{}{PACKAGE_SUFFIX}", manifest.uuid));
+    let suffix = if stream_deck(&manifest) {
+        STREAM_DECK_SUFFIX
+    } else {
+        PACKAGE_SUFFIX
+    };
+    let named = staging.join(format!("{}{suffix}", manifest.uuid));
     fs::rename(&package, &named)?;
     Ok(named)
+}
+
+/// Only Stream Deck manifests have these, so a package without its folder can be told apart.
+fn stream_deck(manifest: &Manifest) -> bool {
+    !manifest.sdk_version.is_null()
+        || !manifest.code_path_mac.trim().is_empty()
+        || !manifest.code_path_win.trim().is_empty()
 }
 
 /// Where a ZIP without its package folder is unpacked before the folder gets its name.
@@ -522,5 +535,37 @@ mod tests {
         fs::create_dir_all(&victim).unwrap();
         assert!(uninstall(&plugins.join("../victim"), &plugins).is_err());
         assert!(victim.is_dir());
+    }
+
+    #[test]
+    fn installs_stream_deck_packages_and_replaces_other_versions_of_the_plugin() {
+        let dir = tempfile::tempdir().unwrap();
+        let plugins = dir.path().join("plugins");
+        install(&package(&dir.path().join("old"), "1.0.0"), &plugins).unwrap();
+        let stream_dock =
+            json!({ "Version": "2.0.0", "Actions": [{ "UUID": "com.a.b.c.act" }] }).to_string();
+        let source = zip(
+            dir.path(),
+            &[
+                ("com.a.b.c.sdPlugin/", ""),
+                ("com.a.b.c.sdPlugin/manifest.json", &stream_dock),
+            ],
+        );
+        assert_eq!(install(&source, &plugins).unwrap(), "com.a.b.c");
+        assert_eq!(
+            entries(&plugins),
+            vec!["com.a.b.c.sdPlugin".to_owned()],
+            "the Ulanzi package of the same plugin goes"
+        );
+
+        let flat = zip(
+            dir.path(),
+            &[(
+                "manifest.json",
+                &json!({ "SDKVersion": 2, "Actions": [{ "UUID": "com.flat.sd.act" }] }).to_string(),
+            )],
+        );
+        assert_eq!(install(&flat, &plugins).unwrap(), "com.flat.sd");
+        assert!(plugins.join("com.flat.sd.sdPlugin/manifest.json").is_file());
     }
 }

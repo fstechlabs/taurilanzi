@@ -9,12 +9,14 @@ use log::warn;
 use super::super::registry::Registry;
 use super::community::Community;
 use super::entry::{CatalogError, CatalogPlugin, CatalogSource, newer};
-use super::marketplace::{ID_PREFIX, Marketplace};
+use super::marketplace::{self, Marketplace};
+use super::space::{self, Space};
 use crate::render::ImageData;
 
 pub struct Catalog {
     marketplace: Marketplace,
     community: Community,
+    space: Space,
 }
 
 impl Catalog {
@@ -22,6 +24,7 @@ impl Catalog {
         Self {
             marketplace: Marketplace::new(),
             community: Community::new(),
+            space: Space::new(),
         }
     }
 
@@ -31,10 +34,19 @@ impl Catalog {
         registry: &Registry,
         language: &str,
     ) -> Result<Vec<CatalogPlugin>, CatalogError> {
-        let read = [
-            self.marketplace.catalog(refresh, registry, language),
-            self.community.catalog(refresh, registry, language),
-        ];
+        // Each store answers on its own time: they are asked at once.
+        let read = std::thread::scope(|scope| {
+            let stores = [
+                scope.spawn(|| self.marketplace.catalog(refresh, registry, language)),
+                scope.spawn(|| self.community.catalog(refresh, registry, language)),
+                scope.spawn(|| self.space.catalog(refresh, registry, language)),
+            ];
+            stores.map(|store| {
+                store
+                    .join()
+                    .unwrap_or_else(|_| Err(CatalogError::Catalog(String::new())))
+            })
+        });
         let mut failure = None;
         let mut found = Vec::new();
         for result in read {
@@ -63,8 +75,10 @@ impl Catalog {
         language: &str,
         folder: &Path,
     ) -> Result<PathBuf, CatalogError> {
-        if id.starts_with(ID_PREFIX) {
+        if id.starts_with(marketplace::ID_PREFIX) {
             self.marketplace.download(id, language, folder)
+        } else if id.starts_with(space::ID_PREFIX) {
+            self.space.download(id, language, folder)
         } else {
             self.community.download(id, folder)
         }
@@ -74,10 +88,12 @@ impl Catalog {
         self.marketplace
             .image(url, language)
             .or_else(|| self.community.image(url))
+            .or_else(|| self.space.image(url, language))
     }
 }
 
-/// The entry of each plugin with the latest version; Ulanzi's own when both have it.
+/// The entry of each plugin with the latest version; for the same one, the store whose
+/// packages are made for Ulanzi's docks.
 fn once_each(plugins: Vec<CatalogPlugin>) -> Vec<CatalogPlugin> {
     let mut chosen: Vec<CatalogPlugin> = Vec::new();
     let mut at: HashMap<String, usize> = HashMap::new();
@@ -90,14 +106,20 @@ fn once_each(plugins: Vec<CatalogPlugin>) -> Vec<CatalogPlugin> {
         };
         let kept = &chosen[index];
         let better = newer(&plugin.version, &kept.version)
-            || (!newer(&kept.version, &plugin.version)
-                && plugin.source == CatalogSource::Ulanzi
-                && kept.source != CatalogSource::Ulanzi);
+            || (!newer(&kept.version, &plugin.version) && rank(plugin.source) < rank(kept.source));
         if better {
             chosen[index] = plugin;
         }
     }
     chosen
+}
+
+fn rank(source: CatalogSource) -> u8 {
+    match source {
+        CatalogSource::Ulanzi => 0,
+        CatalogSource::Community => 1,
+        CatalogSource::Mirabox => 2,
+    }
 }
 
 #[cfg(test)]
@@ -182,6 +204,7 @@ mod tests {
         let catalog = Catalog {
             marketplace: Marketplace::at(format!("{}/missing", server.base)),
             community: Community::at(format!("{}/catalog.json", server.base)),
+            space: Space::at(format!("{}/missing", server.base)),
         };
         let found = catalog.plugins(false, &Registry::default(), "en").unwrap();
         assert_eq!(found.len(), 1);
@@ -190,6 +213,7 @@ mod tests {
         let nowhere = Catalog {
             marketplace: Marketplace::at(format!("{}/missing", server.base)),
             community: Community::at(format!("{}/missing.json", server.base)),
+            space: Space::at(format!("{}/missing", server.base)),
         };
         assert!(matches!(
             nowhere.plugins(false, &Registry::default(), "en"),

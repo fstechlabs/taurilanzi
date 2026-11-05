@@ -185,6 +185,10 @@ impl EngineHandle {
         self.ask(|reply| Command::ShowPage { id, reply }).await?
     }
 
+    pub async fn edit_page(&self, id: Option<Uuid>) -> Result<(), CommandError> {
+        self.ask(|reply| Command::EditPage { id, reply }).await?
+    }
+
     pub async fn move_key(&self, from: KeySlot, to: KeySlot) -> Result<(), CommandError> {
         self.ask(|reply| Command::MoveKey { from, to, reply })
             .await?

@@ -11,10 +11,11 @@ use super::desktop::Desktop;
 use super::hub::{HubSetup, PluginHost, PluginInput};
 use super::install::{self, InstallError};
 use super::launcher::{Launcher, RunState};
-use super::manifest::Runtime;
+use super::manifest::{Protocol, Runtime};
 use super::node;
+use super::protocol::settings_object;
 use super::python;
-use super::registry::Registry;
+use super::registry::{Plugin, Registry};
 use super::server;
 
 pub struct PluginsSetup {
@@ -57,8 +58,10 @@ pub struct PluginInfo {
     pub category: String,
     /// Relative to the plugin folder.
     pub icon: Option<String>,
-    /// The package folder, ending in `.ulanziPlugin`.
+    /// The package folder, ending in `.ulanziPlugin` or `.sdPlugin`.
     pub folder: String,
+    /// How it talks to the host.
+    pub protocol: PluginProtocol,
     /// What runs its main service.
     pub runtime: PluginRuntime,
     pub run: RunState,
@@ -69,10 +72,32 @@ pub struct PluginInfo {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
+pub enum PluginProtocol {
+    /// Made for Ulanzi Studio.
+    Ulanzi,
+    /// Made for the Stream Deck or for Mirabox's Stream Dock.
+    StreamDeck,
+}
+
+impl From<Protocol> for PluginProtocol {
+    fn from(protocol: Protocol) -> Self {
+        match protocol {
+            Protocol::Ulanzi => Self::Ulanzi,
+            Protocol::StreamDeck => Self::StreamDeck,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
 pub enum PluginRuntime {
     Node,
     Html,
     Python,
+    /// A program of its own.
+    Native,
+    /// Keyboard shortcuts the host presses, in Stream Dock plugins that run nothing.
+    Shortcuts,
     /// Nothing runs: images only.
     None,
 }
@@ -83,6 +108,7 @@ impl From<&Runtime> for PluginRuntime {
             Runtime::Node(_) => Self::Node,
             Runtime::Html(_) => Self::Html,
             Runtime::Python(_) => Self::Python,
+            Runtime::Native(_) => Self::Native,
             Runtime::None => Self::None,
         }
     }
@@ -98,6 +124,9 @@ pub struct PluginActionInfo {
     pub inspector: Option<String>,
     /// Can go on a key of the D200: dials and other models are not supported yet.
     pub supported: bool,
+    /// What a new key of it starts with.
+    #[specta(type = specta_typescript::Any)]
+    pub settings: serde_json::Value,
 }
 
 impl Plugins {
@@ -176,6 +205,12 @@ impl Plugins {
             .iter()
             .map(|plugin| {
                 let m = &plugin.manifest;
+                // The host presses what these plugins hold: there is nothing to wait for.
+                let shortcuts = plugin.protocol == Protocol::StreamDeck
+                    && plugin.runtime == Runtime::None
+                    && m.actions
+                        .iter()
+                        .any(|a| super::shortcut::from_settings(&a.settings).is_some());
                 PluginInfo {
                     id: m.uuid.clone(),
                     name: m.name.clone(),
@@ -187,9 +222,18 @@ impl Plugins {
                         .unwrap_or_else(|| m.name.clone()),
                     icon: Some(m.icon.clone()).filter(|i| !i.is_empty()),
                     folder: plugin.folder.clone(),
-                    runtime: PluginRuntime::from(&plugin.runtime),
-                    run: self.launcher.state(plugin),
-                    connected: connected.contains(&m.uuid),
+                    protocol: PluginProtocol::from(plugin.protocol),
+                    runtime: if shortcuts {
+                        PluginRuntime::Shortcuts
+                    } else {
+                        PluginRuntime::from(&plugin.runtime)
+                    },
+                    run: if shortcuts {
+                        RunState::Running
+                    } else {
+                        self.launcher.state(plugin)
+                    },
+                    connected: shortcuts || connected.contains(&m.uuid),
                     actions: m
                         .actions
                         .iter()
@@ -203,6 +247,7 @@ impl Plugins {
                             inspector: Some(a.property_inspector_path.clone())
                                 .filter(|p| !p.is_empty()),
                             supported: a.supports_keys() && a.supports_device("D200"),
+                            settings: settings_object(&a.settings),
                         })
                         .collect(),
                 }
@@ -221,33 +266,45 @@ impl Plugins {
     pub fn reload(&self) {
         // Names and descriptions in the language shown now, which may have changed.
         let fresh = Registry::scan(&self.folder, crate::i18n::current().tag());
-        let mut registry = self
+        // The hub reads the registry while it holds itself: nothing here holds the registry while
+        // it reaches the hub.
+        let (gone, changed) = {
+            let registry = self.registry.read().unwrap_or_else(PoisonError::into_inner);
+            let same =
+                |a: &Plugin, b: &Plugin| a.dir == b.dir && a.manifest.version == b.manifest.version;
+            let gone: Vec<String> = registry
+                .plugins()
+                .iter()
+                .filter(|old| {
+                    !fresh
+                        .plugin(&old.manifest.uuid)
+                        .is_some_and(|p| same(p, old))
+                })
+                .map(|old| old.manifest.uuid.clone())
+                .collect();
+            let changed: Vec<Plugin> = fresh
+                .plugins()
+                .iter()
+                .filter(|new| {
+                    !registry
+                        .plugin(&new.manifest.uuid)
+                        .is_some_and(|p| same(p, new))
+                })
+                .cloned()
+                .collect();
+            (gone, changed)
+        };
+        for id in &gone {
+            self.launcher.stop(id);
+            self.host.drop_plugin(id);
+        }
+        *self
             .registry
             .write()
-            .unwrap_or_else(PoisonError::into_inner);
-        for old in registry.plugins() {
-            let kept = fresh
-                .plugin(&old.manifest.uuid)
-                .is_some_and(|p| p.dir == old.dir && p.manifest.version == old.manifest.version);
-            if !kept {
-                self.launcher.stop(&old.manifest.uuid);
-                self.host.drop_plugin(&old.manifest.uuid);
-            }
+            .unwrap_or_else(PoisonError::into_inner) = fresh;
+        for plugin in &changed {
+            self.launcher.start(plugin);
         }
-        let started: Vec<String> = registry
-            .plugins()
-            .iter()
-            .map(|p| p.manifest.uuid.clone())
-            .collect();
-        for plugin in fresh.plugins() {
-            let same = registry.plugin(&plugin.manifest.uuid).is_some_and(|old| {
-                old.dir == plugin.dir && old.manifest.version == plugin.manifest.version
-            });
-            if !same || !started.contains(&plugin.manifest.uuid) {
-                self.launcher.start(plugin);
-            }
-        }
-        *registry = fresh;
     }
 
     pub fn install(&self, source: &Path) -> Result<String, InstallError> {

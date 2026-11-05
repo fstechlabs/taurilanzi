@@ -1,0 +1,25 @@
+{
+  "Name": "Stream Dock counter",
+  "Author": "Taurilanzi",
+  "Description": "Plugin for the end-to-end tests: counts presses with the Stream Deck protocol, as Stream Dock plugins do.",
+  "Version": "1.0.0",
+  "SDKVersion": 3,
+  "Icon": "images/icon",
+  "Category": "Tests",
+  "CodePath": "plugin/index.js",
+  "Nodejs": { "Version": "20" },
+  "OS": [{ "Platform": "mac", "MinimumVersion": "10.11" }, { "Platform": "windows", "MinimumVersion": "7" }],
+  "Software": { "MinimumVersion": "3.10.188.226" },
+  "Actions": [
+    {
+      "UUID": "com.taurilanzi.streamdock.count",
+      "Name": "Count",
+      "Tooltip": "Adds one on every press",
+      "Icon": "images/icon",
+      "PropertyInspectorPath": "inspector/index.html",
+      "Settings": { "step": 1 },
+      "Controllers": [],
+      "States": [{ "Image": "images/off" }, { "Image": "images/on" }]
+    }
+  ]
+}

@@ -2,6 +2,7 @@
 //! service of a plugin and each open property inspector are separate connections; the hub routes
 //! between them and hands what concerns keys and their settings to the engine.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -15,11 +16,19 @@ use serde_json::Value;
 
 use super::desktop::Desktop;
 use super::images;
+use super::manifest::{Protocol, Runtime};
 use super::protocol::{self, Instance, ack, text};
 use super::registry::{Registry, is_plugin_id};
+use super::streamdeck::{self, Contexts, Side};
 use crate::render::ImageData;
 
 pub type ConnId = u64;
+
+/// Writes every message between the host and each plugin to `<plugin>.trace.log`, to see what
+/// a plugin that misbehaves says and hears.
+pub const TRACE_ENV: &str = "TAURILANZI_PLUGIN_TRACE";
+/// Images make most of the traffic: only their start is written.
+const TRACE_LIMIT: usize = 600;
 
 /// What the engine has to do about a plugin.
 #[derive(Debug, Clone)]
@@ -30,6 +39,8 @@ pub enum PluginInput {
     InspectorConnected {
         conn: ConnId,
         instance: Instance,
+        /// What the page was opened with, for a key the editor has not saved yet.
+        settings: Option<Value>,
     },
     Visual {
         actionid: String,
@@ -46,8 +57,10 @@ pub enum PluginInput {
         actionid: String,
         conn: ConnId,
     },
-    Alert {
+    /// Show on the key that it worked or that it did not.
+    Result {
         actionid: String,
+        ok: bool,
     },
     /// Settings shared by every key of a plugin; they live in the configuration.
     SaveGlobalSettings {
@@ -76,6 +89,11 @@ pub enum VisualChange {
     },
     /// Images that replace the manifest's, by state.
     StateImages(Vec<(u32, ImageData)>),
+    /// One image that replaces the manifest's for a state.
+    StateImage {
+        state: u32,
+        image: ImageData,
+    },
     /// Back to the manifest's images.
     ClearImages,
     Title(Option<String>),
@@ -98,16 +116,23 @@ enum Peer {
 struct Connection {
     peer: Peer,
     out: Sender<String>,
+    protocol: Protocol,
 }
 
 pub struct Hub {
     connections: HashMap<ConnId, Connection>,
+    /// What Stream Deck plugins are told of their instances, by plugin.
+    contexts: RefCell<HashMap<String, Contexts>>,
+    /// The instance each inspector page was last served for, by action: some connect without
+    /// saying which, as Ulanzi Studio knows the one it opened.
+    opened: HashMap<String, Instance>,
     next: ConnId,
     registry: Arc<RwLock<Registry>>,
     notify: Box<dyn Fn(PluginInput) + Send>,
     desktop: Arc<dyn Desktop>,
     logs: PathBuf,
     port: u16,
+    trace: bool,
 }
 
 /// Cheap to clone; how the server, the launcher and the engine reach the hub.
@@ -125,12 +150,15 @@ impl PluginHost {
     pub fn new(setup: HubSetup) -> Self {
         Self(Arc::new(Mutex::new(Hub {
             connections: HashMap::new(),
+            contexts: RefCell::default(),
+            opened: HashMap::new(),
             next: 1,
             registry: setup.registry,
             notify: setup.notify,
             desktop: setup.desktop,
             logs: setup.logs,
             port: 0,
+            trace: std::env::var_os(TRACE_ENV).is_some_and(|v| !v.is_empty()),
         })))
     }
 
@@ -146,8 +174,39 @@ impl PluginHost {
         self.hub().port
     }
 
+    /// An inspector page was served for this instance.
+    pub fn opened_inspector(&self, instance: Instance) {
+        self.hub().opened.insert(instance.action.clone(), instance);
+    }
+
+    /// A file or folder the user picks, for a page that asked; the hub is not held meanwhile.
+    pub fn pick(&self, kind: &str, filter: &str) -> Option<String> {
+        let desktop = Arc::clone(&self.hub().desktop);
+        desktop.select(kind, filter)
+    }
+
     pub fn registry(&self) -> Arc<RwLock<Registry>> {
         Arc::clone(&self.hub().registry)
+    }
+
+    /// Whether the plugin of an action speaks the Stream Deck protocol.
+    pub fn stream_deck(&self, action: &str) -> bool {
+        let registry = self.registry();
+        let registry = registry.read().unwrap_or_else(PoisonError::into_inner);
+        registry
+            .owner(action)
+            .is_some_and(|p| p.protocol == Protocol::StreamDeck)
+    }
+
+    /// The shortcut a key of a Stream Dock shortcut plugin presses: those plugins run nothing and
+    /// leave it to the host.
+    pub fn shortcut(&self, action: &str, settings: &Value) -> Option<crate::config::KeyCombo> {
+        let registry = self.registry();
+        let registry = registry.read().unwrap_or_else(PoisonError::into_inner);
+        let (plugin, _) = registry.action(action)?;
+        (plugin.protocol == Protocol::StreamDeck && plugin.runtime == Runtime::None)
+            .then(|| super::shortcut::from_settings(settings))
+            .flatten()
     }
 
     pub(super) fn open(&self, out: Sender<String>) -> ConnId {
@@ -159,16 +218,24 @@ impl PluginHost {
             Connection {
                 peer: Peer::Unknown,
                 out,
+                protocol: Protocol::Ulanzi,
             },
         );
         id
     }
 
     pub(super) fn close(&self, conn: ConnId) {
-        if let Some(connection) = self.hub().connections.remove(&conn)
-            && let Peer::Main { plugin } = connection.peer
-        {
-            info!("plugin {plugin} disconnected");
+        let mut hub = self.hub();
+        let Some(connection) = hub.connections.remove(&conn) else {
+            return;
+        };
+        match connection.peer {
+            Peer::Main { plugin } => info!("plugin {plugin} disconnected"),
+            Peer::Inspector { plugin, instance } if connection.protocol == Protocol::StreamDeck => {
+                let closed = streamdeck::inspector_closed(&instance.action, &instance.actionid);
+                hub.to_mains(&plugin, &closed);
+            }
+            _ => {}
         }
     }
 
@@ -177,10 +244,13 @@ impl PluginHost {
             warn!("plugin sent something that is not JSON");
             return;
         };
+        self.hub().trace(conn, &message, "<-", text);
         // A file dialog waits for the user, so it runs apart and without holding the hub.
         if protocol::text(&message, "cmd") == "selectdialog" {
             let host = self.clone();
             thread::spawn(move || host.select(conn, &message));
+        } else if message.get("cmd").is_none() && message.get("event").is_some() {
+            self.hub().stream_deck(conn, &message);
         } else {
             self.handle(conn, message);
         }
@@ -214,6 +284,16 @@ impl PluginHost {
         if message.get("code").is_some() {
             return;
         }
+        // Some inspectors never say they connected and start asking: the one served for that
+        // action.
+        if hub
+            .connections
+            .get(&conn)
+            .is_some_and(|c| c.peer == Peer::Unknown)
+            && hub.opened.contains_key(&text(&message, "uuid"))
+        {
+            hub.connected(conn, &message);
+        }
         let Some(peer) = hub.connections.get(&conn).map(|c| c.peer.clone()) else {
             return;
         };
@@ -221,6 +301,15 @@ impl PluginHost {
             Peer::Main { plugin } | Peer::Inspector { plugin, .. } => plugin.clone(),
             Peer::Unknown => hub.plugin_id(&text(&message, "uuid")),
         };
+        let mut message = message;
+        // An inspector that never learnt its instance speaks for the one it was opened for.
+        if let Peer::Inspector { instance, .. } = &peer {
+            for (field, value) in [("actionid", &instance.actionid), ("key", &instance.key)] {
+                if text(&message, field).is_empty() && message.is_object() {
+                    message[field] = value.clone().into();
+                }
+            }
+        }
         hub.send(conn, ack(&cmd));
         hub.command(conn, &peer, &plugin, &cmd, &message);
     }
@@ -278,7 +367,9 @@ impl PluginHost {
 
     /// Closes the connections of a plugin, before it is stopped or removed.
     pub fn drop_plugin(&self, plugin: &str) {
-        self.hub().connections.retain(|_, c| match &c.peer {
+        let mut hub = self.hub();
+        hub.contexts.borrow_mut().remove(plugin);
+        hub.connections.retain(|_, c| match &c.peer {
             Peer::Main { plugin: p } | Peer::Inspector { plugin: p, .. } => p != plugin,
             Peer::Unknown => true,
         });
@@ -286,10 +377,200 @@ impl PluginHost {
 }
 
 impl Hub {
+    /// In the protocol of whoever is on the other side.
     fn send(&self, conn: ConnId, message: Value) {
-        if let Some(connection) = self.connections.get(&conn) {
-            let _ = connection.out.send(message.to_string());
+        let Some(connection) = self.connections.get(&conn) else {
+            return;
+        };
+        if connection.protocol == Protocol::Ulanzi {
+            let text = message.to_string();
+            self.trace(conn, &message, "->", &text);
+            let _ = connection.out.send(text);
+            return;
         }
+        let (plugin, side) = match &connection.peer {
+            Peer::Main { plugin } => (plugin, Side::Main),
+            Peer::Inspector { plugin, .. } => (plugin, Side::Inspector),
+            Peer::Unknown => return,
+        };
+        let cmd = text(&message, "cmd");
+        let context = text(&message, "actionid");
+        let action = text(&message, "uuid");
+        let (states, automatic) = self.states_of(&action);
+        let mut all = self.contexts.borrow_mut();
+        let contexts = all.entry(plugin.clone()).or_default();
+        if cmd == "add" {
+            contexts.start(&context, states.1);
+        }
+        let events = streamdeck::outgoing(&message, side, contexts);
+        let released = events.iter().any(|e| text(e, "event") == "keyUp");
+        for event in events {
+            let text = event.to_string();
+            self.trace(conn, &event, "->", &text);
+            let _ = connection.out.send(text);
+        }
+        // The Stream Deck moves an action of two states to the next one as its key is let go.
+        if released && automatic && states.0 > 1 {
+            let next = (contexts.state(&context) + 1) % states.0;
+            contexts.set_state(&context, next);
+            drop(all);
+            self.visual(&context, VisualChange::SetState(next));
+        }
+    }
+
+    /// How many states an action has and which one it starts in, and whether the host switches
+    /// between them by itself.
+    fn states_of(&self, action: &str) -> ((u32, u32), bool) {
+        let registry = self.registry.read().unwrap_or_else(PoisonError::into_inner);
+        registry.action(action).map_or(((1, 0), false), |(_, a)| {
+            (
+                (a.states.len().max(1) as u32, a.state),
+                !a.disable_automatic_states,
+            )
+        })
+    }
+
+    fn to_mains(&self, plugin: &str, message: &Value) {
+        for (&id, connection) in &self.connections {
+            if matches!(&connection.peer, Peer::Main { plugin: p } if p == plugin) {
+                self.send(id, message.clone());
+            }
+        }
+    }
+
+    /// A message of a Stream Deck plugin: its registration, what only this protocol has, or a
+    /// command both share, which goes on as Ulanzi's.
+    fn stream_deck(&mut self, conn: ConnId, message: &Value) {
+        let event = text(message, "event");
+        if event == streamdeck::REGISTER_PLUGIN || event == streamdeck::REGISTER_INSPECTOR {
+            self.register(conn, &event, message);
+            return;
+        }
+        let Some(peer) = self.connections.get(&conn).map(|c| c.peer.clone()) else {
+            return;
+        };
+        let plugin = match &peer {
+            Peer::Main { plugin } | Peer::Inspector { plugin, .. } => plugin.clone(),
+            Peer::Unknown => {
+                warn!("a client sent {event} before saying who it is");
+                return;
+            }
+        };
+        let context = text(message, "context");
+        let payload = message.get("payload").cloned().unwrap_or(Value::Null);
+        match event.as_str() {
+            "setImage" => self.stream_deck_image(&plugin, &context, &payload),
+            "setState" => {
+                if let Some(state) = payload.get("state").and_then(Value::as_u64) {
+                    let state = state as u32;
+                    self.contexts
+                        .borrow_mut()
+                        .entry(plugin)
+                        .or_default()
+                        .set_state(&context, state);
+                    self.visual(&context, VisualChange::SetState(state));
+                }
+            }
+            "showOk" => (self.notify)(PluginInput::Result {
+                actionid: context,
+                ok: true,
+            }),
+            "sendToPlugin" => self.to_mains(&plugin, message),
+            "sendToPropertyInspector" => self.to_inspectors_except(&context, None, message),
+            _ => match streamdeck::incoming(message) {
+                Some(command) => {
+                    let cmd = text(&command, "cmd");
+                    self.command(conn, &peer, &plugin, &cmd, &command);
+                }
+                // Dials, profiles and what only Mirabox's own devices have.
+                None => log::debug!("plugin {plugin} sent {event}, which the app does not do"),
+            },
+        }
+    }
+
+    /// The plugin learns of the dock as it registers; an inspector is known by the instance its
+    /// page was opened for, which the page adds to its registration.
+    fn register(&mut self, conn: ConnId, event: &str, message: &Value) {
+        let uuid = text(message, "uuid");
+        let peer = if event == streamdeck::REGISTER_PLUGIN {
+            let plugin = self.plugin_id(&uuid);
+            info!("plugin {plugin} connected");
+            Peer::Main { plugin }
+        } else {
+            let hint = message.get("taurilanzi").cloned().unwrap_or(Value::Null);
+            let shown = self
+                .contexts
+                .borrow()
+                .values()
+                .find_map(|c| c.shown(&uuid).cloned());
+            let action = Some(text(&hint, "action"))
+                .filter(|a| !a.is_empty())
+                .or_else(|| shown.as_ref().map(|s| s.action.clone()))
+                .unwrap_or_default();
+            let key = Some(text(&hint, "key"))
+                .filter(|k| !k.is_empty())
+                .or_else(|| shown.map(|s| s.key))
+                .unwrap_or_default();
+            Peer::Inspector {
+                plugin: self.plugin_id(&action),
+                instance: Instance {
+                    action,
+                    key,
+                    actionid: uuid,
+                },
+            }
+        };
+        let Some(connection) = self.connections.get_mut(&conn) else {
+            return;
+        };
+        connection.peer = peer.clone();
+        connection.protocol = Protocol::StreamDeck;
+        match peer {
+            Peer::Main { plugin } => {
+                self.send(conn, streamdeck::device_connected());
+                (self.notify)(PluginInput::MainConnected { plugin });
+            }
+            Peer::Inspector { instance, .. } => {
+                let settings = message
+                    .pointer("/taurilanzi/settings")
+                    .filter(|s| s.is_object())
+                    .cloned();
+                (self.notify)(PluginInput::InspectorConnected {
+                    conn,
+                    instance,
+                    settings,
+                });
+            }
+            Peer::Unknown => {}
+        }
+    }
+
+    /// An image for now, or for one state; none goes back to the manifest's.
+    fn stream_deck_image(&self, plugin: &str, context: &str, payload: &Value) {
+        let image = text(payload, "image");
+        let state = payload.get("state").and_then(Value::as_u64);
+        if image.trim().is_empty() {
+            self.visual(context, VisualChange::ClearImages);
+            return;
+        }
+        let read = if image.trim_start().starts_with("data:") {
+            images::from_base64(&image)
+        } else {
+            self.file_image(plugin, &image)
+                .or_else(|| images::from_base64(&image))
+        };
+        let Some(image) = read else {
+            warn!("plugin {plugin} sent an image that could not be read");
+            return;
+        };
+        let change = match state {
+            Some(state) => VisualChange::StateImage {
+                state: state as u32,
+                image,
+            },
+            None => VisualChange::Image { image, title: None },
+        };
+        self.visual(context, change);
     }
 
     fn to_inspectors_except(&self, actionid: &str, except: Option<ConnId>, message: &Value) {
@@ -338,13 +619,22 @@ impl Hub {
                 plugin: uuid.clone(),
             }
         } else {
+            let mut instance = Instance {
+                action: uuid.clone(),
+                key: text(message, "key"),
+                actionid: text(message, "actionid"),
+            };
+            if instance.actionid.is_empty()
+                && let Some(opened) = self.opened.get(&uuid)
+            {
+                instance.actionid.clone_from(&opened.actionid);
+                if instance.key.is_empty() {
+                    instance.key.clone_from(&opened.key);
+                }
+            }
             Peer::Inspector {
                 plugin: self.plugin_id(&uuid),
-                instance: Instance {
-                    action: uuid.clone(),
-                    key: text(message, "key"),
-                    actionid: text(message, "actionid"),
-                },
+                instance,
             }
         };
         let Some(connection) = self.connections.get_mut(&conn) else {
@@ -354,7 +644,11 @@ impl Hub {
         match peer {
             Peer::Main { plugin } => (self.notify)(PluginInput::MainConnected { plugin }),
             Peer::Inspector { instance, .. } => {
-                (self.notify)(PluginInput::InspectorConnected { conn, instance });
+                (self.notify)(PluginInput::InspectorConnected {
+                    conn,
+                    instance,
+                    settings: None,
+                });
             }
             Peer::Unknown => {}
         }
@@ -443,7 +737,10 @@ impl Hub {
                 }
             }
             "sendToPropertyInspector" => self.to_inspectors_except(&actionid, None, message),
-            "showAlert" => (self.notify)(PluginInput::Alert { actionid }),
+            "showAlert" => (self.notify)(PluginInput::Result {
+                actionid,
+                ok: false,
+            }),
             "toast" => self.desktop.toast(plugin, &text(message, "msg")),
             "logMessage" => self.log(plugin, &text(message, "level"), &text(message, "message")),
             "openurl" => self.open_url(plugin, message),
@@ -610,6 +907,44 @@ impl Hub {
                 }
             }
             None => warn!("plugin {plugin} asked to open a page it does not have"),
+        }
+    }
+
+    fn trace(&self, conn: ConnId, message: &Value, direction: &str, raw: &str) {
+        if !self.trace {
+            return;
+        }
+        let (plugin, side) = match self.connections.get(&conn).map(|c| &c.peer) {
+            Some(Peer::Main { plugin }) => (plugin.clone(), "main"),
+            Some(Peer::Inspector { plugin, .. }) => (plugin.clone(), "inspector"),
+            _ => {
+                let uuid = Some(text(message, "uuid"))
+                    .filter(|u| !u.is_empty())
+                    .unwrap_or_else(|| text(message, "action"));
+                (self.plugin_id(&uuid), "new")
+            }
+        };
+        let plugin = if plugin.is_empty() {
+            "unknown".into()
+        } else {
+            plugin
+        };
+        let cut = raw
+            .char_indices()
+            .nth(TRACE_LIMIT)
+            .map_or(raw.len(), |(i, _)| i);
+        let line = format!(
+            "[{}] [{conn} {side}] {direction} {}\n",
+            jiff::Zoned::now().strftime("%H:%M:%S%.3f"),
+            &raw[..cut]
+        );
+        if fs::create_dir_all(&self.logs).is_ok()
+            && let Ok(mut file) = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(self.logs.join(format!("{plugin}.trace.log")))
+        {
+            let _ = file.write_all(line.as_bytes());
         }
     }
 

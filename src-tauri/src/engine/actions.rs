@@ -32,7 +32,13 @@ impl Engine {
                     settings,
                 } = &action
                 {
-                    if let Some(host) = &plugins {
+                    if let Some(host) = &plugins
+                        && let Some(combo) = host.shortcut(action, settings)
+                    {
+                        if let Err(err) = actions::press_hotkey(&combo) {
+                            warn!("plugin shortcut {action}: {err}");
+                        }
+                    } else if let Some(host) = &plugins {
                         let instance = Instance {
                             action: action.clone(),
                             key: key_name(slot.index),
@@ -252,7 +258,7 @@ fn check(
                 return invalid(problem);
             }
         }
-        Action::Plugin { action, .. } if action.split('.').count() < 5 => {
+        Action::Plugin { action, .. } if !crate::plugins::valid_action_id(action) => {
             return invalid("that is not the id of a plugin action");
         }
         _ => {}
@@ -436,15 +442,20 @@ mod tests {
             check(&key(vec![plugin(), plugin()])).is_err(),
             "one per key"
         );
-        let short = Action::Plugin {
-            action: "com.a.b.c".into(),
+        let named = |action: &str| Action::Plugin {
+            action: action.into(),
             id: Uuid::new_v4(),
             settings: serde_json::Value::Null,
         };
         assert!(
-            check(&key(vec![short])).is_err(),
+            check(&key(vec![named("com.mutedeck.plugin.togglemute")])).is_ok(),
+            "Stream Deck actions have fewer parts"
+        );
+        assert!(
+            check(&key(vec![named("com.a")])).is_err(),
             "the id of a plugin, not of an action"
         );
+        assert!(check(&key(vec![named("not an action")])).is_err());
         assert!(
             check(&key(vec![Action::Random {
                 actions: vec![plugin()]

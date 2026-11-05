@@ -1320,15 +1320,13 @@
   "plugins": {
     "list": {
       "title": "Plugins",
-      "add": "Añadir plugin",
-      "store": "Tienda de plugins…",
-      "fromZip": "Instalar desde un ZIP…",
+      "add": "Instalar plugin",
+      "fromZip": "Instalar desde un archivo…",
       "fromFolder": "Instalar desde una carpeta…",
       "reload": "Buscar plugins nuevos",
       "openFolder": "Abrir la carpeta de plugins",
       "failed": "Los plugins no han podido arrancar.",
-      "none": "Ninguno instalado",
-      "zipFilter": "Plugin de Ulanzi"
+      "zipFilter": "Paquete de plugin"
     },
     "status": {
       "running": "En marcha",
@@ -1358,10 +1356,11 @@
     },
     "store": {
       "title": "Tienda de plugins",
-      "description": "Del Marketplace de Ulanzi y de Ulanzi Community Store, solo los que funcionan en este ordenador. Se ejecutan en tu ordenador: instala los que te fíes.",
+      "description": "Del Marketplace de Ulanzi, Ulanzi Community Store y Mirabox Space, solo los que funcionan en este ordenador. Se ejecutan en tu ordenador: instala los que te fíes.",
       "search": "Buscar",
       "searchLabel": "Buscar plugins",
-      "reload": "Volver a leer la tienda",
+      "reload": "Recargar listados",
+      "manual": "Instalar a mano",
       "loadFailed": "No se ha podido leer la tienda. Comprueba la conexión y vuelve a intentarlo.",
       "loading": "Leyendo la tienda…",
       "noMatch": "Ningún plugin coincide.",
@@ -1381,7 +1380,8 @@
       "sourceLabel": "Origen",
       "from": {
         "ulanzi": "Marketplace de Ulanzi",
-        "community": "Ulanzi Community Store"
+        "community": "Ulanzi Community Store",
+        "mirabox": "Mirabox Space"
       },
       "filters": "Filtros",
       "allSources": "Todos",
@@ -1400,12 +1400,19 @@
         "office": "Oficina",
         "creative": "Creatividad",
         "lighting": "Iluminación",
-        "ai": "IA"
+        "audio": "Audio y música",
+        "gaming": "Juegos",
+        "social": "Social",
+        "smart_home": "Hogar inteligente",
+        "ai": "IA",
+        "other": "Otras"
       },
       "count": "Ningún plugin | 1 plugin | {n} plugins",
       "clear": "Quitar filtros",
       "sortLabel": "Ordenar",
+      "clearSearch": "Borrar la búsqueda",
       "sorts": {
+        "relevance": "Más relevantes",
         "popular": "Más populares",
         "name": "Por nombre",
         "recent": "Más recientes"
@@ -1414,7 +1421,9 @@
     "runtime": {
       "node": "Node.js",
       "html": "HTML",
-      "python": "Python"
+      "python": "Python",
+      "native": "Programa",
+      "shortcuts": "Atajos de teclado"
     }
   },
   "settings": {

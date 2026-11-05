@@ -122,8 +122,11 @@ App environment variables:
   apart from the released app's.
 - `TAURILANZI_NODE=<path>` runs plugins with another Node.
 - `TAURILANZI_PYTHON=<path>` runs Python plugins with another Python.
-- `TAURILANZI_COMMUNITY_CATALOG=<url>` reads another community plugin catalog, and
-  `TAURILANZI_ULANZI_MARKETPLACE=<url>` another Ulanzi Marketplace (the e2e tests serve their own).
+- `TAURILANZI_PLUGIN_TRACE=1` writes every message between the host and each plugin to
+  `plugin-logs/<plugin>.trace.log`, to see what a plugin that misbehaves says and hears.
+- `TAURILANZI_COMMUNITY_CATALOG=<url>` reads another community plugin catalog,
+  `TAURILANZI_ULANZI_MARKETPLACE=<url>` another Ulanzi Marketplace and `TAURILANZI_MIRABOX_SPACE=<url>`
+  another Mirabox Space (the e2e tests serve their own).
 - `TAURILANZI_LANGUAGE=es|en` stands in for the system's language.
 - `TAURILANZI_CLOUD=<url>` syncs with another cloud. Without it the released app syncs with
   `https://taurilanzi.com` and development builds with `taurilanzi-cloud` running locally
@@ -204,9 +207,18 @@ Commits, versions and releases:
   Ulanzi Studio bundles (their native modules are built for it), from python-build-standalone,
   with the packages Ulanzi's carries (`websockets`): pinned in `scripts/python-runtime.json`,
   fetched and trimmed by `scripts/fetch-python.ts`. Never a Python installed on the computer.
+- Plugins of Mirabox's Stream Dock (`.sdPlugin` folders) speak Elgato's Stream Deck protocol,
+  which Elgato's own plugins will share: the folder's ending picks the protocol
+  (`src/plugins/streamdeck.rs`), and the hub turns the engine's messages, always in Ulanzi's shape,
+  into that protocol's events for those connections, and their commands back. They start with
+  `-port -pluginUUID -registerEvent -info` from their folder: Node for scripts, pages for HTML (the
+  shim calls their `connect…Socket` function once loaded), or their own program for this system.
+  Their keys hear `keyDown`/`keyUp` from the dock, or both from a run the dock did not press; Stream
+  Dock's shortcut plugins run nothing and the host presses the key in their settings
+  (`src/plugins/shortcut.rs`).
 - Plugins come from the stores in `src/plugins/catalog`, one file per store (Ulanzi's own
-  Marketplace, the Ulanzi Community Store) shown as one catalog; a new source of plugins is one
-  more file there.
+  Marketplace, the Ulanzi Community Store, Mirabox Space) shown as one catalog; a new source of
+  plugins is one more file there. Only free plugins are offered: never download a paid one.
 - The logo and icons come from the SVGs in `docs/brand/`. App icons: `bun run tauri icon
   docs/brand/app-icon.svg`, then delete the `android/`, `ios/` and `64x64.png` it also writes, and
   copy `icon.ico` to `src-nuxt/public/favicon.ico`. `src-tauri/icons/tray.png` is

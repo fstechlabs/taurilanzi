@@ -87,6 +87,13 @@ pub async fn show_page(engine: State<'_, EngineHandle>, page: Uuid) -> Result<()
     Ok(engine.show_page(page).await?)
 }
 
+/// Tells the engine which page the editor shows, so the keys of plugins on it draw.
+#[tauri::command]
+#[specta::specta]
+pub async fn edit_page(engine: State<'_, EngineHandle>, page: Option<Uuid>) -> Result<()> {
+    Ok(engine.edit_page(page).await?)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn set_device(engine: State<'_, EngineHandle>, settings: DeviceSettings) -> Result<()> {

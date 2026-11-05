@@ -21,6 +21,7 @@ pub fn builder() -> tauri_specta::Builder<Wry> {
             commands::delete_page,
             commands::set_home_page,
             commands::show_page,
+            commands::edit_page,
             commands::set_device,
             commands::set_preferences,
             commands::try_screensaver,

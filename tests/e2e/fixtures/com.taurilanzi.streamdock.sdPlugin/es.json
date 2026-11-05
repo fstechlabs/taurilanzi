@@ -1,0 +1,9 @@
+{
+  "Name": "Contador Stream Dock",
+  "Description": "Cuenta pulsaciones.",
+  "com.taurilanzi.streamdock.count": {
+    "Name": "Contar",
+    "Tooltip": "Suma uno en cada pulsación"
+  },
+  "Localization": {}
+}

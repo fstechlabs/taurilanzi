@@ -128,6 +128,11 @@ pub enum Command {
         id: Uuid,
         reply: Done,
     },
+    /// The page open in the editor, whose plugin keys draw too, for their previews.
+    EditPage {
+        id: Option<Uuid>,
+        reply: Done,
+    },
     /// Moves a key to another place, on its page or another one; swaps if that place is taken.
     MoveKey {
         from: KeySlot,

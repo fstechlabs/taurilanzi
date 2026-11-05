@@ -68,7 +68,7 @@ const delaySeconds = computed({
     </div>
 
     <HttpFields v-if="action.type === 'http'" :model-value="action.request" @update:model-value="patch({ request: $event })" />
-    <PluginInspector v-else-if="action.type === 'plugin'" :action="action.action" :id="action.id" />
+    <PluginInspector v-else-if="action.type === 'plugin'" :action="action.action" :id="action.id" :settings="action.settings" />
     <div v-else-if="action.type === 'home_assistant'" class="flex flex-col gap-4">
       <ServerField kind="home_assistant" :model-value="action.server ?? NO_SERVER" @update:model-value="patch({ server: $event })" />
       <template v-if="server">

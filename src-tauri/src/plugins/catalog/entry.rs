@@ -11,7 +11,7 @@ use serde::Serialize;
 use ureq::Agent;
 
 use super::super::images;
-use super::super::registry::{PACKAGE_SUFFIX, Plugin, Registry};
+use super::super::registry::{Plugin, Registry, protocol_of};
 use crate::render::ImageData;
 
 #[derive(Debug, thiserror::Error)]
@@ -46,6 +46,8 @@ pub enum CatalogSource {
     Ulanzi,
     /// The Ulanzi Community Store.
     Community,
+    /// Mirabox Space, the store of Mirabox's Stream Dock.
+    Mirabox,
 }
 
 /// What a plugin is for, in the categories every store's are brought to.
@@ -57,6 +59,10 @@ pub enum PluginKind {
     Office,
     Creative,
     Lighting,
+    Audio,
+    Gaming,
+    Social,
+    SmartHome,
     Ai,
 }
 
@@ -158,7 +164,7 @@ pub fn installed<'a>(
     folder: Option<&str>,
     plugin: &str,
 ) -> Option<&'a Plugin> {
-    let folder = folder.filter(|f| f.ends_with(PACKAGE_SUFFIX));
+    let folder = folder.filter(|f| protocol_of(f).is_some());
     registry
         .plugins()
         .iter()
@@ -238,8 +244,13 @@ impl Images {
 
     /// Only for what the store lists: the caller checks it first.
     pub fn fetch(&self, agent: &Agent, url: &str) -> Option<ImageData> {
+        self.fetch_as(agent, url, url)
+    }
+
+    /// Kept as `url`, fetched from `from`.
+    pub fn fetch_as(&self, agent: &Agent, url: &str, from: &str) -> Option<ImageData> {
         let bytes = agent
-            .get(url)
+            .get(from)
             .call()
             .and_then(|mut r| r.body_mut().with_config().limit(IMAGE_LIMIT).read_to_vec())
             .ok()?;
