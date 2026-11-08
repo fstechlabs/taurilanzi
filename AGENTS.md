@@ -166,6 +166,15 @@ Commits, versions and releases:
   and the `.gitignore` files: `.github/workflows/guard.yml` closes any other pull request that
   touches them. It runs on `pull_request_target`, so it must never check out or run the pull
   request's code.
+- Released macOS apps are signed with the project's Developer ID and notarized
+  (`scripts/macos-signing.ts`): the certificate (`APPLE_CERTIFICATE`, a base64 `.p12`, and
+  `APPLE_CERTIFICATE_PASSWORD`) and an App Store Connect API key (`APPLE_API_ISSUER`,
+  `APPLE_API_KEY`, `APPLE_API_PRIVATE_KEY`) are secrets of the `release` environment. Never ad hoc:
+  macOS ties the Accessibility permission to the signature, and an ad hoc one changes with every
+  build, so each update lost it. Tauri signs and notarizes the app; the script signs the Node and
+  the Python in its resources (with `src-tauri/entitlements/plugin-runtimes.plist`), which Tauri
+  leaves alone and notarization checks, and signs and notarizes the `.dmg`. Builds by hand without
+  the certificate stay ad hoc.
 - Builds made by hand with `scripts/build-app.ts` are signed with a test key of the computer's own
   (`~/.tauri/taurilanzi-test.key`, created on the first build) and trust it instead of the real
   one, which is how the updater is tried locally. Only release builds look for updates: the

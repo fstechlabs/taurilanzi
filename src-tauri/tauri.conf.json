@@ -50,6 +50,7 @@
     "createUpdaterArtifacts": true,
     "macOS": {
       "signingIdentity": "-",
+      "entitlements": "entitlements/app.plist",
       "minimumSystemVersion": "13.0",
       "files": {
         "Resources/es.lproj/InfoPlist.strings": "locales/es.lproj/InfoPlist.strings"
