@@ -19,12 +19,12 @@ use serde::Serialize;
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, Signal, System, UpdateKind};
 
 use super::desktop::Desktop;
+use super::elgato::protocol as streamdeck;
 use super::hub::urlencode;
 use super::manifest::{Protocol, Runtime};
 use super::node::Node;
 use super::python::Python;
 use super::registry::Plugin;
-use super::streamdeck;
 
 /// The version plugins are told the host is: the Ulanzi Studio they were tested against.
 pub const HOST_VERSION: &str = "3.3.9";
@@ -173,6 +173,9 @@ impl Launcher {
                 self.supervise(&id, &plugin.dir, program);
             }
             Runtime::Native(_) => warn!("plugin {id} is a program for another system"),
+            Runtime::Html(page) if !plugin.file(page).is_some_and(|f| f.is_file()) => {
+                warn!("plugin {id} has no page {page}");
+            }
             Runtime::Html(page) => {
                 let url = format!(
                     "http://127.0.0.1:{port}/plugins/{folder}/{page}?address=127.0.0.1&port={port}&language={language}&uuid={id}",
@@ -242,8 +245,12 @@ impl Launcher {
                 .unwrap_or_else(PoisonError::into_inner)
                 .take()
             {
+                #[cfg(unix)]
+                super::process_group::end(child.id(), false);
                 let _ = child.kill();
                 let _ = child.wait();
+                #[cfg(unix)]
+                super::process_group::end(child.id(), true);
             }
         }
         let mut pages = self.pages.lock().unwrap_or_else(PoisonError::into_inner);
@@ -416,7 +423,13 @@ impl Launcher {
                                     break None;
                                 };
                                 match running.try_wait() {
-                                    Ok(Some(status)) => break Some(status),
+                                    Ok(Some(status)) => {
+                                        // What the plugin started dies with it, before it is
+                                        // started again.
+                                        #[cfg(unix)]
+                                        super::process_group::end(running.id(), true);
+                                        break Some(status);
+                                    }
                                     Ok(None) => {}
                                     Err(_) => break None,
                                 }
@@ -489,10 +502,26 @@ fn spawn(program: &Program, dir: &Path, log: &Path, stdin: Stdio) -> std::io::Re
         .stderr(err);
     #[cfg(target_os = "windows")]
     crate::os::windows::without_console(&mut command);
+    // Plugins call the system's tools by name, and a shell's path may put others of the same
+    // name first, such as Python's `xattr`.
+    #[cfg(target_os = "macos")]
+    command.env("PATH", system_first(env::var_os("PATH")));
+    #[cfg(unix)]
+    super::process_group::isolate(&mut command);
     let child = command.spawn()?;
     #[cfg(target_os = "windows")]
     super::job_object::adopt(&child);
     Ok(child)
+}
+
+#[cfg(target_os = "macos")]
+fn system_first(path: Option<OsString>) -> OsString {
+    let system = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"].map(PathBuf::from);
+    let rest = path
+        .iter()
+        .flat_map(env::split_paths)
+        .filter(|dir| !system.contains(dir));
+    env::join_paths(system.iter().cloned().chain(rest)).unwrap_or_default()
 }
 
 fn write_pids(file: &Path, pids: &[u32]) {
@@ -502,7 +531,7 @@ fn write_pids(file: &Path, pids: &[u32]) {
 
 /// A program for this system: Windows runs `.exe` files, macOS the others. Linux runs neither,
 /// as the stores only have them for those two.
-fn runs_here(code: &Path) -> bool {
+pub fn runs_here(code: &Path) -> bool {
     if !code.is_file() {
         return false;
     }
@@ -574,6 +603,8 @@ fn kill_leftovers(file: &Path) {
             .any(|s| s.contains(".ulanziplugin") || s.contains(".sdplugin"));
         if plugin {
             info!("stopping plugin process {pid} left from before");
+            #[cfg(unix)]
+            super::process_group::end(pid.as_u32(), false);
             // Windows has no signal to ask a process to end.
             if process.kill_with(Signal::Term).is_none() {
                 process.kill();
@@ -788,7 +819,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let launcher = launcher(dir.path());
         let page = plugin(dir.path(), "index.html");
-        assert_eq!(launcher.state(&page), RunState::Stopped);
+        launcher.start(&page);
+        assert_eq!(launcher.state(&page), RunState::Stopped, "no such page");
+        fs::write(dir.path().join("index.html"), "<p>x</p>").unwrap();
         launcher.start(&page);
         assert_eq!(launcher.state(&page), RunState::Running);
         launcher.stop_all();
@@ -922,6 +955,16 @@ mod tests {
         assert_eq!(
             fs::metadata(&program).unwrap().permissions().mode() & 0o111,
             0o111
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_system_tools_come_first_in_the_path_of_plugins() {
+        let path = system_first(Some("/opt/py/bin:/usr/bin:/custom".into()));
+        assert_eq!(
+            path,
+            OsString::from("/usr/bin:/bin:/usr/sbin:/sbin:/opt/py/bin:/custom")
         );
     }
 }

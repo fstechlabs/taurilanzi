@@ -58,19 +58,25 @@ impl Registry {
         self.plugins.iter().find(|p| p.manifest.uuid == id)
     }
 
-    /// The installed plugin an id belongs to: the plugin itself, or the one whose id starts the
-    /// id of an action, the longest if several do.
+    /// The installed plugin an id belongs to: the plugin itself, the one whose manifest declares
+    /// the action, or else the one whose id starts the id of the action, the longest if several
+    /// do. Some published actions are not named after their plugin.
     pub fn owner(&self, uuid: &str) -> Option<&Plugin> {
-        self.plugins
-            .iter()
-            .filter(|p| {
-                let id = p.manifest.uuid.as_str();
-                uuid == id
-                    || uuid
-                        .strip_prefix(id)
-                        .is_some_and(|rest| rest.starts_with('.'))
+        self.plugin(uuid)
+            .or_else(|| {
+                self.plugins
+                    .iter()
+                    .find(|p| p.manifest.actions.iter().any(|a| a.uuid == uuid))
             })
-            .max_by_key(|p| p.manifest.uuid.len())
+            .or_else(|| {
+                self.plugins
+                    .iter()
+                    .filter(|p| {
+                        uuid.strip_prefix(p.manifest.uuid.as_str())
+                            .is_some_and(|rest| rest.starts_with('.'))
+                    })
+                    .max_by_key(|p| p.manifest.uuid.len())
+            })
     }
 
     /// The plugin of an id as above, or by Ulanzi's convention when it is not installed.
@@ -210,18 +216,25 @@ fn load(dir: &Path, language: &str) -> Result<Plugin, String> {
     })
 }
 
+/// An image of a package, named as Stream Deck plugins name them: with or without its extension.
+pub fn image_name(dir: &Path, given: &str) -> Option<String> {
+    let given = given.trim();
+    if given.is_empty() {
+        return None;
+    }
+    if inside(dir, given).is_some_and(|p| p.is_file()) {
+        return Some(given.to_owned());
+    }
+    IMAGE_EXTENSIONS
+        .iter()
+        .map(|ext| format!("{given}{ext}"))
+        .find(|name| inside(dir, name).is_some_and(|p| p.is_file()))
+}
+
 /// Stream Deck manifests name images without an extension: the host finds the file.
 fn with_image_files(manifest: &mut Manifest, dir: &Path) {
     let found = |path: &mut String| {
-        let given = path.trim();
-        if given.is_empty() || inside(dir, given).is_some_and(|p| p.is_file()) {
-            return;
-        }
-        if let Some(file) = IMAGE_EXTENSIONS
-            .iter()
-            .map(|ext| format!("{given}{ext}"))
-            .find(|name| inside(dir, name).is_some_and(|p| p.is_file()))
-        {
+        if let Some(file) = image_name(dir, path) {
             *path = file;
         }
     };
@@ -432,5 +445,30 @@ mod tests {
         assert_eq!(package_stem("a.b.sdPlugin"), "a.b");
         assert_eq!(protocol_of("a.b.ulanziPlugin"), Some(Protocol::Ulanzi));
         assert_eq!(protocol_of("a.b.zip"), None);
+    }
+
+    #[test]
+    fn an_action_belongs_to_the_plugin_that_declares_it() {
+        let root = tempfile::tempdir().unwrap();
+        package(
+            root.path(),
+            "com.mirabox.weather.sdPlugin",
+            &json!({
+                "Name": "Weather",
+                "Actions": [{ "UUID": "com.hotspot.weather.action1", "Name": "Now" }],
+            }),
+        );
+        package(
+            root.path(),
+            "com.hotspot.ulanziPlugin",
+            &plugin("com.hotspot", "Other"),
+        );
+        let registry = Registry::scan(root.path(), "en");
+        assert_eq!(
+            registry.plugin_id("com.hotspot.weather.action1"),
+            "com.mirabox.weather",
+            "declared, though another plugin's id starts it"
+        );
+        assert_eq!(registry.plugin_id("com.hotspot.other"), "com.hotspot");
     }
 }

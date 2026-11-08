@@ -81,6 +81,9 @@ pub fn setup(
             .clone()
             .map(|plugins| plugins as Arc<dyn PluginInstaller>),
     })?;
+    if let Some(plugins) = &running.plugins {
+        crate::deep_links::listen(app.handle(), plugins.host());
+    }
     app.manage(cloud);
     app.manage(running.engine.clone());
     app.manage(running.assets);

@@ -11,5 +11,7 @@
 	</array>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>To show the song playing in Music or Spotify on the dock.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>To reach the servers on your network that your keys and plugins use, such as Home Assistant, OBS or Uptime Kuma.</string>
 </dict>
 </plist>

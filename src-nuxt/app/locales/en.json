@@ -1361,6 +1361,16 @@
       "searchLabel": "Search plugins",
       "reload": "Reload listings",
       "manual": "Install by hand",
+      "consent": {
+        "title": "Install {name}?",
+        "manualTitle": "Install a plugin by hand?",
+        "risk": "Plugins run on your computer with your permissions: they can read your files, use the network and open programs, like any app you install.",
+        "unchecked": "{store} does not check the code of its plugins. Install it only if you trust {who}.",
+        "findings": "The automatic check found warnings in this plugin. Install it only if you trust {who} and have looked at its code.",
+        "manual": "Nobody has checked this package. Install it only if you trust whoever made it or gave it to you.",
+        "cancel": "Cancel",
+        "accept": "Install"
+      },
       "loadFailed": "The store could not be read. Check the connection and try again.",
       "loading": "Reading the store…",
       "noMatch": "No plugin matches.",

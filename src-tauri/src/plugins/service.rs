@@ -13,10 +13,10 @@ use super::install::{self, InstallError};
 use super::launcher::{Launcher, RunState};
 use super::manifest::{Protocol, Runtime};
 use super::node;
-use super::protocol::settings_object;
 use super::python;
 use super::registry::{Plugin, Registry};
 use super::server;
+use super::ulanzi::protocol::settings_object;
 
 pub struct PluginsSetup {
     pub data_dir: PathBuf,
@@ -141,6 +141,9 @@ impl Plugins {
             logs: setup.data_dir.join("plugin-logs"),
         });
         let port = server::start(host.clone())?;
+        if let Err(err) = super::elgato::system_events::watch(host.clone(), Arc::clone(&registry)) {
+            warn!("plugins will not hear of apps and sleep: {err}");
+        }
         let node = node::find(setup.resources.as_deref());
         match &node {
             Some(node) => info!(
@@ -210,7 +213,7 @@ impl Plugins {
                     && plugin.runtime == Runtime::None
                     && m.actions
                         .iter()
-                        .any(|a| super::shortcut::from_settings(&a.settings).is_some());
+                        .any(|a| super::mirabox::shortcut::from_settings(&a.settings).is_some());
                 PluginInfo {
                     id: m.uuid.clone(),
                     name: m.name.clone(),
@@ -237,6 +240,7 @@ impl Plugins {
                     actions: m
                         .actions
                         .iter()
+                        .filter(|a| a.visible_in_actions_list)
                         .map(|a| PluginActionInfo {
                             uuid: a.uuid.clone(),
                             name: a.name.clone(),

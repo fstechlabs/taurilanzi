@@ -9,9 +9,10 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use super::protocol::text;
-use super::registry::Plugin;
 use crate::driver::d200::COLUMNS;
+use crate::plugins::manifest::{Manifest, this_platform};
+use crate::plugins::registry::Plugin;
+use crate::plugins::ulanzi::protocol::text;
 
 /// The dock as plugins see it. One fixed id: the app drives one D200.
 pub const DEVICE_ID: &str = "TAURILANZI-D200";
@@ -19,9 +20,12 @@ const DEVICE_NAME: &str = "Ulanzi D200";
 const ROWS: u8 = 3;
 /// The type of a Stream Deck of five columns and three rows, which the D200 is laid out as.
 const DEVICE_TYPE: u8 = 0;
-/// What the plugins are told the host is: a Stream Dock recent enough for every plugin of its
-/// store, whose SDKs take a version 5 or later for another app of Mirabox's.
-pub const HOST_VERSION: &str = "3.10.191.0421";
+/// What plugins made for Stream Dock are told the host is: a Stream Dock recent enough for every
+/// plugin of its store, whose SDKs take a version 5 or later for another app of Mirabox's.
+pub const STREAM_DOCK_VERSION: &str = "3.10.191.0421";
+/// What plugins made for the Stream Deck are told, unless they ask for a later one: the first
+/// whose behaviour Elgato's current SDK requires, with resources.
+const STREAM_DECK_VERSION: (u32, u32) = (7, 1);
 /// Keys are drawn at this size; the wide key is as wide as two and their gap.
 const KEY_SIZE: u32 = 196;
 const WIDE_KEY_WIDTH: u32 = 452;
@@ -71,17 +75,22 @@ impl Contexts {
     pub fn shown(&self, context: &str) -> Option<&Shown> {
         self.shown.get(context)
     }
+
+    pub fn known(&self, context: &str) -> bool {
+        self.states.contains_key(context)
+    }
 }
 
 /// `-info`, and the fourth argument of the pages: the host, the dock and the plugin.
 pub fn info(plugin: &Plugin, language: &str) -> Value {
+    let stream_dock = plugin.manifest.made_for_stream_dock();
     json!({
         "application": {
             "font": "",
             "language": plugin_language(&plugin.dir, language),
-            "platform": platform(),
+            "platform": this_platform(),
             "platformVersion": sysinfo::System::os_version().unwrap_or_default(),
-            "version": HOST_VERSION,
+            "version": host_version(&plugin.manifest),
         },
         "colors": {
             "buttonMouseOverBackgroundColor": "#464646FF",
@@ -90,7 +99,8 @@ pub fn info(plugin: &Plugin, language: &str) -> Value {
             "buttonPressedTextColor": "#969696FF",
             "highlightColor": "#0078FFFF",
         },
-        "devicePixelRatio": 1,
+        // Keys are drawn at 196 pixels: Stream Deck plugins pick their sharper images by this.
+        "devicePixelRatio": if stream_dock { 1 } else { 2 },
         "devices": [{
             "id": DEVICE_ID,
             "name": DEVICE_NAME,
@@ -116,14 +126,16 @@ pub fn arguments(port: u16, plugin: &Plugin, language: &str) -> Vec<String> {
     ]
 }
 
-fn platform() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "windows"
-    } else if cfg!(target_os = "macos") {
-        "mac"
-    } else {
-        "linux"
+/// The version of the host a plugin is told, by the app it was made for.
+pub fn host_version(manifest: &Manifest) -> String {
+    if manifest.made_for_stream_dock() {
+        return STREAM_DOCK_VERSION.to_owned();
     }
+    let mut asked = manifest.software.minimum_version.trim().split('.');
+    let mut part = || asked.next().and_then(|p| p.parse::<u32>().ok());
+    let wanted = (part().unwrap_or_default(), part().unwrap_or_default());
+    let (major, minor) = wanted.max(STREAM_DECK_VERSION);
+    format!("{major}.{minor}.0.0")
 }
 
 /// Plugins load `<language>.json` by the name they are told, and show `undefined` when it is
@@ -150,6 +162,10 @@ pub fn device_connected() -> Value {
     })
 }
 
+pub fn device_disconnected() -> Value {
+    json!({ "event": "deviceDidDisconnect", "device": DEVICE_ID })
+}
+
 fn coordinates(key: &str) -> Value {
     let (column, row) = key.split_once('_').unwrap_or_default();
     json!({
@@ -172,7 +188,7 @@ fn about(event: &str, action: &str, context: &str, payload: Value) -> Value {
 }
 
 /// What every event of a key carries, with the size it is drawn at.
-fn key_payload(settings: Value, key: &str, state: u32) -> Value {
+fn key_payload(settings: Value, resources: Value, key: &str, state: u32) -> Value {
     let width = if key == WIDE_KEY {
         WIDE_KEY_WIDTH
     } else {
@@ -184,6 +200,7 @@ fn key_payload(settings: Value, key: &str, state: u32) -> Value {
         "controller": "Keypad",
         "state": state,
         "isInMultiAction": false,
+        "resources": resources,
         "width": width,
         "height": KEY_SIZE,
     })
@@ -210,6 +227,20 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
             .cloned()
             .unwrap_or_else(|| json!({}))
     };
+    let resources = || {
+        message
+            .get("resources")
+            .filter(|r| r.is_object())
+            .cloned()
+            .unwrap_or_else(|| json!({}))
+    };
+    // A request of the plugin is answered with its id, which tells the answer from a change.
+    let answer = |mut event: Value| {
+        if let Some(id) = message.get("id").filter(|id| !id.is_null()) {
+            event["id"] = id.clone();
+        }
+        event
+    };
     match (text(message, "cmd").as_str(), side) {
         ("add", Side::Main) => {
             contexts.shown.insert(
@@ -224,7 +255,7 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
                 "willAppear",
                 &action,
                 &context,
-                key_payload(settings(), &key, state),
+                key_payload(settings(), resources(), &key, state),
             )]
         }
         ("setactive", Side::Main) if message.get("active") == Some(&Value::Bool(false)) => {
@@ -249,7 +280,7 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
                 event,
                 &action,
                 &context,
-                key_payload(settings(), &key, state),
+                key_payload(settings(), resources(), &key, state),
             )]
         }
         // These plugins only hear keys go down and up: a press that did not come from the dock,
@@ -270,7 +301,7 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
                         event,
                         &action,
                         &context,
-                        key_payload(settings(), &key, state),
+                        key_payload(settings(), resources(), &key, state),
                     )
                 })
                 .collect()
@@ -284,17 +315,26 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
         // Stream Dock's inspectors wait for their settings and never ask for them.
         ("paramfromapp" | "didReceiveSettings", _) => {
             let state = contexts.state(&context);
-            vec![about(
+            vec![answer(about(
                 "didReceiveSettings",
                 &action,
                 &context,
-                key_payload(settings(), &key, state),
-            )]
+                key_payload(settings(), resources(), &key, state),
+            ))]
         }
-        ("didReceiveGlobalSettings", _) => vec![json!({
+        ("didReceiveResources", _) => {
+            let state = contexts.state(&context);
+            vec![answer(about(
+                "didReceiveResources",
+                &action,
+                &context,
+                key_payload(settings(), resources(), &key, state),
+            ))]
+        }
+        ("didReceiveGlobalSettings", _) => vec![answer(json!({
             "event": "didReceiveGlobalSettings",
             "payload": { "settings": settings() },
-        })],
+        }))],
         _ => Vec::new(),
     }
 }
@@ -308,7 +348,7 @@ fn disappear(contexts: &mut Contexts, context: &str, settings: Value) -> Vec<Val
         "willDisappear",
         &gone.action,
         context,
-        key_payload(settings, &gone.key, state),
+        key_payload(settings, json!({}), &gone.key, state),
     )]
 }
 
@@ -332,13 +372,11 @@ pub fn incoming(message: &Value) -> Option<Value> {
             "actionid": context,
             "settings": payload,
         }),
-        "getSettings" => json!({ "cmd": "getSettings", "actionid": context }),
+        "getSettings" => {
+            json!({ "cmd": "getSettings", "actionid": context, "id": message.get("id") })
+        }
         "setGlobalSettings" => json!({ "cmd": "setGlobalSettings", "settings": payload }),
-        "getGlobalSettings" => json!({ "cmd": "getGlobalSettings" }),
-        "setTitle" => json!({
-            "cmd": "setTitle",
-            "param": { "actionid": context, "text": text(&payload, "title") },
-        }),
+        "getGlobalSettings" => json!({ "cmd": "getGlobalSettings", "id": message.get("id") }),
         "showAlert" => json!({ "cmd": "showAlert", "actionid": context }),
         "openUrl" => json!({ "cmd": "openurl", "url": text(&payload, "url") }),
         "logMessage" => json!({
@@ -355,9 +393,9 @@ pub fn incoming(message: &Value) -> Option<Value> {
 mod tests {
     use std::fs;
 
-    use super::super::manifest::{Manifest, Protocol, Runtime};
-    use super::super::protocol::{Instance, event, key_fields, with_settings};
     use super::*;
+    use crate::plugins::manifest::{Protocol, Runtime};
+    use crate::plugins::ulanzi::protocol::{Instance, event, key_fields, with_settings};
 
     const ACTION: &str = "com.a.b.act";
 
@@ -387,7 +425,7 @@ mod tests {
         let plugin = plugin(dir.path());
         let info = info(&plugin, "es-ES");
         assert_eq!(info["application"]["language"], "en", "none shipped");
-        assert_eq!(info["application"]["version"], HOST_VERSION);
+        assert_eq!(info["application"]["version"], STREAM_DOCK_VERSION);
         assert_eq!(
             info["plugin"],
             json!({ "uuid": "com.a.b", "version": "1.2" })
@@ -445,6 +483,7 @@ mod tests {
                     "controller": "Keypad",
                     "state": 0,
                     "isInMultiAction": false,
+                    "resources": {},
                     "width": 196,
                     "height": 196,
                 },
@@ -577,12 +616,6 @@ mod tests {
             json!({ "cmd": "setSettings", "actionid": "c", "settings": { "a": 1 } })
         );
         assert_eq!(
-            command(
-                json!({ "event": "setTitle", "context": "c", "payload": { "title": "Hi", "target": 0 } })
-            ),
-            json!({ "cmd": "setTitle", "param": { "actionid": "c", "text": "Hi" } })
-        );
-        assert_eq!(
             command(json!({ "event": "setGlobalSettings", "context": "p", "payload": { "k": 1 } })),
             json!({ "cmd": "setGlobalSettings", "settings": { "k": 1 } })
         );
@@ -591,9 +624,47 @@ mod tests {
             json!({ "cmd": "openurl", "url": "https://a.b" })
         );
         assert_eq!(
-            command(json!({ "event": "getSettings", "context": "c" }))["cmd"],
-            "getSettings"
+            command(json!({ "event": "getSettings", "context": "c", "id": "r1" })),
+            json!({ "cmd": "getSettings", "actionid": "c", "id": "r1" })
+        );
+        assert_eq!(
+            command(json!({ "event": "getGlobalSettings", "context": "p", "id": "r2" })),
+            json!({ "cmd": "getGlobalSettings", "id": "r2" })
         );
         assert!(incoming(&json!({ "event": "setFeedback", "context": "c" })).is_none());
+    }
+
+    #[test]
+    fn each_plugin_is_told_the_host_it_was_made_for() {
+        let made = |manifest: Value| {
+            let manifest: Manifest = serde_json::from_value(manifest).unwrap();
+            (manifest.made_for_stream_dock(), host_version(&manifest))
+        };
+        let dock = (true, STREAM_DOCK_VERSION.to_owned());
+        assert_eq!(made(json!({ "APIVersion": "1.0", "SDKVersion": 2 })), dock);
+        assert_eq!(
+            made(json!({ "SDKVersion": 1, "Software": { "MinimumVersion": "2.9" } })),
+            dock
+        );
+        assert_eq!(made(json!({ "SDKVersion": 1 })), dock);
+        assert_eq!(
+            made(json!({ "SDKVersion": 2, "Software": { "MinimumVersion": "5.0" } })),
+            (false, "7.1.0.0".to_owned())
+        );
+        assert_eq!(
+            made(json!({ "SDKVersion": 3, "Software": { "MinimumVersion": "7.4" } })),
+            (false, "7.4.0.0".to_owned()),
+            "a later one when the plugin asks for it"
+        );
+        assert_eq!(
+            made(json!({ "SDKVersion": 2 })),
+            (false, "7.1.0.0".to_owned())
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut elgato = plugin(dir.path());
+        elgato.manifest.sdk_version = json!(2);
+        assert_eq!(info(&elgato, "en")["devicePixelRatio"], 2);
+        assert_eq!(info(&plugin(dir.path()), "en")["devicePixelRatio"], 1);
     }
 }

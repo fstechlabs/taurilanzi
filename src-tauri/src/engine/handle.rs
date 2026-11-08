@@ -285,6 +285,10 @@ impl EngineHandle {
         self.ask_blocking(|reply| Command::PluginsInstalled { plugins, reply })?
     }
 
+    pub fn flush_blocking(&self) {
+        let _ = self.ask_blocking(Command::Flush);
+    }
+
     /// For sync, which runs on a thread of its own.
     pub fn sync_export_blocking(&self) -> Result<SyncExport, CommandError> {
         self.ask_blocking(Command::SyncExport)

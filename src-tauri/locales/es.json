@@ -150,12 +150,13 @@
     "notStarted": "los plugins no han podido arrancar",
     "notInstalled": "ese plugin no está instalado",
     "install": {
-      "notAPlugin": "no es un plugin de Ulanzi: falta una carpeta .ulanziPlugin con manifest.json",
+      "notAPlugin": "no es un plugin: falta una carpeta .ulanziPlugin o .sdPlugin con manifest.json",
       "unsafePaths": "el ZIP tiene rutas que saldrían de la carpeta del plugin",
       "badManifest": "el manifest no se puede leer: {reason}",
       "damagedZip": "el ZIP está dañado: {reason}",
       "invalidId": "el id {id} no es válido",
-      "notRemovable": "solo se pueden quitar los plugins instalados en la app"
+      "notRemovable": "solo se pueden quitar los plugins instalados en la app",
+      "otherSystem": "es un programa para otro sistema"
     },
     "catalog": {
       "read": "no se pudo leer la tienda de plugins: {reason}",

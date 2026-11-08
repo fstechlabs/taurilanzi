@@ -100,6 +100,10 @@ pub enum Action {
         #[serde(default)]
         #[specta(type = specta_typescript::Unknown)]
         settings: serde_json::Value,
+        /// Files a Stream Deck plugin keeps for this placement apart from its settings.
+        #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+        #[specta(type = specta_typescript::Unknown)]
+        resources: serde_json::Value,
     },
 }
 

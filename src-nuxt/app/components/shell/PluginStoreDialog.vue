@@ -113,6 +113,57 @@ async function rescan() {
   await load()
 }
 
+/** What is waiting for the user to accept running code nobody checked. */
+type Pending = { kind: 'store', plugin: Plugin } | { kind: 'zip' | 'folder' }
+const pending = ref<Pending | null>(null)
+const confirming = computed({
+  get: () => pending.value !== null,
+  set: (value) => {
+    if (!value) {
+      pending.value = null
+    }
+  },
+})
+
+/** Only a plugin the community store checked and found clean installs without asking; an update
+ * is of one already trusted. */
+function needsConsent(plugin: Plugin) {
+  return !plugin.installed && !(plugin.source === 'community' && plugin.security.status === 'clean')
+}
+
+function consentText(waiting: Pending) {
+  if (waiting.kind !== 'store') {
+    return t('plugins.store.consent.manual')
+  }
+  const { plugin } = waiting
+  const store = t(`plugins.store.from.${plugin.source}`)
+  const who = plugin.author || store
+  if (warned(plugin)) {
+    return t('plugins.store.consent.findings', { who })
+  }
+  return t('plugins.store.consent.unchecked', { store, who })
+}
+
+function ask(plugin: Plugin) {
+  if (needsConsent(plugin)) {
+    pending.value = { kind: 'store', plugin }
+  }
+  else {
+    add(plugin)
+  }
+}
+
+function accept() {
+  const waiting = pending.value
+  pending.value = null
+  if (waiting?.kind === 'store') {
+    add(waiting.plugin)
+  }
+  else if (waiting) {
+    addFrom(waiting.kind)
+  }
+}
+
 async function add(plugin: Plugin) {
   try {
     const id = await install(plugin.id)
@@ -231,10 +282,10 @@ async function add(plugin: Plugin) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" class="w-60">
-                <DropdownMenuItem @select="addFrom('zip')">
+                <DropdownMenuItem @select="pending = { kind: 'zip' }">
                   <FileArchive /> {{ t('plugins.list.fromZip') }}
                 </DropdownMenuItem>
-                <DropdownMenuItem @select="addFrom('folder')">
+                <DropdownMenuItem @select="pending = { kind: 'folder' }">
                   <FolderSearch /> {{ t('plugins.list.fromFolder') }}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -345,7 +396,7 @@ async function add(plugin: Plugin) {
                   v-if="!selected.installed || selected.update"
                   size="sm"
                   :disabled="installing.has(selected.id)"
-                  @click="add(selected)"
+                  @click="ask(selected)"
                 >
                   <LoaderCircle v-if="installing.has(selected.id)" class="animate-spin" />
                   <ArrowUpCircle v-else-if="selected.update" />
@@ -402,6 +453,31 @@ async function add(plugin: Plugin) {
           <Puzzle class="mr-2 size-4" /> {{ t('plugins.store.choose') }}
         </div>
       </div>
+    </DialogContent>
+  </Dialog>
+
+  <Dialog v-model:open="confirming">
+    <DialogContent class="sm:max-w-md" data-store-consent>
+      <DialogHeader>
+        <DialogTitle class="flex items-center gap-2">
+          <ShieldAlert class="size-4 text-amber-400" />
+          {{ pending?.kind === 'store' ? t('plugins.store.consent.title', { name: pending.plugin.name }) : t('plugins.store.consent.manualTitle') }}
+        </DialogTitle>
+        <DialogDescription class="leading-relaxed">
+          {{ t('plugins.store.consent.risk') }}
+        </DialogDescription>
+      </DialogHeader>
+      <p v-if="pending" class="text-sm">
+        {{ consentText(pending) }}
+      </p>
+      <DialogFooter>
+        <Button variant="ghost" @click="pending = null">
+          {{ t('plugins.store.consent.cancel') }}
+        </Button>
+        <Button @click="accept">
+          {{ t('plugins.store.consent.accept') }}
+        </Button>
+      </DialogFooter>
     </DialogContent>
   </Dialog>
 </template>

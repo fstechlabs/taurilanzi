@@ -19,7 +19,11 @@ pub fn from_base64(data: &str) -> Option<ImageData> {
         }
         None => (None, data),
     };
-    let bytes = if data.starts_with("data:") && !data.contains(";base64,") {
+    // Only the head tells: an SVG as text may hold base64 images of its own.
+    let encoded = data
+        .split_once(',')
+        .is_some_and(|(head, _)| head.contains(";base64"));
+    let bytes = if data.starts_with("data:") && !encoded {
         percent_encoding::percent_decode_str(payload).collect()
     } else {
         STANDARD
@@ -169,5 +173,15 @@ mod tests {
         assert_eq!(file("c.JPG", b"????"), Some(ImageFormat::Jpeg));
         assert_eq!(file("d.txt", b"????"), None);
         assert_eq!(from_file(&dir.path().join("missing.png")), None);
+    }
+
+    #[test]
+    fn an_svg_as_text_may_hold_base64_images() {
+        let inner = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg"><image href="data:image/png;base64,{}"/></svg>"#,
+            STANDARD.encode(PNG)
+        );
+        let uri = format!("data:image/svg+xml;charset=utf8,{inner}");
+        assert_eq!(read(&uri), Some((ImageFormat::Svg, inner.into_bytes())));
     }
 }

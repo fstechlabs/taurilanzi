@@ -30,6 +30,7 @@ impl Engine {
                     action,
                     id,
                     settings,
+                    ..
                 } = &action
                 {
                     if let Some(host) = &plugins
@@ -426,6 +427,7 @@ mod tests {
             action: "com.a.b.c.act".into(),
             id: Uuid::new_v4(),
             settings: serde_json::Value::Null,
+            resources: serde_json::Value::Null,
         };
         let key = |actions: Vec<Action>| Key {
             kind: None,
@@ -446,6 +448,7 @@ mod tests {
             action: action.into(),
             id: Uuid::new_v4(),
             settings: serde_json::Value::Null,
+            resources: serde_json::Value::Null,
         };
         assert!(
             check(&key(vec![named("com.mutedeck.plugin.togglemute")])).is_ok(),

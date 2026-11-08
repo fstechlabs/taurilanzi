@@ -10,6 +10,7 @@
   "Nodejs": { "Version": "20" },
   "OS": [{ "Platform": "mac", "MinimumVersion": "10.11" }, { "Platform": "windows", "MinimumVersion": "7" }],
   "Software": { "MinimumVersion": "3.10.188.226" },
+  "ApplicationsToMonitor": { "mac": ["com.apple.TextEdit"], "windows": ["notepad.exe"] },
   "Actions": [
     {
       "UUID": "com.taurilanzi.streamdock.count",

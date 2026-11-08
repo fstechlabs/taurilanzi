@@ -1361,6 +1361,16 @@
       "searchLabel": "Buscar plugins",
       "reload": "Recargar listados",
       "manual": "Instalar a mano",
+      "consent": {
+        "title": "¿Instalar {name}?",
+        "manualTitle": "¿Instalar un plugin a mano?",
+        "risk": "Los plugins se ejecutan en tu ordenador con tus permisos: pueden leer tus archivos, usar la red y abrir programas, como cualquier app que instales.",
+        "unchecked": "{store} no revisa el código de sus plugins. Instálalo solo si te fías de {who}.",
+        "findings": "El análisis automático ha encontrado avisos en este plugin. Instálalo solo si te fías de {who} y has revisado su código.",
+        "manual": "Nadie ha revisado este paquete. Instálalo solo si te fías de quien lo hizo o te lo pasó.",
+        "cancel": "Cancelar",
+        "accept": "Instalar"
+      },
       "loadFailed": "No se ha podido leer la tienda. Comprueba la conexión y vuelve a intentarlo.",
       "loading": "Leyendo la tienda…",
       "noMatch": "Ningún plugin coincide.",

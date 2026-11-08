@@ -208,6 +208,8 @@ pub enum Command {
         id: String,
         reply: Done,
     },
+    /// Writes what is waiting to be saved, as the app quits.
+    Flush(Reply<()>),
 }
 
 pub enum Input {

@@ -6,6 +6,7 @@ use base64::engine::general_purpose::STANDARD;
 use super::design::{
     Background, Color, Fit, ImageData, ImageFormat, KeyDesign, Layer, VerticalPosition,
 };
+use super::fonts::DEFAULT_FAMILY;
 use super::widgets;
 
 /// The dock bezel hides a few pixels of each edge.
@@ -195,10 +196,33 @@ fn silhouette(index: usize, color: Color) -> String {
 pub(super) fn tinted(image: &ImageData, tint: Option<Color>) -> Vec<u8> {
     match (image.format, tint, std::str::from_utf8(&image.bytes)) {
         (ImageFormat::Svg, Some(color), Ok(text)) => {
-            text.replace("currentColor", &color.hex()).into_bytes()
+            with_sans(&text.replace("currentColor", &color.hex())).into_bytes()
         }
+        (ImageFormat::Svg, None, Ok(text)) => with_sans(text).into_bytes(),
         _ => image.bytes.to_vec(),
     }
+}
+
+/// Text that names no font is drawn in the app's sans serif, as stream deck apps draw the images
+/// plugins send; the default of SVG is a serif. Images that use `xlink:` without declaring it,
+/// which those apps draw anyway, get it declared.
+fn with_sans(svg: &str) -> String {
+    let Some(start) = svg.find("<svg") else {
+        return svg.to_owned();
+    };
+    let Some(end) = svg[start..].find('>').map(|i| start + i) else {
+        return svg.to_owned();
+    };
+    let root = &svg[start..end];
+    let mut added = String::new();
+    if !root.contains("font-family") {
+        added.push_str(&format!(r#" font-family="{DEFAULT_FAMILY}""#));
+    }
+    if svg.contains("xlink:") && !svg.contains("xmlns:xlink") {
+        added.push_str(r#" xmlns:xlink="http://www.w3.org/1999/xlink""#);
+    }
+    let at = start + "<svg".len();
+    format!("{}{added}{}", &svg[..at], &svg[at..])
 }
 
 pub(super) fn escape(text: &str) -> String {
@@ -257,13 +281,41 @@ mod tests {
             bytes: std::sync::Arc::from(&b"<svg fill=\"currentColor\"/>"[..]),
         };
         let out = String::from_utf8(tinted(&image, Some(Color::rgb(255, 0, 102)))).unwrap();
-        assert_eq!(out, "<svg fill=\"#ff0066\"/>");
-        assert_eq!(tinted(&image, None), image.bytes.to_vec());
+        assert_eq!(out, "<svg font-family=\"Inter\" fill=\"#ff0066\"/>");
+    }
+
+    #[test]
+    fn svg_images_without_a_font_are_drawn_in_sans() {
+        let image = |svg: &str| ImageData {
+            format: ImageFormat::Svg,
+            bytes: std::sync::Arc::from(svg.as_bytes()),
+        };
+        let plain = tinted(&image("<?xml?><svg><text>99%</text></svg>"), None);
+        assert_eq!(
+            String::from_utf8(plain).unwrap(),
+            "<?xml?><svg font-family=\"Inter\"><text>99%</text></svg>"
+        );
+        let named = image(r#"<svg font-family="Arial"><text>99%</text></svg>"#);
+        assert_eq!(tinted(&named, None), named.bytes.to_vec());
     }
 
     #[test]
     fn canvas_matches_requested_size() {
         let svg = build(&KeyDesign::solid(Color::BLACK), (452, 196));
         assert!(svg.contains(r#"width="452" height="196" viewBox="0 0 452 196""#));
+    }
+
+    #[test]
+    fn svg_images_get_the_xlink_namespace_they_use() {
+        let image = ImageData {
+            format: ImageFormat::Svg,
+            bytes: std::sync::Arc::from(
+                &br#"<svg font-family="A"><image xlink:href="x.png"/></svg>"#[..],
+            ),
+        };
+        assert_eq!(
+            String::from_utf8(tinted(&image, None)).unwrap(),
+            r#"<svg xmlns:xlink="http://www.w3.org/1999/xlink" font-family="A"><image xlink:href="x.png"/></svg>"#
+        );
     }
 }

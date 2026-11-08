@@ -6,6 +6,7 @@ mod app_menu;
 mod clients;
 mod cloud;
 mod config;
+mod deep_links;
 mod driver;
 mod engine;
 mod foreground;
@@ -60,6 +61,7 @@ pub fn run() {
             .plugin(tauri_plugin_wdio_webdriver::init());
     }
     builder = builder
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build());
@@ -85,6 +87,11 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(|app, event| {
+        if let RunEvent::Exit = event
+            && let Some(engine) = app.try_state::<engine::EngineHandle>()
+        {
+            engine.flush_blocking();
+        }
         // What changed in the last minutes reaches the other computers before this one is off.
         if let RunEvent::Exit = event
             && let Some(cloud) = app.try_state::<cloud::Cloud>()

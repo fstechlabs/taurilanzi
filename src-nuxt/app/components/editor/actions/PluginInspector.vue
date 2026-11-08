@@ -20,6 +20,8 @@ watchEffect(() => {
   }
 })
 const running = computed(() => found.value?.plugin.connected ?? false)
+/** Stream Dock shows these pages as they are, in a column this wide over its own grey. */
+const streamDeck = computed(() => found.value?.plugin.protocol === 'stream_deck')
 </script>
 
 <template>
@@ -39,7 +41,8 @@ const running = computed(() => found.value?.plugin.connected ?? false)
         v-else-if="url"
         :src="url"
         :title="t('actions.pluginInspector.settingsOf', { name: found.action.name })"
-        class="h-[60vh] w-full rounded-lg bg-transparent"
+        class="h-[60vh] rounded-lg"
+        :class="streamDeck ? 'mx-auto block w-[430px] max-w-full bg-[#2d2d2d]' : 'w-full bg-transparent'"
         data-plugin-inspector
       />
     </template>

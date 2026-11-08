@@ -205,7 +205,9 @@ action: string;
 /**  This placement of the action, which the plugin tells its keys apart by. */
 id: string; 
 /**  What the plugin saved for this placement. The plugin owns it: editing the key keeps it. */
-settings?: unknown };
+settings?: unknown; 
+/**  Files a Stream Deck plugin keeps for this placement apart from its settings. */
+resources?: unknown };
 
 /**  Whether the app can tell which app is in front, which switching profiles by app needs. */
 export type AppDetection = "ready" | 

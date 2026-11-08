@@ -1,1 +1,2 @@
 "NSAppleEventsUsageDescription" = "Para mostrar en el dock la canción que suena en Música o Spotify.";
+"NSLocalNetworkUsageDescription" = "Para llegar a los servidores de tu red que usan tus teclas y plugins, como Home Assistant, OBS o Uptime Kuma.";

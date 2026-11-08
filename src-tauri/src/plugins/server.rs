@@ -21,11 +21,11 @@ use tungstenite::handshake::derive_accept_key;
 use tungstenite::protocol::Role;
 use tungstenite::{Message, WebSocket};
 
+use super::elgato::protocol as streamdeck;
 use super::hub::PluginHost;
 use super::manifest::Protocol;
-use super::protocol::Instance;
 use super::registry::Registry;
-use super::streamdeck;
+use super::ulanzi::protocol::Instance;
 
 pub const PREFERRED_PORT: u16 = 3906;
 const HEAD_LIMIT: usize = 64 * 1024;
@@ -33,10 +33,12 @@ const BODY_LIMIT: usize = 32 * 1024 * 1024;
 const READ_TIMEOUT: Duration = Duration::from_millis(30);
 const SHIM: &str = include_str!("shim.js");
 const SHIM_PATH: &str = "/__taurilanzi/shim.js";
-const THEME: &str = include_str!("theme.css");
+const THEME: &str = include_str!("ulanzi/theme.css");
 const THEME_PATH: &str = "/__taurilanzi/theme.css";
 const PROXY_PATH: &str = "/__taurilanzi/proxy";
 const PICK_PATH: &str = "/__taurilanzi/pick";
+/// Where the pages of a plugin report their errors, which only their console would show.
+const LOG_PATH: &str = "/__taurilanzi/log";
 const TOKEN_HEADER: &str = "x-taurilanzi-token";
 const TARGET_HEADER: &str = "x-taurilanzi-target";
 
@@ -98,15 +100,19 @@ fn serve(mut stream: TcpStream, host: &PluginHost, token: &str, port: u16) {
         proxy(&mut stream, request, token)
     } else if request.path == PICK_PATH {
         pick(&mut stream, &request, host, token)
+    } else if request.path == LOG_PATH {
+        page_log(&mut stream, &request, host, token)
     } else if request.path == SHIM_PATH {
         respond(&mut stream, 200, "text/javascript", SHIM.as_bytes())
     } else if request.path == THEME_PATH {
         respond(&mut stream, 200, "text/css", THEME.as_bytes())
     } else if let Some(rest) = request.path.strip_prefix("/plugins/") {
+        let mut state = None;
         if let (Some(action), Some(actionid)) = (
             query_value(&request.query, "uuid"),
             query_value(&request.query, "actionid"),
         ) {
+            state = Some(host.state_of(&actionid));
             host.opened_inspector(Instance {
                 action,
                 key: query_value(&request.query, "key").unwrap_or_default(),
@@ -114,7 +120,7 @@ fn serve(mut stream: TcpStream, host: &PluginHost, token: &str, port: u16) {
             });
         }
         let registry = host.registry();
-        file(&mut stream, &registry, rest, token, port)
+        file(&mut stream, &registry, rest, token, port, state)
     } else if let Some(folder) = referring_plugin(&request, port) {
         // Ulanzi Studio opens pages from their files, so some take the root of the server they
         // are served from for the root of the plugin: `/en.json`, `/images/a.png`.
@@ -125,6 +131,7 @@ fn serve(mut stream: TcpStream, host: &PluginHost, token: &str, port: u16) {
             &format!("{folder}{}", request.path),
             token,
             port,
+            None,
         )
     } else {
         respond(&mut stream, 404, "text/plain", b"not found")
@@ -170,6 +177,14 @@ fn read_head(stream: &mut TcpStream) -> Option<Request> {
         headers,
         rest,
     })
+}
+
+/// `https://host:port` of an address, without what could be a password or a token in it.
+fn origin_of(url: &str) -> String {
+    let (scheme, rest) = url.split_once("://").unwrap_or(("", url));
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host = authority.rsplit('@').next().unwrap_or_default();
+    format!("{scheme}://{host}")
 }
 
 /// A value of the query of a request, if it is there and not empty.
@@ -273,15 +288,18 @@ fn websocket(mut stream: TcpStream, request: Request, host: &PluginHost) {
     host.close(conn);
 }
 
+/// A file of a plugin; pages get the shim, and inspectors of Stream Deck plugins the state of
+/// their key.
 fn file(
     stream: &mut TcpStream,
     registry: &RwLock<Registry>,
     rest: &str,
     token: &str,
     port: u16,
+    state: Option<u32>,
 ) -> io::Result<()> {
     let (folder, relative) = rest.split_once('/').unwrap_or((rest, ""));
-    let (path, stream_deck) = {
+    let (path, stream_deck, id) = {
         let registry = registry.read().unwrap_or_else(PoisonError::into_inner);
         let plugin = registry.plugins().iter().find(|p| p.folder == folder);
         let stream_deck = plugin
@@ -290,11 +308,18 @@ fn file(
                 json!({
                     "port": port,
                     "plugin": p.manifest.uuid,
+                    // Stream Dock calls the function of its own SDK only for plugins made with it.
+                    "mirabox": !p.manifest.api_version.is_null(),
                     "device": streamdeck::DEVICE_ID,
                     "info": streamdeck::info(p, crate::i18n::current().tag()),
+                    "state": state.unwrap_or_default(),
                 })
             });
-        (plugin.and_then(|p| p.file(relative)), stream_deck)
+        (
+            plugin.and_then(|p| p.file(relative)),
+            stream_deck,
+            plugin.map(|p| p.manifest.uuid.clone()).unwrap_or_default(),
+        )
     };
     let Some(path) = path.filter(|p| p.is_file()) else {
         return respond(stream, 404, "text/plain", b"not found");
@@ -302,25 +327,86 @@ fn file(
     let bytes = std::fs::read(&path)?;
     let kind = content_type(relative);
     if kind.starts_with("text/html") {
-        respond(stream, 200, kind, &with_shim(&bytes, token, stream_deck))
+        respond(
+            stream,
+            200,
+            kind,
+            &with_shim(&bytes, token, &id, stream_deck),
+        )
+    } else if kind.starts_with("text/css") && stream_deck.is_some() {
+        let css = String::from_utf8_lossy(&bytes);
+        respond(stream, 200, kind, with_standard_markers(&css).as_bytes())
     } else {
         respond(stream, 200, kind, &bytes)
     }
 }
 
-/// The token and the shim go first in the page, before any script of the plugin runs, and the
-/// app's colors for its stylesheets with them. Pages of Stream Deck plugins also get what the
-/// shim connects them with.
-fn with_shim(html: &[u8], token: &str, stream_deck: Option<Value>) -> Vec<u8> {
+/// The Stream Deck and Stream Dock show pages in Chromium, where `::-webkit-details-marker`
+/// hides the triangle of a `<summary>`; WebKit no longer reads it. Each rule that hides it is
+/// followed by its standard counterpart.
+fn with_standard_markers(css: &str) -> String {
+    const MARKER: &str = "::-webkit-details-marker";
+    if !css.contains(MARKER) {
+        return css.to_owned();
+    }
+    let mut added = String::new();
+    let mut start = 0;
+    while let Some(open) = css[start..].find('{').map(|i| start + i) {
+        let Some(close) = css[open..].find('}').map(|i| open + i) else {
+            break;
+        };
+        let selector = css[start..open]
+            .rsplit(['}', ';'])
+            .next()
+            .unwrap_or_default();
+        let body = css[open + 1..close].to_ascii_lowercase();
+        if body.contains("display") && body.contains("none") {
+            let summaries: Vec<String> = selector
+                .split(',')
+                .filter(|part| part.contains(MARKER))
+                .map(|part| part.replace(MARKER, "").trim().to_owned())
+                .filter(|part| !part.is_empty())
+                .collect();
+            if !summaries.is_empty() {
+                let list = summaries.join(", ");
+                let markers: Vec<String> =
+                    summaries.iter().map(|s| format!("{s}::marker")).collect();
+                added.push_str(&format!(
+                    "\n{list} {{ list-style: none; }}\n{} {{ content: none; }}\n",
+                    markers.join(", ")
+                ));
+            }
+        }
+        start = close + 1;
+    }
+    format!("{css}{added}")
+}
+
+/// The token and the shim go first in the page, before any script of the plugin runs. Pages of
+/// Ulanzi plugins get the app's colors for their stylesheets; those of Stream Deck plugins are
+/// left as their own host shows them, with only what the shim connects them with.
+fn with_shim(html: &[u8], token: &str, plugin: &str, stream_deck: Option<Value>) -> Vec<u8> {
     let text = String::from_utf8_lossy(html);
-    let mut config = json!({ "proxy": PROXY_PATH, "pick": PICK_PATH, "token": token });
+    let mut config = json!({
+        "proxy": PROXY_PATH,
+        "pick": PICK_PATH,
+        "log": LOG_PATH,
+        "plugin": plugin,
+        "token": token,
+    });
+    let themed = stream_deck.is_none();
     if let Some(stream_deck) = stream_deck {
         config["streamDeck"] = stream_deck;
     }
     // Nothing in the configuration may close the script it goes in.
     let config = config.to_string().replace("</", "<\\/");
+    let theme = if themed {
+        format!(r#"<link rel="stylesheet" href="{THEME_PATH}">"#)
+    } else {
+        String::new()
+    };
     let tag = format!(
-        r#"<script>window.__TAURILANZI__={config};</script><script src="{SHIM_PATH}"></script><link rel="stylesheet" href="{THEME_PATH}">"#
+        r#"<script>window.__TAURILANZI__={config};</script><script src="{SHIM_PATH}"></script>{theme}"#
     );
     let lower = text.to_ascii_lowercase();
     let at = lower
@@ -336,6 +422,20 @@ fn with_shim(html: &[u8], token: &str, stream_deck: Option<Value>) -> Vec<u8> {
 
 /// A file picker for the pages that ask the host for one, as Stream Dock's inspectors do: the
 /// paths chosen, as a JSON list.
+fn page_log(
+    stream: &mut TcpStream,
+    request: &Request,
+    host: &PluginHost,
+    token: &str,
+) -> io::Result<()> {
+    if request.headers.get(TOKEN_HEADER).map(String::as_str) != Some(token) {
+        return respond(stream, 403, "text/plain", b"not allowed");
+    }
+    let field = |name: &str| query_value(&request.query, name).unwrap_or_default();
+    host.page_log(&field("plugin"), &field("level"), &field("message"));
+    respond(stream, 204, "text/plain", b"")
+}
+
 fn pick(
     stream: &mut TcpStream,
     request: &Request,
@@ -440,7 +540,14 @@ fn proxy(stream: &mut TcpStream, request: Request, token: &str) -> io::Result<()
         .and_then(|prepared| agent.run(prepared).map_err(io::Error::other));
     let response = match sent {
         Ok(response) => response,
-        Err(err) => return respond(stream, 502, "text/plain", err.to_string().as_bytes()),
+        Err(err) => {
+            // What a page sees is only that its request failed: the reason is here.
+            warn!(
+                "a plugin page could not reach {}: {err}",
+                origin_of(&target)
+            );
+            return respond(stream, 502, "text/plain", err.to_string().as_bytes());
+        }
     };
     let status = response.status().as_u16();
     let kind = response
@@ -516,7 +623,7 @@ mod tests {
     use super::super::desktop::Headless;
     use super::super::hub::{HubSetup, PluginInput, VisualChange};
     use super::super::install;
-    use super::super::protocol::{Instance, event, key_fields};
+    use super::super::ulanzi::protocol::{Instance, event, key_fields};
     use super::*;
     use crate::render::ImageFormat;
 
@@ -847,12 +954,20 @@ mod tests {
             &mut main,
             json!({ "cmd": "setTitle", "param": { "actionid": "A1", "text": "T" } }),
         );
-        assert!(matches!(visual(&host), VisualChange::Title(Some(t)) if t == "T"));
+        assert!(
+            matches!(visual(&host), VisualChange::Title { state: None, title: Some(t) } if t == "T")
+        );
         request(
             &mut main,
             json!({ "cmd": "setTitle", "actionid": "A1", "text": "" }),
         );
-        assert!(matches!(visual(&host), VisualChange::Title(None)));
+        assert!(matches!(
+            visual(&host),
+            VisualChange::Title {
+                state: None,
+                title: None
+            }
+        ));
         request(
             &mut main,
             json!({ "cmd": "setTitle", "param": { "text": "nobody" } }),
@@ -952,7 +1067,7 @@ mod tests {
         );
         assert!(matches!(
             host.input(),
-            PluginInput::GetSettings { actionid, conn } if actionid == "A1" && conn == first_conn
+            PluginInput::GetSettings { actionid, conn, .. } if actionid == "A1" && conn == first_conn
         ));
 
         let to_plugin = json!({ "cmd": "sendToPlugin", "uuid": ACTION, "key": "2_1", "actionid": "A1", "payload": { "x": 1 } });
@@ -1068,7 +1183,7 @@ mod tests {
         let token = token(host.port);
         assert_eq!(token.len(), 32);
         let tag = format!(
-            r#"<script>window.__TAURILANZI__={{"pick":"/__taurilanzi/pick","proxy":"/__taurilanzi/proxy","token":"{token}"}};</script><script src="/__taurilanzi/shim.js"></script><link rel="stylesheet" href="/__taurilanzi/theme.css">"#
+            r#"<script>window.__TAURILANZI__={{"log":"/__taurilanzi/log","pick":"/__taurilanzi/pick","plugin":"{PLUGIN}","proxy":"/__taurilanzi/proxy","token":"{token}"}};</script><script src="/__taurilanzi/shim.js"></script><link rel="stylesheet" href="/__taurilanzi/theme.css">"#
         );
         assert_eq!(
             String::from_utf8(body).unwrap(),
@@ -1107,6 +1222,7 @@ mod tests {
         let page = String::from_utf8(with_shim(
             b"<html><HEAD lang=\"es\"><title>x</title>",
             "t",
+            "com.a.b.c",
             None,
         ))
         .unwrap();
@@ -1115,7 +1231,7 @@ mod tests {
             "{page}"
         );
         assert!(page.ends_with(r#"theme.css"><title>x</title>"#), "{page}");
-        let bare = String::from_utf8(with_shim(b"<p>x</p>", "t", None)).unwrap();
+        let bare = String::from_utf8(with_shim(b"<p>x</p>", "t", "com.a.b.c", None)).unwrap();
         assert!(
             bare.starts_with("<script>") && bare.ends_with("<p>x</p>"),
             "{bare}"
@@ -1292,7 +1408,9 @@ mod tests {
             &mut main,
             json!({ "event": "setTitle", "context": "A1", "payload": { "title": "3", "target": 0 } }),
         );
-        assert!(matches!(visual(&host), VisualChange::Title(Some(t)) if t == "3"));
+        assert!(
+            matches!(visual(&host), VisualChange::Title { state: None, title: Some(t) } if t == "3")
+        );
         let svg = "data:image/svg+xml;charset=utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"4\"/>";
         send(
             &mut main,
@@ -1321,6 +1439,226 @@ mod tests {
             host.input(),
             PluginInput::Result { actionid, ok: true } if actionid == "A1"
         ));
+    }
+
+    #[test]
+    fn stream_deck_titles_and_images_change_what_the_sdk_says() {
+        let host = host();
+        let mut main = stream_deck_main(&host);
+        let title = |main: &mut Socket, payload: Value| {
+            send(
+                main,
+                json!({ "event": "setTitle", "context": "A1", "payload": payload }),
+            );
+            match visual(&host) {
+                VisualChange::Title { state, title } => (state, title),
+                other => panic!("{other:?}"),
+            }
+        };
+        assert_eq!(
+            title(&mut main, json!({ "target": 0 })),
+            (None, None),
+            "back to the manifest's"
+        );
+        assert_eq!(
+            title(&mut main, json!({ "title": "" })),
+            (None, Some(String::new())),
+            "an empty title shows none"
+        );
+        assert_eq!(
+            title(&mut main, json!({ "title": "On", "state": 1 })),
+            (Some(1), Some("On".into()))
+        );
+
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>"#;
+        send(
+            &mut main,
+            json!({ "event": "setImage", "context": "A1", "payload": { "image": svg } }),
+        );
+        assert!(
+            matches!(visual(&host), VisualChange::EveryState(image) if image.format == ImageFormat::Svg),
+            "an SVG as it is, for every state"
+        );
+        send(
+            &mut main,
+            json!({ "event": "setImage", "context": "A1", "payload": { "image": "images/off" } }),
+        );
+        assert!(
+            matches!(visual(&host), VisualChange::EveryState(image) if image.format == ImageFormat::Svg),
+            "a file of the plugin named without its extension"
+        );
+        send(
+            &mut main,
+            json!({ "event": "setImage", "context": "A1", "payload": { "image": null, "state": 1 } }),
+        );
+        assert!(matches!(visual(&host), VisualChange::ClearStateImage(1)));
+
+        let twice = json!({ "event": "setState", "context": "A1", "payload": { "state": 1 } });
+        send(&mut main, Value::String(twice.to_string()));
+        assert!(
+            matches!(visual(&host), VisualChange::SetState(1)),
+            "a message encoded twice"
+        );
+        let again = PluginHost::new(HubSetup {
+            registry: host.host.registry(),
+            notify: Box::new(|_| {}),
+            desktop: Arc::new(Headless),
+            logs: host.dir.path().join("logs"),
+        });
+        assert_eq!(again.known_state("A1"), Some(1), "kept for the next start");
+    }
+
+    #[test]
+    fn stream_deck_requests_are_answered_with_their_id() {
+        let host = host();
+        let mut main = stream_deck_main(&host);
+        send(
+            &mut main,
+            json!({ "event": "getSettings", "context": "A1", "id": "r1" }),
+        );
+        assert!(matches!(
+            host.input(),
+            PluginInput::GetSettings { actionid, id: Some(id), .. } if actionid == "A1" && id == "r1"
+        ));
+        send(
+            &mut main,
+            json!({ "event": "setResources", "context": "A1", "payload": { "sound": "a.mp3" } }),
+        );
+        assert!(matches!(
+            host.input(),
+            PluginInput::SaveResources { actionid, resources, .. }
+                if actionid == "A1" && resources == json!({ "sound": "a.mp3" })
+        ));
+        send(
+            &mut main,
+            json!({ "event": "getResources", "context": "A1", "id": "r2" }),
+        );
+        assert!(matches!(
+            host.input(),
+            PluginInput::GetResources { id: Some(id), .. } if id == "r2"
+        ));
+
+        let answer = json!({ "cmd": "didReceiveSettings", "uuid": SD_ACTION, "key": "2_1", "actionid": "A1", "settings": { "n": 1 }, "id": "r1" });
+        host.host.to_main(SD_PLUGIN, &answer);
+        let told = next(&mut main);
+        assert_eq!(
+            (told["event"].as_str(), told["id"].as_str()),
+            (Some("didReceiveSettings"), Some("r1"))
+        );
+        assert_eq!(told["payload"]["settings"], json!({ "n": 1 }));
+    }
+
+    #[test]
+    fn a_main_service_hears_of_a_key_once() {
+        let host = host();
+        let mut main = stream_deck_main(&host);
+        let fields = key_fields(&json!({}));
+        for _ in 0..2 {
+            host.host
+                .to_main(SD_PLUGIN, &event("add", &sd_instance(), fields.clone()));
+        }
+        host.host
+            .to_main(SD_PLUGIN, &event("keydown", &sd_instance(), fields));
+        assert_eq!(next(&mut main)["event"], "willAppear");
+        assert_eq!(next(&mut main)["event"], "keyDown");
+    }
+
+    #[test]
+    fn stream_deck_plugins_hear_of_links_the_dock_and_the_computer() {
+        let host = host();
+        host.host
+            .deep_link("streamdeck://plugins/message/com.taurilanzi.streamdock/hello?name=x#y");
+        let mut main = stream_deck_main(&host);
+        assert_eq!(
+            next(&mut main),
+            json!({ "event": "didReceiveDeepLink", "payload": { "url": "/hello?name=x#y" } }),
+            "a link that came before the plugin connected"
+        );
+        host.host
+            .deep_link("streamdeck://plugins/message/com.taurilanzi.streamdock");
+        assert_eq!(next(&mut main)["payload"]["url"], "/");
+
+        host.host.system_woke();
+        assert_eq!(next(&mut main), json!({ "event": "systemDidWakeUp" }));
+        host.host.set_dock(false);
+        assert_eq!(next(&mut main)["event"], "deviceDidDisconnect");
+        host.host.set_dock(true);
+        assert_eq!(next(&mut main)["event"], "deviceDidConnect");
+
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        {
+            let (app, named) = if cfg!(target_os = "macos") {
+                ("com.apple.textedit", "com.apple.TextEdit")
+            } else {
+                ("notepad.exe", "notepad.exe")
+            };
+            host.host
+                .apps_running([app.to_owned(), "other".into()].into());
+            assert_eq!(
+                next(&mut main),
+                json!({ "event": "applicationDidLaunch", "payload": { "application": named } })
+            );
+            host.host.apps_running(["other".to_owned()].into());
+            assert_eq!(next(&mut main)["event"], "applicationDidTerminate");
+        }
+    }
+
+    #[test]
+    fn styles_of_stream_deck_pages_hide_the_markers_chromium_hides() {
+        let css = ".message > summary::-webkit-details-marker { display: none; }\na, b::-webkit-details-marker{color:red}";
+        assert_eq!(
+            with_standard_markers(css),
+            format!(
+                "{css}\n.message > summary {{ list-style: none; }}\n.message > summary::marker {{ content: none; }}\n"
+            )
+        );
+        assert_eq!(
+            with_standard_markers("p { color: red }"),
+            "p { color: red }"
+        );
+
+        let host = host();
+        let (status, _, body) = get(
+            host.port,
+            &format!("/plugins/{SD_FOLDER}/inspector/index.html"),
+        );
+        assert_eq!(status, 200);
+        assert!(
+            String::from_utf8(body)
+                .unwrap()
+                .contains(r#""log":"/__taurilanzi/log""#)
+        );
+    }
+
+    #[test]
+    fn pages_report_their_errors_to_the_log_of_their_plugin() {
+        let host = host();
+        let token = token(host.port);
+        let ask = |plugin: &str| {
+            http(
+                host.port,
+                &format!(
+                    "GET /__taurilanzi/log?plugin={plugin}&level=error&message=boom HTTP/1.1\r\nX-Taurilanzi-Token: {token}\r\n\r\n"
+                ),
+            )
+            .0
+        };
+        assert_eq!(ask(SD_PLUGIN), 204);
+        assert_eq!(ask("..%2Fevil"), 204);
+        let log = std::fs::read_to_string(
+            host.dir
+                .path()
+                .join("logs")
+                .join(format!("{SD_PLUGIN}.log")),
+        )
+        .unwrap();
+        assert!(
+            log.trim_end().ends_with(&format!("[{SD_PLUGIN}][E] boom")),
+            "{log}"
+        );
+        assert!(!host.dir.path().join("evil.log").exists());
+        let (status, _, _) = get(host.port, "/__taurilanzi/log?plugin=x&message=y");
+        assert_eq!(status, 403, "only with the token");
     }
 
     #[test]
@@ -1409,13 +1747,21 @@ mod tests {
             config["streamDeck"]["info"]["application"]["language"],
             "es"
         );
+        assert!(!page.contains("theme.css"), "left as Stream Dock shows it");
+        assert_eq!(config["streamDeck"]["mirabox"], false);
         let (_, _, ulanzi) = get(
             host.port,
             &format!("/plugins/{FOLDER}/inspector/inspector.html"),
         );
-        assert!(!String::from_utf8(ulanzi).unwrap().contains("streamDeck"));
+        let ulanzi = String::from_utf8(ulanzi).unwrap();
+        assert!(!ulanzi.contains("streamDeck"));
+        assert!(ulanzi.contains("theme.css"));
         assert_eq!(file_filter(".png, image/svg+xml"), "files(*.png *.svg)");
         assert_eq!(file_filter(""), "");
+        assert_eq!(
+            origin_of("https://user:secret@kuma.example.com:3001/socket.io/?EIO=4"),
+            "https://kuma.example.com:3001"
+        );
     }
 
     #[test]

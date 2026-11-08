@@ -7,7 +7,7 @@ use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
-use super::manifest::Manifest;
+use super::manifest::{Manifest, Runtime};
 use super::registry::{
     PACKAGE_SUFFIX, STREAM_DECK_SUFFIX, protocol_of, read_manifest, valid_plugin_id,
 };
@@ -29,6 +29,8 @@ pub enum InstallError {
         trf!("plugins.install.badManifest", reason = .0)
     )]
     BadManifest(String),
+    #[error("{}", tr!("plugins.install.otherSystem"))]
+    OtherSystem,
     #[error("{0}")]
     Io(#[from] io::Error),
     #[error("{}", trf!("plugins.install.damagedZip", reason = .0))]
@@ -59,6 +61,14 @@ pub fn install(source: &Path, plugins: &Path) -> Result<String, InstallError> {
             .and_then(|n| n.to_str())
             .ok_or(InstallError::NotAPlugin)?
             .to_owned();
+        // Manifests often list one system and run on any; what cannot run is a program built
+        // only for another.
+        if let Some(protocol) = super::registry::protocol_of(&name)
+            && let Runtime::Native(code) = manifest.runtime(&package, protocol)
+            && !super::launcher::runs_here(&code)
+        {
+            return Err(InstallError::OtherSystem);
+        }
         let target = plugins.join(&name);
         if target.exists() {
             fs::remove_dir_all(&target)?;
@@ -567,5 +577,44 @@ mod tests {
         );
         assert_eq!(install(&flat, &plugins).unwrap(), "com.flat.sd");
         assert!(plugins.join("com.flat.sd.sdPlugin/manifest.json").is_file());
+    }
+
+    #[test]
+    fn a_program_for_another_system_is_not_installed() {
+        let dir = tempfile::tempdir().unwrap();
+        let program = if cfg!(target_os = "windows") {
+            "plugin/run"
+        } else {
+            "plugin/run.exe"
+        };
+        let manifest =
+            json!({ "UUID": "com.a.b", "Name": "P", "SDKVersion": 2, "CodePath": program })
+                .to_string();
+        let package = zip(
+            dir.path(),
+            &[
+                ("com.a.b.sdPlugin/manifest.json", &manifest),
+                (&format!("com.a.b.sdPlugin/{program}"), "x"),
+            ],
+        );
+        let plugins = dir.path().join("plugins");
+        assert!(matches!(
+            install(&package, &plugins),
+            Err(InstallError::OtherSystem)
+        ));
+        let script =
+            json!({ "UUID": "com.a.b", "Name": "P", "SDKVersion": 2, "CodePath": "plugin/index.js", "OS": [{ "Platform": "windows" }] }).to_string();
+        let package = zip(
+            dir.path(),
+            &[
+                ("com.a.b.sdPlugin/manifest.json", &script),
+                ("com.a.b.sdPlugin/plugin/index.js", "x"),
+            ],
+        );
+        assert_eq!(
+            install(&package, &plugins).unwrap(),
+            "com.a.b",
+            "scripts run anywhere, whatever systems the manifest lists"
+        );
     }
 }

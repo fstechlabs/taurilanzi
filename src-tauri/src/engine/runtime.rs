@@ -178,6 +178,7 @@ impl Engine {
                 .chain(self.screen_deadline())
                 .chain(self.live_deadline())
                 .chain(self.result_deadline())
+                .chain(self.plugin_save_deadline())
                 .min();
             let input = match due {
                 Some(due) => {
@@ -211,6 +212,7 @@ impl Engine {
             self.tick_screen(now);
             self.tick_live();
             self.tick_results(now);
+            self.save_plugin_settings(now);
             if self.changed {
                 self.publish();
             }
@@ -226,11 +228,17 @@ impl Engine {
                 );
                 self.device = Some(device);
                 self.changed = true;
+                if let Some(host) = self.plugin_keys.host() {
+                    host.set_dock(true);
+                }
             }
             Event::Disconnected => {
                 info!("dock lost, waiting for it to come back");
                 self.device = None;
                 self.changed = true;
+                if let Some(host) = self.plugin_keys.host() {
+                    host.set_dock(false);
+                }
             }
             Event::Key { index, pressed } => {
                 self.activity.touch();
@@ -417,6 +425,10 @@ impl Engine {
             Command::DeleteIntegration { id, reply } => {
                 let result = self.delete_integration(id);
                 self.respond(reply, result);
+            }
+            Command::Flush(reply) => {
+                self.flush_plugin_settings();
+                let _ = reply.send(());
             }
             Command::SyncExport(reply) => {
                 let _ = reply.send(self.sync_export());
@@ -867,18 +879,30 @@ impl Engine {
         design
     }
 
-    /// A plugin key shows the plugin's image instead of the user's, and its title on top.
+    /// A plugin key shows the plugin's image instead of the user's, and its title on top. On a
+    /// Stream Deck plugin's key what the user set wins, as there: their image over the plugin's,
+    /// and their text as the title, unless the action keeps its title to itself.
     fn with_plugin(&self, key: &Key, design: &mut KeyDesign) {
         let Some((image, title)) = self.plugin_layers(key) else {
             return;
         };
-        if let Some(image) = image {
+        let stream_deck = self.stream_deck_key(key);
+        let pictured = design
+            .layers
+            .iter()
+            .any(|layer| matches!(layer, Layer::Image { .. }));
+        if let Some(image) = image.filter(|_| !(stream_deck && pictured)) {
             design
                 .layers
                 .retain(|layer| !matches!(layer, Layer::Image { .. }));
             design.layers.insert(0, image);
         }
-        design.layers.extend(title);
+        let titled = design.layers.iter().any(
+            |layer| matches!(layer, Layer::Text { content, .. } if !content.trim().is_empty()),
+        );
+        if !(titled && stream_deck && self.user_title_enabled(key)) {
+            design.layers.extend(title);
+        }
     }
 
     fn feeds(&self) -> Feeds<'_> {

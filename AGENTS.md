@@ -218,13 +218,23 @@ Commits, versions and releases:
   fetched and trimmed by `scripts/fetch-python.ts`. Never a Python installed on the computer.
 - Plugins of Mirabox's Stream Dock (`.sdPlugin` folders) speak Elgato's Stream Deck protocol,
   which Elgato's own plugins will share: the folder's ending picks the protocol
-  (`src/plugins/streamdeck.rs`), and the hub turns the engine's messages, always in Ulanzi's shape,
+  (`src/plugins/elgato/`), and the hub turns the engine's messages, always in Ulanzi's shape,
   into that protocol's events for those connections, and their commands back. They start with
   `-port -pluginUUID -registerEvent -info` from their folder: Node for scripts, pages for HTML (the
   shim calls their `connect…Socket` function once loaded), or their own program for this system.
   Their keys hear `keyDown`/`keyUp` from the dock, or both from a run the dock did not press; Stream
   Dock's shortcut plugins run nothing and the host presses the key in their settings
-  (`src/plugins/shortcut.rs`).
+  (`src/plugins/mirabox/shortcut.rs`).
+- What belongs to one plugin SDK lives in its folder under `src/plugins`: `ulanzi/` (its
+  protocol, the host's shape inside), `elgato/` (the Stream Deck protocol, its side of the hub,
+  how Qt draws their SVGs, what they hear of the computer) and `mirabox/` (what only Stream Dock
+  adds). The host shared by all (hub, server, launcher, registry, manifest, install, stores) stays
+  at the root of `src/plugins`.
+- Protocols that already exist (Elgato's Stream Deck, Mirabox's Stream Dock, Ulanzi's) are read
+  from their official documentation and official SDKs, and implemented as those say: every event,
+  command and field, with the semantics the SDK expects (what a message changes and what it leaves
+  alone, who receives it, in what order). Never infer how they work from a few plugins alone;
+  plugins and traces only confirm it.
 - Plugins come from the stores in `src/plugins/catalog`, one file per store (Ulanzi's own
   Marketplace, the Ulanzi Community Store, Mirabox Space) shown as one catalog; a new source of
   plugins is one more file there. Only free plugins are offered: never download a paid one.

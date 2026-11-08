@@ -54,6 +54,9 @@ pub struct Manifest {
     /// Only in Stream Deck manifests, which tells them apart in a package without its folder.
     #[serde(rename = "SDKVersion", default)]
     pub sdk_version: Value,
+    /// Set by Mirabox's own SDK, whose pages connect through `connectMiraBoxSDSocket`.
+    #[serde(rename = "APIVersion", default)]
+    pub api_version: Value,
     #[serde(default)]
     pub code_path: String,
     /// What runs on each system, over `CodePath`, in Stream Deck plugins.
@@ -73,6 +76,51 @@ pub struct Manifest {
     /// app. Ulanzi Studio runs it each time the plugin starts.
     #[serde(default)]
     pub install_to_deps_app: Option<DepsInstaller>,
+    /// The Stream Deck or Stream Dock the plugin was made for.
+    #[serde(default)]
+    pub software: Software,
+    /// Apps whose launch and exit the plugin hears of: bundle ids on macOS, programs on Windows.
+    #[serde(default)]
+    pub applications_to_monitor: ApplicationsToMonitor,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct Software {
+    #[serde(default)]
+    pub minimum_version: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ApplicationsToMonitor {
+    #[serde(default)]
+    pub mac: Vec<String>,
+    #[serde(default)]
+    pub windows: Vec<String>,
+}
+
+impl ApplicationsToMonitor {
+    /// Those of this system; Linux has none, as no Stream Deck runs there.
+    pub fn here(&self) -> &[String] {
+        if cfg!(target_os = "macos") {
+            &self.mac
+        } else if cfg!(target_os = "windows") {
+            &self.windows
+        } else {
+            &[]
+        }
+    }
+}
+
+/// The name manifests give the system the app runs on.
+pub fn this_platform() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "mac"
+    } else {
+        "linux"
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -113,6 +161,15 @@ pub struct ActionManifest {
     /// The settings a new key starts with, in Stream Dock plugins.
     #[serde(default)]
     pub settings: Value,
+    /// Whether the user may give the key a title of their own over the plugin's.
+    #[serde(default = "yes")]
+    pub user_title_enabled: bool,
+    #[serde(default = "yes")]
+    pub visible_in_actions_list: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -120,6 +177,24 @@ pub struct ActionManifest {
 pub struct StateManifest {
     #[serde(default)]
     pub image: String,
+    /// The title the host draws over the image, in Stream Deck plugins, until the plugin sets one.
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub show_title: Option<bool>,
+    /// `top`, `middle` or `bottom`.
+    #[serde(default)]
+    pub title_alignment: String,
+    #[serde(default)]
+    pub title_color: String,
+    /// In points of a 72-point key; a number or a string of one.
+    #[serde(default)]
+    pub font_size: Value,
+    #[serde(default)]
+    pub font_family: String,
+    /// `Regular`, `Bold`, `Italic` or `Bold Italic`.
+    #[serde(default)]
+    pub font_style: String,
 }
 
 fn keypad() -> Vec<String> {
@@ -213,6 +288,27 @@ impl Manifest {
         .map(|c| c.trim())
         .find(|c| !c.is_empty())
         .unwrap_or_default()
+    }
+
+    /// Whether it was made for Mirabox's Stream Dock rather than Elgato's Stream Deck, which
+    /// decides the version of the host it is told and how its titles are drawn. Mirabox's SDK sets
+    /// `APIVersion`; its older plugins ask for a Stream Dock of version 2 or 3, or for none,
+    /// while Elgato's ask for a Stream Deck of version 4 or later.
+    pub fn made_for_stream_dock(&self) -> bool {
+        if !self.api_version.is_null() {
+            return true;
+        }
+        let major = self
+            .software
+            .minimum_version
+            .trim()
+            .split('.')
+            .next()
+            .and_then(|m| m.parse::<u32>().ok());
+        match major {
+            Some(major) => major < 4,
+            None => self.sdk_version.as_u64().is_none_or(|v| v <= 1),
+        }
     }
 
     /// The script of `InstallToDepsApp`, which Ulanzi Studio only runs when it is JavaScript.

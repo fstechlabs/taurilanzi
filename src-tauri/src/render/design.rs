@@ -20,6 +20,26 @@ impl Color {
     pub fn hex(self) -> String {
         format!("#{:02x}{:02x}{:02x}", self.r, self.g, self.b)
     }
+
+    /// `#rgb`, `#rrggbb` or `#rrggbbaa`, the alpha left out.
+    pub fn from_hex(text: &str) -> Option<Self> {
+        let digits = text.trim().strip_prefix('#')?;
+        let channel = |i: usize, len: usize| {
+            let part = digits.get(i * len..i * len + len)?;
+            let value = u8::from_str_radix(part, 16).ok()?;
+            Some(if len == 1 { value * 17 } else { value })
+        };
+        let len = match digits.len() {
+            3 => 1,
+            6 | 8 => 2,
+            _ => return None,
+        };
+        Some(Self::rgb(
+            channel(0, len)?,
+            channel(1, len)?,
+            channel(2, len)?,
+        ))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]

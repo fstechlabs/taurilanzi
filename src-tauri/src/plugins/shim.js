@@ -17,6 +17,32 @@
     }
   }
 
+  // Errors of a page only reach its console, which nobody sees: they go to the plugin's log.
+  let reported = 0
+  const report = (level, parts) => {
+    if (!config.plugin || reported >= 100) {
+      return
+    }
+    reported += 1
+    const message = parts.map(part => part instanceof Error ? part.stack || part.message : typeof part === 'string' ? part : (() => {
+      try {
+        return JSON.stringify(part)
+      }
+      catch {
+        return String(part)
+      }
+    })()).join(' ').slice(0, 1500)
+    const query = new URLSearchParams({ plugin: config.plugin, level, message: `${location.pathname}: ${message}` })
+    nativeFetch(`${config.log}?${query}`, { headers: { 'X-Taurilanzi-Token': config.token } }).catch(() => {})
+  }
+  window.addEventListener('error', event => report('error', [event.error || event.message]))
+  window.addEventListener('unhandledrejection', event => report('error', ['unhandled rejection:', event.reason]))
+  const consoleError = console.error.bind(console)
+  console.error = (...parts) => {
+    report('error', parts)
+    consoleError(...parts)
+  }
+
   const nativeFetch = window.fetch.bind(window)
   window.fetch = async (input, init = {}) => {
     const request = input instanceof Request ? input : null
@@ -119,7 +145,7 @@
       action,
       context,
       device: deck.device,
-      payload: { settings, coordinates: { column, row }, controller: 'Keypad', state: 0, isInMultiAction: false },
+      payload: { settings, coordinates: { column, row }, controller: 'Keypad', state: deck.state || 0, isInMultiAction: false, resources: {} },
     }
     connect(context, 'registerPropertyInspector', JSON.stringify(actionInfo))
   }
@@ -129,7 +155,9 @@
 
   function connect(uuid, register, actionInfo) {
     window.addEventListener('load', () => {
-      const names = ['connectMiraBoxSDSocket', 'connectElgatoStreamDeckSocket', 'connectSocket', 'connectSDSocket']
+      // The one Stream Dock calls first, then the others pages define.
+      const own = deck.mirabox ? 'connectMiraBoxSDSocket' : 'connectElgatoStreamDeckSocket'
+      const names = [own, 'connectElgatoStreamDeckSocket', 'connectMiraBoxSDSocket', 'connectSocket', 'connectSDSocket']
       const found = names.map(global).find(Boolean)
       if (!found) {
         return
