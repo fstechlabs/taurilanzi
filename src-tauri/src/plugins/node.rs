@@ -78,16 +78,12 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn finds_a_node_that_answers() {
-        use std::os::unix::fs::PermissionsExt;
-
         if env::var_os(NODE_ENV).is_some() {
             return;
         }
         let dir = tempfile::tempdir().unwrap();
         let node = dir.path().join("node/node");
-        std::fs::create_dir_all(node.parent().unwrap()).unwrap();
-        std::fs::write(&node, "#!/bin/sh\necho v24.0.0\n").unwrap();
-        std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::plugins::test_scripts::write_script(&node, "#!/bin/sh\necho v24.0.0\n");
         let found = find(Some(dir.path())).unwrap();
         assert_eq!((found.path, found.version.as_str()), (node, "v24.0.0"));
     }

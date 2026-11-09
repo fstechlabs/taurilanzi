@@ -81,16 +81,12 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn finds_a_python_that_answers() {
-        use std::os::unix::fs::PermissionsExt;
-
         if env::var_os(PYTHON_ENV).is_some() {
             return;
         }
         let dir = tempfile::tempdir().unwrap();
         let python = dir.path().join(BUNDLED);
-        std::fs::create_dir_all(python.parent().unwrap()).unwrap();
-        std::fs::write(&python, "#!/bin/sh\necho Python 3.14.10\n").unwrap();
-        std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::plugins::test_scripts::write_script(&python, "#!/bin/sh\necho Python 3.14.10\n");
         let found = find(Some(dir.path())).unwrap();
         assert_eq!((found.path, found.version.as_str()), (python, "3.14.10"));
     }

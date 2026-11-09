@@ -17,6 +17,8 @@ mod registry;
 mod server;
 mod service;
 mod synced;
+#[cfg(all(test, unix))]
+mod test_scripts;
 mod ulanzi;
 
 pub use catalog::CatalogPlugin;
