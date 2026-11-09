@@ -979,7 +979,8 @@
       "notInstalled": "The plugin of this action is not installed. Install it to set it up.",
       "notRunning": "The plugin is not running right now: its settings may not load until it starts.",
       "noSettings": "This action has no settings: the plugin handles it on its own.",
-      "settingsOf": "{name} settings"
+      "settingsOf": "{name} settings",
+      "website": "{name} website"
     },
     "sound": {
       "modes": {
@@ -1356,7 +1357,7 @@
     },
     "store": {
       "title": "Plugin store",
-      "description": "From the Ulanzi Marketplace, the Ulanzi Community Store and Mirabox Space, only those that work on this computer. They run on your computer: install the ones you trust.",
+      "description": "From the Ulanzi Marketplace, the Ulanzi Community Store, Mirabox Space, the OpenAction Marketplace and the Elgato App Store archive, only those that work on this computer. They run on your computer: install the ones you trust.",
       "search": "Search",
       "searchLabel": "Search plugins",
       "reload": "Reload listings",
@@ -1391,7 +1392,9 @@
       "from": {
         "ulanzi": "Ulanzi Marketplace",
         "community": "Ulanzi Community Store",
-        "mirabox": "Mirabox Space"
+        "mirabox": "Mirabox Space",
+        "open_action": "OpenAction Marketplace",
+        "elgato_archive": "Elgato App Store archive"
       },
       "filters": "Filters",
       "allSources": "All",

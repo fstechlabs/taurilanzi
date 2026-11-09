@@ -74,7 +74,7 @@ export function newPluginAction(uuid: string, settings: unknown = {}): Action {
 /** One section per plugin, with its actions; those it cannot run here show why. */
 export function catalogOf(catalog: Catalog): { sections: Section[], entries: CatalogEntry[] } {
   const sections = catalog.plugins
-    .filter(plugin => plugin.actions.length)
+    .filter(plugin => plugin.actions.some(action => action.visible))
     .map((plugin): Section => ({
       id: `plugin:${plugin.id}`,
       name: plugin.category || plugin.name,
@@ -91,6 +91,7 @@ export function catalogOf(catalog: Catalog): { sections: Section[], entries: Cat
     image: pluginImage(plugin.id, action.icon ?? plugin.icon),
     keywords: ['plugin', plugin.name, plugin.author],
     plugin: true,
+    hidden: !action.visible,
     modal: true,
     get soon() {
       return unavailable(plugin, action)

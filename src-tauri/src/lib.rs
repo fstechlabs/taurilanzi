@@ -77,8 +77,11 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol(ipc::SCHEME, ipc::serve_images)
         .setup(move |app| setup::setup(app, &bindings, background))
         .on_window_event(|window, event| {
-            // Closing the window keeps the app in the menu bar; "Salir" quits it.
-            if let WindowEvent::CloseRequested { api, .. } = event {
+            // Closing the window keeps the app in the menu bar; "Salir" quits it. The windows
+            // plugins open close as usual.
+            if let WindowEvent::CloseRequested { api, .. } = event
+                && window.label() == window::MAIN
+            {
                 api.prevent_close();
                 window::hide(window.app_handle());
             }

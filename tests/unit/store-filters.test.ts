@@ -54,6 +54,20 @@ test('the most popular of each store come first, however each counts its downloa
   expect(scores.get('other.ulanziPlugin')).toBe(0.5)
 })
 
+test('the plugins of a store that counts no downloads come after those of the others', () => {
+  const uncounted = [
+    ...plugins,
+    plugin({ id: 'openaction:a', source: 'open_action', name: 'Aaa' }),
+    plugin({ id: 'elgato:a', source: 'elgato_archive', name: 'Aab' }),
+  ]
+  const scores = popularity(uncounted)
+  expect(scores.get('openaction:a')).toBe(0)
+  expect(scores.get('elgato:a')).toBe(0)
+  const sorted = filterPlugins(uncounted, none, 'popular').map(p => p.id)
+  expect(sorted.slice(-2)).toEqual(['openaction:a', 'elgato:a'])
+  expect(sourcesOf(uncounted)).toEqual(['ulanzi', 'community', 'mirabox', 'open_action', 'elgato_archive'])
+})
+
 test('sorts by name and by date, the undated last', () => {
   expect(ids({ source: 'ulanzi' }, 'name')).toEqual(['ulanzi:1', 'ulanzi:2'])
   expect(ids({}, 'recent').slice(0, 2)).toEqual(['ulanzi:2', 'ulanzi:1'])

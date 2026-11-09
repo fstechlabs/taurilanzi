@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
-const MAIN: &str = "main";
+pub const MAIN: &str = "main";
 
 /// Created by hand, once the engine is running, so the UI never loads before it can answer.
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
@@ -11,7 +11,9 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .iter()
         .find(|window| window.label == MAIN)
         .expect("main window in tauri.conf.json");
-    let builder = WebviewWindowBuilder::from_config(app, config)?.title(&app.package_info().name);
+    let builder = WebviewWindowBuilder::from_config(app, config)?
+        .title(&app.package_info().name)
+        .on_new_window(crate::plugin_desktop::new_window_handler(app.clone()));
     // Test windows stay behind whatever the user is working on, never taking the focus, and keep
     // running there: macOS would otherwise freeze a covered window and the tests with it. They
     // open at the smallest size the app allows, so every screen, CI's included, gives the same

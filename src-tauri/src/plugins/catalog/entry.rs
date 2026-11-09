@@ -36,6 +36,11 @@ pub enum CatalogError {
         trf!("plugins.catalog.download", reason = .0)
     )]
     Download(String),
+    #[error(
+        "{}",
+        tr!("plugins.catalog.noPackage")
+    )]
+    NoPackage,
 }
 
 /// The store a plugin comes from.
@@ -48,6 +53,11 @@ pub enum CatalogSource {
     Community,
     /// Mirabox Space, the store of Mirabox's Stream Dock.
     Mirabox,
+    /// The OpenAction Marketplace, OpenDeck's.
+    OpenAction,
+    /// The archive OpenDeck keeps of the Elgato App Store, the Stream Deck's before its
+    /// Marketplace.
+    ElgatoArchive,
 }
 
 /// What a plugin is for, in the categories every store's are brought to.

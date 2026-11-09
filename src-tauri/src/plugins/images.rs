@@ -34,10 +34,31 @@ pub fn from_base64(data: &str) -> Option<ImageData> {
         .as_deref()
         .and_then(ImageFormat::from_mime)
         .or_else(|| sniff(&bytes))?;
+    let bytes = if format == ImageFormat::Svg {
+        without_trailing_text(bytes)
+    } else {
+        bytes
+    };
     Some(ImageData {
         format,
         bytes: Arc::from(bytes),
     })
+}
+
+/// Some plugins leave text after the SVG, such as a `;` written after the address, which
+/// browsers ignore and an XML parser refuses.
+fn without_trailing_text(mut bytes: Vec<u8>) -> Vec<u8> {
+    const END: &[u8] = b"</svg>";
+    let end = bytes
+        .windows(END.len())
+        .rposition(|w| w.eq_ignore_ascii_case(END))
+        .map(|at| at + END.len());
+    if let Some(end) = end
+        && !bytes[end..].iter().all(u8::is_ascii_whitespace)
+    {
+        bytes.truncate(end);
+    }
+    bytes
 }
 
 /// Bytes from anywhere, told apart by their content.
@@ -183,5 +204,24 @@ mod tests {
         );
         let uri = format!("data:image/svg+xml;charset=utf8,{inner}");
         assert_eq!(read(&uri), Some((ImageFormat::Svg, inner.into_bytes())));
+    }
+
+    #[test]
+    fn text_after_an_svg_is_left_out() {
+        let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><circle r="1" fill="#fff"/></svg>"##;
+        assert_eq!(
+            read(&format!("data:image/svg+xml,{svg};")),
+            Some((ImageFormat::Svg, svg.as_bytes().to_vec())),
+            "a semicolon written after the address"
+        );
+        let with_newline = format!("{svg}\n");
+        assert_eq!(
+            read(&format!(
+                "data:image/svg+xml;base64,{}",
+                STANDARD.encode(&with_newline)
+            )),
+            Some((ImageFormat::Svg, with_newline.into_bytes())),
+            "whitespace stays"
+        );
     }
 }

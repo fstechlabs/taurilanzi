@@ -535,14 +535,29 @@ pub fn runs_here(code: &Path) -> bool {
     if !code.is_file() {
         return false;
     }
-    let exe = code
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("exe"));
     if cfg!(target_os = "windows") {
-        exe
-    } else {
-        cfg!(target_os = "macos") && !exe
+        return code
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("exe"));
     }
+    // Packages for several systems name every program alike: what it is built for is in its
+    // first bytes.
+    let mut start = [0u8; 4];
+    let read = fs::File::open(code).and_then(|mut f| std::io::Read::read(&mut f, &mut start));
+    let start = &start[..read.unwrap_or(0)];
+    let own = if cfg!(target_os = "macos") {
+        const MACH_O: [[u8; 4]; 5] = [
+            [0xcf, 0xfa, 0xed, 0xfe],
+            [0xce, 0xfa, 0xed, 0xfe],
+            [0xfe, 0xed, 0xfa, 0xcf],
+            [0xfe, 0xed, 0xfa, 0xce],
+            [0xca, 0xfe, 0xba, 0xbe],
+        ];
+        MACH_O.iter().any(|m| start == m)
+    } else {
+        start == b"\x7fELF"
+    };
+    own || start.starts_with(b"#!")
 }
 
 /// Packages made on Windows lose the mark that lets a program run.
@@ -940,6 +955,31 @@ mod tests {
             launcher.state(&missing),
             RunState::Unavailable { .. }
         ));
+    }
+
+    #[test]
+    fn programs_are_told_apart_by_what_they_are_built_for() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = |name: &str, bytes: &[u8]| {
+            let path = dir.path().join(name);
+            fs::write(&path, bytes).unwrap();
+            path
+        };
+        let mach_o = file("mac", &[0xcf, 0xfa, 0xed, 0xfe, 7, 0, 0, 1]);
+        let universal = file("universal", &[0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 2]);
+        let elf = file("linux", b"\x7fELF\x02\x01");
+        let script = file("script", b"#!/bin/sh\n");
+        let exe = file("plugin.exe", b"MZ");
+        let text = file("notes", b"hello");
+        let windows = cfg!(target_os = "windows");
+        let mac = cfg!(target_os = "macos");
+        assert_eq!(runs_here(&mach_o), mac);
+        assert_eq!(runs_here(&universal), mac);
+        assert_eq!(runs_here(&elf), !windows && !mac);
+        assert_eq!(runs_here(&script), !windows);
+        assert_eq!(runs_here(&exe), windows);
+        assert!(!runs_here(&text) || windows);
+        assert!(!runs_here(&dir.path().join("missing")));
     }
 
     #[cfg(target_os = "macos")]

@@ -17,6 +17,9 @@ const appOptions = {
     TAURILANZI_COMMUNITY_CATALOG: `http://127.0.0.1:${STORE_PORT}/catalog.json`,
     TAURILANZI_ULANZI_MARKETPLACE: `http://127.0.0.1:${STORE_PORT}/marketplace`,
     TAURILANZI_MIRABOX_SPACE: `http://127.0.0.1:${STORE_PORT}/space`,
+    TAURILANZI_OPENACTION_CATALOG: `http://127.0.0.1:${STORE_PORT}/openaction/catalogue.json`,
+    TAURILANZI_GITHUB: `http://127.0.0.1:${STORE_PORT}/github`,
+    TAURILANZI_ELGATO_ARCHIVE: `http://127.0.0.1:${STORE_PORT}/archive/catalogue.json`,
     TAURILANZI_CLOUD: `http://127.0.0.1:${CLOUD_PORT}`,
     // Set it to see the messages of every plugin in its trace log.
     TAURILANZI_PLUGIN_TRACE: process.env.TAURILANZI_PLUGIN_TRACE ?? "",

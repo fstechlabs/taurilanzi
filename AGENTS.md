@@ -125,8 +125,10 @@ App environment variables:
 - `TAURILANZI_PLUGIN_TRACE=1` writes every message between the host and each plugin to
   `plugin-logs/<plugin>.trace.log`, to see what a plugin that misbehaves says and hears.
 - `TAURILANZI_COMMUNITY_CATALOG=<url>` reads another community plugin catalog,
-  `TAURILANZI_ULANZI_MARKETPLACE=<url>` another Ulanzi Marketplace and `TAURILANZI_MIRABOX_SPACE=<url>`
-  another Mirabox Space (the e2e tests serve their own).
+  `TAURILANZI_ULANZI_MARKETPLACE=<url>` another Ulanzi Marketplace, `TAURILANZI_MIRABOX_SPACE=<url>`
+  another Mirabox Space, `TAURILANZI_OPENACTION_CATALOG=<url>` another OpenAction Marketplace,
+  `TAURILANZI_GITHUB=<url>` another GitHub for its releases (pages and API on one server) and
+  `TAURILANZI_ELGATO_ARCHIVE=<url>` another Elgato App Store archive (the e2e tests serve their own).
 - `TAURILANZI_LANGUAGE=es|en` stands in for the system's language.
 - `TAURILANZI_CLOUD=<url>` syncs with another cloud. Without it the released app syncs with
   `https://taurilanzi.com` and development builds with `taurilanzi-cloud` running locally
@@ -236,8 +238,11 @@ Commits, versions and releases:
   alone, who receives it, in what order). Never infer how they work from a few plugins alone;
   plugins and traces only confirm it.
 - Plugins come from the stores in `src/plugins/catalog`, one file per store (Ulanzi's own
-  Marketplace, the Ulanzi Community Store, Mirabox Space) shown as one catalog; a new source of
-  plugins is one more file there. Only free plugins are offered: never download a paid one.
+  Marketplace, the Ulanzi Community Store, Mirabox Space, and OpenDeck's two: the OpenAction
+  Marketplace and its archive of the Elgato App Store) shown as one catalog; a new source of
+  plugins is one more file there. Only free plugins are offered: never download a paid one. Plugins
+  that drive devices of their own (`DeviceNamespace` in OpenAction's manifest) are not offered nor
+  installed for now, and packages the Elgato Marketplace encrypted are refused, never decrypted.
 - The logo and icons come from the SVGs in `docs/brand/`. App icons: `bun run tauri icon
   docs/brand/app-icon.svg`, then delete the `android/`, `ios/` and `64x64.png` it also writes, and
   copy `icon.ico` to `src-nuxt/public/favicon.ico`. `src-tauri/icons/tray.png` is

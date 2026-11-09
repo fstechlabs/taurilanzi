@@ -134,6 +134,8 @@ export interface CatalogEntry {
   face?: boolean
   /** Only makes sense among other actions: not offered as what a key is. */
   notType?: boolean
+  /** Never offered, but known on the keys that have it. */
+  hidden?: boolean
   keywords?: string[]
   /** Not built yet: shown so nothing of Ulanzi Studio is missing, but cannot be added. */
   soon?: string
@@ -493,12 +495,12 @@ export function allEntries(): CatalogEntry[] {
 
 /** What can be the type of a key. */
 export function typeEntries(): CatalogEntry[] {
-  return allEntries().filter(entry => !entry.notType)
+  return allEntries().filter(entry => !entry.notType && !entry.hidden)
 }
 
 /** What can be one more action of a key: whatever does not draw it. */
 export function actionEntries(): CatalogEntry[] {
-  return allEntries().filter(entry => !entry.face && !entry.plugin && !entry.setup)
+  return allEntries().filter(entry => !entry.face && !entry.plugin && !entry.setup && !entry.hidden)
 }
 
 export function entryFor(action: Action): CatalogEntry | undefined {

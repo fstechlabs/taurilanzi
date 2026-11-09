@@ -12,6 +12,7 @@ function action(changes: Partial<PluginActionInfo> = {}): PluginActionInfo {
     inspector: 'inspector/inspector.html',
     supported: true,
     settings: {},
+    visible: true,
     ...changes,
   }
 }
@@ -30,6 +31,7 @@ function plugin(changes: Partial<PluginInfo> = {}): PluginInfo {
     runtime: 'node',
     run: { state: 'running' },
     connected: true,
+    website: null,
     actions: [action()],
     ...changes,
   }
@@ -110,6 +112,17 @@ test('each plugin with actions is a section of the catalog', () => {
   expect(counter!.matches!({ type: 'plugin', action: 'com.taurilanzi.e2e.images.show', id: 'x', settings: {} })).toBe(false)
   expect(counter!.matches!({ type: 'back' })).toBe(false)
   expect(shown!.image).toBe(pluginImage('com.taurilanzi.e2e.images', 'images/plugin icon.svg'))
+})
+
+test('actions a plugin hides are known on keys but never offered', () => {
+  const tile = action({ uuid: 'com.taurilanzi.e2e.game.tile', visible: false })
+  const game = plugin({ id: 'com.taurilanzi.e2e.game', actions: [tile] })
+  const { sections, entries } = catalogOf(catalog([plugin(), game]))
+  expect(sections.map(s => s.id)).toEqual(['plugin:com.taurilanzi.e2e.counter'])
+  const hidden = entries.find(e => e.id === 'plugin:com.taurilanzi.e2e.game.tile')
+  expect(hidden).toMatchObject({ hidden: true, plugin: true })
+  expect(entries.find(e => e.id === 'plugin:com.taurilanzi.e2e.counter.count')!.hidden).toBe(false)
+  expect(findAction(catalog([game]), 'com.taurilanzi.e2e.game.tile')?.action).toBe(tile)
 })
 
 test('actions that cannot run here are shown but not offered', () => {

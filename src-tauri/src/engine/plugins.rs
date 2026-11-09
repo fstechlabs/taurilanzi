@@ -24,6 +24,34 @@ const TITLE_SIZE: f32 = 26.0;
 /// The Stream Deck sizes titles in points of a key of 72, 12 unless the manifest gives a number.
 const ELGATO_KEY: f32 = 72.0;
 const ELGATO_SIZE: f64 = 12.0;
+/// The fonts the Stream Deck offers for titles. It names only these, and leaves the default one
+/// empty: SDKs that read the name into a list of them refuse the whole message otherwise.
+const TITLE_FONTS: [&str; 15] = [
+    "Arial",
+    "Arial Black",
+    "Comic Sans MS",
+    "Courier",
+    "Courier New",
+    "Georgia",
+    "Impact",
+    "Microsoft Sans Serif",
+    "Symbol",
+    "Tahoma",
+    "Times New Roman",
+    "Trebuchet MS",
+    "Verdana",
+    "Webdings",
+    "Wingdings",
+];
+const TITLE_STYLES: [&str; 4] = ["Regular", "Bold", "Italic", "Bold Italic"];
+
+fn told_as(known: &[&'static str], name: &str) -> &'static str {
+    known
+        .iter()
+        .find(|k| k.eq_ignore_ascii_case(name.trim()))
+        .copied()
+        .unwrap_or("")
+}
 /// Stream Dock draws titles on keys of 112 pixels, in points two more than their `FontSize`: 10
 /// when the manifest gives none, 12 when it gives one it cannot read. Points of Windows, where
 /// its plugins are made: 4/3 of a pixel.
@@ -275,8 +303,8 @@ impl Engine {
             Some((content, family, weight, size, color, position)) => (
                 content.clone(),
                 json!({
-                    "fontFamily": family,
-                    "fontSize": (size * ELGATO_KEY / KEY_SIZE.0 as f32).round(),
+                    "fontFamily": told_as(&TITLE_FONTS, family),
+                    "fontSize": (size * ELGATO_KEY / KEY_SIZE.0 as f32).round() as u32,
                     "fontStyle": if weight >= 700 { "Bold" } else { "Regular" },
                     "fontUnderline": false,
                     "showTitle": true,
@@ -290,7 +318,10 @@ impl Engine {
                     look,
                     plugin.manifest.made_for_stream_dock(),
                 );
-                let asked = look.map(|l| &l.font_size).and_then(Value::as_f64);
+                let asked = look.map(|l| &l.font_size).and_then(|size| {
+                    size.as_f64()
+                        .or_else(|| size.as_str().and_then(|s| s.trim().parse().ok()))
+                });
                 let (content, family, color, position) = match drawn {
                     Some(Layer::Text {
                         content,
@@ -307,14 +338,19 @@ impl Engine {
                     ),
                 };
                 let style = look
-                    .map(|l| l.font_style.trim())
+                    .map(|l| told_as(&TITLE_STYLES, &l.font_style))
                     .filter(|s| !s.is_empty())
                     .unwrap_or("Regular");
                 (
                     content,
                     json!({
-                        "fontFamily": look.map(|l| l.font_family.trim()).filter(|f| !f.is_empty()).unwrap_or(family.as_str()),
-                        "fontSize": asked.unwrap_or(ELGATO_SIZE),
+                        "fontFamily": told_as(
+                            &TITLE_FONTS,
+                            look.map(|l| l.font_family.trim())
+                                .filter(|f| !f.is_empty())
+                                .unwrap_or(family.as_str()),
+                        ),
+                        "fontSize": asked.unwrap_or(ELGATO_SIZE).round() as u32,
                         "fontStyle": style,
                         "fontUnderline": false,
                         "showTitle": look.and_then(|l| l.show_title).unwrap_or(true),
@@ -1887,6 +1923,17 @@ mod tests {
         );
     }
 
+    /// SDKs that read the font into a list of the Stream Deck's refuse the whole message if it is
+    /// another, such as the app's own.
+    #[test]
+    fn stream_deck_plugins_are_told_only_the_fonts_the_stream_deck_offers() {
+        assert_eq!(told_as(&TITLE_FONTS, "arial black"), "Arial Black");
+        assert_eq!(told_as(&TITLE_FONTS, DEFAULT_FAMILY), "");
+        assert_eq!(told_as(&TITLE_FONTS, ""), "");
+        assert_eq!(told_as(&TITLE_STYLES, "Bold Italic"), "Bold Italic");
+        assert_eq!(told_as(&TITLE_STYLES, "Heavy"), "");
+    }
+
     #[test]
     fn stream_deck_keys_keep_their_resources_and_hear_their_title() {
         let mut setup = setup(Uuid::new_v4(), Uuid::new_v4());
@@ -1912,8 +1959,8 @@ mod tests {
         assert_eq!(
             told["payload"]["titleParameters"],
             json!({
-                "fontFamily": DEFAULT_FAMILY,
-                "fontSize": 18.0,
+                "fontFamily": "",
+                "fontSize": 18,
                 "fontStyle": "Regular",
                 "fontUnderline": false,
                 "showTitle": true,

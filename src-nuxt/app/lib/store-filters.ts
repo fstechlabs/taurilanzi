@@ -16,7 +16,7 @@ export interface StoreFilters {
 type Plugin = Readonly<Pick<CatalogPlugin, 'id' | 'source' | 'kind' | 'installed' | 'update' | 'name' | 'author' | 'description' | 'category' | 'downloads' | 'published_at'>> & { readonly tags: readonly string[] }
 
 /** The stores in the order the filters list them; any other comes after them. */
-export const SOURCES: CatalogSource[] = ['ulanzi', 'community', 'mirabox']
+export const SOURCES: CatalogSource[] = ['ulanzi', 'community', 'mirabox', 'open_action', 'elgato_archive']
 export const STATUSES: StoreStatus[] = ['all', 'installed', 'updates', 'available']
 export const KINDS: PluginKind[] = ['tools', 'streaming', 'office', 'creative', 'audio', 'lighting', 'gaming', 'social', 'smart_home', 'ai']
 /** Those the list can be sorted by when nothing is searched. */
@@ -93,7 +93,8 @@ function relevance(plugin: Plugin, query: string, labels?: Labels) {
 }
 
 /** Each store counts its downloads its own way, a few hundred in one and millions in another:
- * a plugin is as popular as its place in its own store, from 1 for the first towards 0. */
+ * a plugin is as popular as its place in its own store, from 1 for the first towards 0. Those of
+ * a store that counts none come last. */
 export function popularity(plugins: readonly Plugin[]) {
   const bySource = new Map<string, Plugin[]>()
   for (const plugin of plugins) {
@@ -101,6 +102,10 @@ export function popularity(plugins: readonly Plugin[]) {
   }
   const scores = new Map<string, number>()
   for (const list of bySource.values()) {
+    if (list.every(p => !p.downloads)) {
+      list.forEach(p => scores.set(p.id, 0))
+      continue
+    }
     const sorted = [...list].sort((a, b) => b.downloads - a.downloads)
     let place = 0
     sorted.forEach((plugin, i) => {

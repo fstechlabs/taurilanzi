@@ -7,6 +7,19 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>"#;
+/// A file that starts with this is answered with the status and headers that follow it, up to an
+/// empty line, instead of with itself.
+const ANSWER: &[u8] = b"\0answer ";
+
+/// What `serve` answers with a status of its own, such as a redirect.
+pub fn answer(status: &str, headers: &[(&str, &str)]) -> Vec<u8> {
+    let mut head = ANSWER.to_vec();
+    head.extend_from_slice(status.as_bytes());
+    for (name, value) in headers {
+        head.extend_from_slice(format!("\r\n{name}: {value}").as_bytes());
+    }
+    head
+}
 
 pub struct FakeStore {
     pub base: String,
@@ -50,8 +63,12 @@ pub fn serve(files: impl FnOnce(&str) -> HashMap<String, Vec<u8>>) -> FakeStore 
             let _ = reader.read_exact(&mut body);
             let path = target.split('?').next().unwrap_or_default();
             let (status, body) = match files.get(&target).or_else(|| files.get(path)) {
-                Some(body) => ("200 OK", body.as_slice()),
-                None => ("404 Not Found", &[][..]),
+                Some(given) if given.starts_with(ANSWER) => (
+                    String::from_utf8_lossy(&given[ANSWER.len()..]).into_owned(),
+                    &[][..],
+                ),
+                Some(body) => ("200 OK".to_owned(), body.as_slice()),
+                None => ("404 Not Found".to_owned(), &[][..]),
             };
             let mut stream = &stream;
             let _ = write!(

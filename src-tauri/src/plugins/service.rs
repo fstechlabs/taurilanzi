@@ -13,6 +13,7 @@ use super::install::{self, InstallError};
 use super::launcher::{Launcher, RunState};
 use super::manifest::{Protocol, Runtime};
 use super::node;
+use super::pages::{self, Pages};
 use super::python;
 use super::registry::{Plugin, Registry};
 use super::server;
@@ -33,6 +34,7 @@ pub struct Plugins {
     registry: Arc<RwLock<Registry>>,
     folder: PathBuf,
     catalog: Catalog,
+    pages: Pages,
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -67,6 +69,8 @@ pub struct PluginInfo {
     pub run: RunState,
     /// Its main service is connected to the host.
     pub connected: bool,
+    /// Where to read about it: its own website, or its page in the store it came from.
+    pub website: Option<String>,
     pub actions: Vec<PluginActionInfo>,
 }
 
@@ -127,6 +131,9 @@ pub struct PluginActionInfo {
     /// What a new key of it starts with.
     #[specta(type = specta_typescript::Any)]
     pub settings: serde_json::Value,
+    /// Offered to put on keys. Plugins hide those only the profiles they bring use, which keys
+    /// may still have.
+    pub visible: bool,
 }
 
 impl Plugins {
@@ -174,6 +181,7 @@ impl Plugins {
             host,
             launcher,
             registry,
+            pages: Pages::open(setup.data_dir.join("plugin-pages.json")),
             folder,
             catalog: Catalog::new(),
         };
@@ -237,10 +245,16 @@ impl Plugins {
                         self.launcher.state(plugin)
                     },
                     connected: shortcuts || connected.contains(&m.uuid),
+                    website: m
+                        .url
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|u| pages::web_page(u))
+                        .map(str::to_owned)
+                        .or_else(|| self.pages.get(&m.uuid)),
                     actions: m
                         .actions
                         .iter()
-                        .filter(|a| a.visible_in_actions_list)
                         .map(|a| PluginActionInfo {
                             uuid: a.uuid.clone(),
                             name: a.name.clone(),
@@ -252,6 +266,7 @@ impl Plugins {
                                 .filter(|p| !p.is_empty()),
                             supported: a.supports_keys() && a.supports_device("D200"),
                             settings: settings_object(&a.settings),
+                            visible: a.visible_in_actions_list,
                         })
                         .collect(),
                 }
@@ -330,6 +345,7 @@ impl Plugins {
         self.host.drop_plugin(id);
         install::uninstall(&dir, &self.folder)?;
         info!("plugin {id} removed");
+        self.pages.set(id, None);
         self.reload();
         Ok(())
     }
@@ -357,6 +373,14 @@ impl Plugins {
             .map_err(|err| err.to_string())?;
         let installed = self.install(&zip).map_err(|err| err.to_string());
         let _ = std::fs::remove_file(&zip);
+        if let Ok(plugin) = &installed
+            && let Some(entry) = self
+                .store(false)
+                .ok()
+                .and_then(|store| store.into_iter().find(|entry| entry.id == id))
+        {
+            self.pages.set(plugin, entry.source_url);
+        }
         installed
     }
 

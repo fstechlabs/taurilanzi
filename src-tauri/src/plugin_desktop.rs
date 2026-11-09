@@ -2,8 +2,10 @@
 //! dialogs and the hidden pages that run plugins made of HTML.
 
 use tauri::utils::config::BackgroundThrottlingPolicy;
+use tauri::webview::{NewWindowFeatures, NewWindowResponse};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_opener::OpenerExt;
 use tauri_specta::Event;
 
 use crate::ipc::PluginToast;
@@ -30,6 +32,50 @@ fn label(prefix: &str, id: &str) -> String {
 
 fn parse(url: &str) -> Option<tauri::Url> {
     url.parse().ok()
+}
+
+/// Pages of plugins open windows of their own with `window.open`, as property inspectors do to
+/// pick from long lists, and answer through `window.opener`: those open as the Stream Deck opens
+/// them. Any other address goes to the browser.
+pub fn new_window_handler(
+    app: AppHandle,
+) -> impl Fn(tauri::Url, NewWindowFeatures) -> NewWindowResponse<tauri::Wry> + Send + 'static {
+    move |url, features| {
+        if !plugin_page(&url) {
+            if url.scheme() == "https" {
+                let _ = app.opener().open_url(url.as_str(), None::<&str>);
+            }
+            return NewWindowResponse::Deny;
+        }
+        let label = label("plugin-popup", &uuid::Uuid::new_v4().simple().to_string());
+        let built = WebviewWindowBuilder::new(
+            &app,
+            label,
+            WebviewUrl::External("about:blank".parse().expect("a valid address")),
+        )
+        .title("")
+        .inner_size(520.0, 640.0)
+        .center()
+        .window_features(features)
+        .on_document_title_changed(|window, title| {
+            let _ = window.set_title(&title);
+        })
+        .build();
+        match built {
+            Ok(window) => NewWindowResponse::Create { window },
+            Err(err) => {
+                log::warn!("could not open the window of a plugin: {err}");
+                NewWindowResponse::Deny
+            }
+        }
+    }
+}
+
+/// What the plugin host serves: `http://127.0.0.1:<port>/plugins/…`.
+fn plugin_page(url: &tauri::Url) -> bool {
+    url.scheme() == "http"
+        && matches!(url.host_str(), Some("127.0.0.1" | "localhost"))
+        && url.path().starts_with("/plugins/")
 }
 
 impl Desktop for TauriDesktop {
@@ -87,6 +133,7 @@ impl Desktop for TauriDesktop {
         .skip_taskbar(true)
         .inner_size(400.0, 300.0)
         .background_throttling(BackgroundThrottlingPolicy::Disabled)
+        .on_new_window(new_window_handler(self.app.clone()))
         .build();
         match built {
             #[cfg(target_os = "macos")]
@@ -114,4 +161,24 @@ fn qt_filter(filter: &str) -> Option<(String, Vec<String>)> {
         .map(str::to_owned)
         .collect();
     (!extensions.is_empty()).then(|| (name.trim().to_owned(), extensions))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_pages_of_the_plugin_host_open_in_a_window_of_their_own() {
+        let page = |url: &str| plugin_page(&url.parse().unwrap());
+        assert!(page(
+            "http://127.0.0.1:3906/plugins/com.a.sdPlugin/picker.html"
+        ));
+        assert!(page(
+            "http://localhost:3906/plugins/com.a.sdPlugin/picker.html?x=1"
+        ));
+        assert!(!page("http://127.0.0.1:3906/__taurilanzi/log"));
+        assert!(!page("https://127.0.0.1:3906/plugins/a.html"));
+        assert!(!page("http://evil.example/plugins/a.html"));
+        assert!(!page("https://github.com/a/b"));
+    }
 }

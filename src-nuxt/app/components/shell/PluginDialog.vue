@@ -86,7 +86,7 @@ async function remove() {
           <p class="text-xs font-medium text-muted-foreground">
             {{ t('plugins.dialog.actions') }}
           </p>
-          <div v-for="action in props.plugin.actions" :key="action.uuid" class="flex items-center gap-2.5 rounded-md bg-neutral-900/60 px-2.5 py-1.5">
+          <div v-for="action in props.plugin.actions.filter(a => a.visible)" :key="action.uuid" class="flex items-center gap-2.5 rounded-md bg-neutral-900/60 px-2.5 py-1.5">
             <img v-if="action.icon" :src="pluginImage(props.plugin.id, action.icon)" alt="" class="size-7 shrink-0 rounded">
             <div class="min-w-0 flex-1">
               <p class="truncate">

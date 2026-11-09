@@ -156,13 +156,16 @@
       "damagedZip": "el ZIP está dañado: {reason}",
       "invalidId": "el id {id} no es válido",
       "notRemovable": "solo se pueden quitar los plugins instalados en la app",
-      "otherSystem": "es un programa para otro sistema"
+      "otherSystem": "es un programa para otro sistema",
+      "protected": "su tienda lo cifró y solo el Stream Deck puede abrirlo",
+      "device": "maneja un dispositivo propio, y la app aún no admite dispositivos mediante plugins"
     },
     "catalog": {
       "read": "no se pudo leer la tienda de plugins: {reason}",
       "unknown": "ese plugin no está en la tienda",
       "host": "ese plugin no se puede descargar desde {host}",
-      "download": "no se pudo descargar el plugin: {reason}"
+      "download": "no se pudo descargar el plugin: {reason}",
+      "noPackage": "su autor no ha publicado un paquete para instalar"
     },
     "launcher": {
       "needsPython": "Falta el Python que trae la app: vuelve a instalarla",

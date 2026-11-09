@@ -51,6 +51,9 @@ pub struct Manifest {
     pub icon: String,
     #[serde(default)]
     pub category: String,
+    /// The plugin's website, in Stream Deck manifests.
+    #[serde(rename = "URL", default)]
+    pub url: Option<String>,
     /// Only in Stream Deck manifests, which tells them apart in a package without its folder.
     #[serde(rename = "SDKVersion", default)]
     pub sdk_version: Value,
@@ -64,6 +67,15 @@ pub struct Manifest {
     pub code_path_mac: String,
     #[serde(default)]
     pub code_path_win: String,
+    /// OpenAction's, for Linux, which no Stream Deck runs on.
+    #[serde(default)]
+    pub code_path_lin: Option<String>,
+    /// OpenAction's, by target triple, over the three above.
+    #[serde(default)]
+    pub code_paths: HashMap<String, Option<String>>,
+    /// Set by OpenAction plugins that drive a device of their own instead of acting on keys.
+    #[serde(default)]
+    pub device_namespace: Option<String>,
     /// `JavaScript` or `Python`.
     #[serde(rename = "Type", default)]
     pub kind: String,
@@ -111,6 +123,22 @@ impl ApplicationsToMonitor {
         }
     }
 }
+
+/// The keys of OpenAction's `CodePaths` this computer runs, its own first; Arm Macs and PCs also
+/// run the x64 programs, translated by the system.
+const TARGET_TRIPLES: &[&str] = if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
+    &["aarch64-pc-windows-msvc", "x86_64-pc-windows-msvc"]
+} else if cfg!(target_os = "windows") {
+    &["x86_64-pc-windows-msvc"]
+} else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+    &["aarch64-apple-darwin", "x86_64-apple-darwin"]
+} else if cfg!(target_os = "macos") {
+    &["x86_64-apple-darwin"]
+} else if cfg!(target_arch = "aarch64") {
+    &["aarch64-unknown-linux-gnu"]
+} else {
+    &["x86_64-unknown-linux-gnu"]
+};
 
 /// The name manifests give the system the app runs on.
 pub fn this_platform() -> &'static str {
@@ -268,26 +296,30 @@ impl Manifest {
         }
     }
 
-    /// The code for this system, as the Stream Deck picks it; Linux, which neither knows, takes
-    /// what is shared.
+    /// The code for this system, as the Stream Deck picks it, with OpenAction's `CodePaths` for
+    /// this processor first and its `CodePathLin` for Linux.
     fn stream_deck_code(&self) -> &str {
-        let own = if cfg!(target_os = "windows") {
+        let own: &str = if cfg!(target_os = "windows") {
             &self.code_path_win
         } else if cfg!(target_os = "macos") {
             &self.code_path_mac
         } else {
-            &self.code_path
+            self.code_path_lin.as_deref().unwrap_or_default()
         };
-        [
-            own,
-            &self.code_path,
-            &self.code_path_mac,
-            &self.code_path_win,
-        ]
-        .into_iter()
-        .map(|c| c.trim())
-        .find(|c| !c.is_empty())
-        .unwrap_or_default()
+        let by_triple = TARGET_TRIPLES
+            .iter()
+            .filter_map(|triple| self.code_paths.get(*triple)?.as_deref());
+        by_triple
+            .chain([
+                own,
+                self.code_path.as_str(),
+                &self.code_path_mac,
+                &self.code_path_win,
+                self.code_path_lin.as_deref().unwrap_or_default(),
+            ])
+            .map(str::trim)
+            .find(|c| !c.is_empty())
+            .unwrap_or_default()
     }
 
     /// Whether it was made for Mirabox's Stream Dock rather than Elgato's Stream Deck, which
@@ -533,6 +565,67 @@ mod tests {
         assert_eq!(runtime("   "), Runtime::None);
         let missing: Manifest = serde_json::from_value(json!({})).unwrap();
         assert_eq!(missing.runtime(dir, Protocol::Ulanzi), Runtime::None);
+    }
+
+    #[test]
+    fn stream_deck_plugins_run_the_code_for_this_system_and_processor() {
+        let dir = Path::new("/plugins/x.sdPlugin");
+        let code = |manifest: Value| {
+            let manifest: Manifest = serde_json::from_value(manifest).unwrap();
+            match manifest.runtime(dir, Protocol::StreamDeck) {
+                Runtime::Native(path) | Runtime::Node(path) => path,
+                other => panic!("{other:?}"),
+            }
+        };
+        let own = if cfg!(target_os = "windows") {
+            "CodePathWin"
+        } else if cfg!(target_os = "macos") {
+            "CodePathMac"
+        } else {
+            "CodePathLin"
+        };
+        let mut paths = serde_json::Map::new();
+        paths.insert("CodePath".into(), json!("shared.js"));
+        paths.insert(own.into(), json!("own.js"));
+        assert_eq!(code(Value::Object(paths.clone())), dir.join("own.js"));
+        let triples: serde_json::Map<String, Value> = TARGET_TRIPLES
+            .iter()
+            .map(|t| ((*t).to_owned(), json!(format!("{t}/bin/plugin"))))
+            .chain([("riscv64gc-unknown-linux-gnu".to_owned(), json!("other"))])
+            .collect();
+        paths.insert("CodePaths".into(), Value::Object(triples));
+        assert_eq!(
+            code(Value::Object(paths)),
+            dir.join(format!("{}/bin/plugin", TARGET_TRIPLES[0])),
+            "OpenAction's paths for this processor come first"
+        );
+        assert_eq!(
+            code(
+                json!({ "CodePaths": { "riscv64gc-unknown-linux-gnu": "other" }, "CodePathLin": null, "CodePath": "shared.js" })
+            ),
+            dir.join("shared.js"),
+            "nor another processor's, nor an empty one"
+        );
+    }
+
+    #[test]
+    fn fields_left_null_read_as_missing() {
+        let manifest: Manifest = serde_json::from_value(json!({
+            "UUID": "com.a.b",
+            "URL": null,
+            "CodePathLin": null,
+            "CodePaths": { "x86_64-apple-darwin": null },
+            "DeviceNamespace": null,
+        }))
+        .unwrap();
+        assert_eq!(manifest.url, None);
+        assert_eq!(manifest.device_namespace, None);
+        let manifest: Manifest = serde_json::from_value(
+            json!({ "URL": "https://a.example.com", "DeviceNamespace": "e9" }),
+        )
+        .unwrap();
+        assert_eq!(manifest.url.as_deref(), Some("https://a.example.com"));
+        assert_eq!(manifest.device_namespace.as_deref(), Some("e9"));
     }
 
     #[test]

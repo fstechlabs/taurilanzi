@@ -279,7 +279,14 @@ export type CatalogSource =
 /**  The Ulanzi Community Store. */
 "community" | 
 /**  Mirabox Space, the store of Mirabox's Stream Dock. */
-"mirabox";
+"mirabox" | 
+/**  The OpenAction Marketplace, OpenDeck's. */
+"open_action" | 
+/**
+ *  The archive OpenDeck keeps of the Elgato App Store, the Stream Deck's before its
+ *  Marketplace.
+ */
+"elgato_archive";
 
 /**  What a digital clock shows under the time. */
 export type ClockLine = "none" | "date" | "weekday" | "weekday_date";
@@ -841,6 +848,11 @@ export type PluginActionInfo = {
 	supported: boolean,
 	/**  What a new key of it starts with. */
 	settings: any,
+	/**
+	 *  Offered to put on keys. Plugins hide those only the profiles they bring use, which keys
+	 *  may still have.
+	 */
+	visible: boolean,
 };
 
 export type PluginCatalog = {
@@ -873,6 +885,8 @@ export type PluginInfo = {
 	run: RunState,
 	/**  Its main service is connected to the host. */
 	connected: boolean,
+	/**  Where to read about it: its own website, or its page in the store it came from. */
+	website: string | null,
 	actions: PluginActionInfo[],
 };
 

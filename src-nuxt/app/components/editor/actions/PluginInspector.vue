@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { TriangleAlert } from '@lucide/vue'
+import { ExternalLink, TriangleAlert } from '@lucide/vue'
 import { KEY_TARGET } from '~/lib/actions/key-draft'
 import { findAction, inspectorUrl } from '~/lib/actions/plugins'
+import { openExternal } from '~/lib/external'
 
 const props = defineProps<{ action: string, id: string, settings?: unknown }>()
 
@@ -34,6 +35,16 @@ const streamDeck = computed(() => found.value?.plugin.protocol === 'stream_deck'
         <TriangleAlert class="mt-0.5 size-4 shrink-0" />
         {{ found.plugin.run.state === 'unavailable' ? found.plugin.run.reason : t('actions.pluginInspector.notRunning') }}
       </div>
+      <Button
+        v-if="found.plugin.website"
+        variant="ghost"
+        size="sm"
+        class="self-start text-muted-foreground"
+        data-plugin-website
+        @click="openExternal(found.plugin.website)"
+      >
+        <ExternalLink /> {{ t('actions.pluginInspector.website', { name: found.plugin.name }) }}
+      </Button>
       <p v-if="!found.action.inspector" class="text-sm text-muted-foreground">
         {{ t('actions.pluginInspector.noSettings') }}
       </p>

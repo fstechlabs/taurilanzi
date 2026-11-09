@@ -10,6 +10,7 @@ mod launcher;
 mod manifest;
 mod mirabox;
 mod node;
+mod pages;
 #[cfg(unix)]
 mod process_group;
 mod python;

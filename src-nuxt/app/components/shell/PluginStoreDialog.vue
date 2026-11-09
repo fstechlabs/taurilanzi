@@ -385,7 +385,7 @@ async function add(plugin: Plugin) {
                 {{ selected.name }}
               </h3>
               <p class="text-sm text-muted-foreground">
-                {{ [selected.author, t('plugins.version', { version: selected.version }), downloads(selected.downloads)].join(' · ') }}
+                {{ [selected.author, selected.version && t('plugins.version', { version: selected.version }), selected.downloads && downloads(selected.downloads)].filter(Boolean).join(' · ') }}
                 <span v-if="selected.stars" class="inline-flex items-center gap-0.5"> · <Star class="size-3" /> {{ selected.stars }}</span>
               </p>
               <Badge variant="outline" class="mt-2" data-store-origin>

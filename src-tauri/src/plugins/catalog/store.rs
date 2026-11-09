@@ -8,8 +8,10 @@ use log::warn;
 
 use super::super::registry::Registry;
 use super::community::Community;
+use super::elgato_archive::{self, ElgatoArchive};
 use super::entry::{CatalogError, CatalogPlugin, CatalogSource, newer};
 use super::marketplace::{self, Marketplace};
+use super::open_action::{self, OpenAction};
 use super::space::{self, Space};
 use crate::render::ImageData;
 
@@ -17,6 +19,8 @@ pub struct Catalog {
     marketplace: Marketplace,
     community: Community,
     space: Space,
+    open_action: OpenAction,
+    elgato_archive: ElgatoArchive,
 }
 
 impl Catalog {
@@ -25,6 +29,8 @@ impl Catalog {
             marketplace: Marketplace::new(),
             community: Community::new(),
             space: Space::new(),
+            open_action: OpenAction::new(),
+            elgato_archive: ElgatoArchive::new(),
         }
     }
 
@@ -40,6 +46,8 @@ impl Catalog {
                 scope.spawn(|| self.marketplace.catalog(refresh, registry, language)),
                 scope.spawn(|| self.community.catalog(refresh, registry, language)),
                 scope.spawn(|| self.space.catalog(refresh, registry, language)),
+                scope.spawn(|| self.open_action.catalog(refresh, registry)),
+                scope.spawn(|| self.elgato_archive.catalog(refresh, registry)),
             ];
             stores.map(|store| {
                 store
@@ -79,6 +87,10 @@ impl Catalog {
             self.marketplace.download(id, language, folder)
         } else if id.starts_with(space::ID_PREFIX) {
             self.space.download(id, language, folder)
+        } else if id.starts_with(open_action::ID_PREFIX) {
+            self.open_action.download(id, folder)
+        } else if id.starts_with(elgato_archive::ID_PREFIX) {
+            self.elgato_archive.download(id, folder)
         } else {
             self.community.download(id, folder)
         }
@@ -89,6 +101,8 @@ impl Catalog {
             .image(url, language)
             .or_else(|| self.community.image(url))
             .or_else(|| self.space.image(url, language))
+            .or_else(|| self.open_action.image(url))
+            .or_else(|| self.elgato_archive.image(url))
     }
 }
 
@@ -119,6 +133,8 @@ fn rank(source: CatalogSource) -> u8 {
         CatalogSource::Ulanzi => 0,
         CatalogSource::Community => 1,
         CatalogSource::Mirabox => 2,
+        CatalogSource::OpenAction => 3,
+        CatalogSource::ElgatoArchive => 4,
     }
 }
 
@@ -205,6 +221,12 @@ mod tests {
             marketplace: Marketplace::at(format!("{}/missing", server.base)),
             community: Community::at(format!("{}/catalog.json", server.base)),
             space: Space::at(format!("{}/missing", server.base)),
+            open_action: OpenAction::at(
+                format!("{}/missing.json", server.base),
+                format!("{}/missing", server.base),
+                format!("{}/missing", server.base),
+            ),
+            elgato_archive: ElgatoArchive::at(format!("{}/missing.json", server.base)),
         };
         let found = catalog.plugins(false, &Registry::default(), "en").unwrap();
         assert_eq!(found.len(), 1);
@@ -214,6 +236,12 @@ mod tests {
             marketplace: Marketplace::at(format!("{}/missing", server.base)),
             community: Community::at(format!("{}/missing.json", server.base)),
             space: Space::at(format!("{}/missing", server.base)),
+            open_action: OpenAction::at(
+                format!("{}/missing.json", server.base),
+                format!("{}/missing", server.base),
+                format!("{}/missing", server.base),
+            ),
+            elgato_archive: ElgatoArchive::at(format!("{}/missing.json", server.base)),
         };
         assert!(matches!(
             nowhere.plugins(false, &Registry::default(), "en"),

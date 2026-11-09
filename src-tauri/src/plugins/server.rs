@@ -53,6 +53,16 @@ pub fn start(host: PluginHost) -> io::Result<u16> {
     host.set_port(port);
     let token = uuid::Uuid::new_v4().simple().to_string();
     info!("plugin host on 127.0.0.1:{port}");
+    // Plugins that connect to `localhost` may try IPv6 alone, as Qt's do.
+    match TcpListener::bind(("::1", port)) {
+        Ok(v6) => accept(v6, host.clone(), token.clone(), port)?,
+        Err(err) => warn!("plugins cannot reach the host on [::1]:{port}: {err}"),
+    }
+    accept(listener, host, token, port)?;
+    Ok(port)
+}
+
+fn accept(listener: TcpListener, host: PluginHost, token: String, port: u16) -> io::Result<()> {
     thread::Builder::new()
         .name("plugin-host".into())
         .spawn(move || {
@@ -66,8 +76,8 @@ pub fn start(host: PluginHost) -> io::Result<u16> {
                     warn!("could not serve a plugin connection: {err}");
                 }
             }
-        })?;
-    Ok(port)
+        })
+        .map(|_| ())
 }
 
 struct Request {
@@ -254,6 +264,13 @@ fn websocket(mut stream: TcpStream, request: Request, host: &PluginHost) {
     loop {
         match socket.read() {
             Ok(Message::Text(text)) => host.receive(conn, text.as_str()),
+            // Elgato's SDK for native macOS plugins sends its JSON as binary frames, which the
+            // Stream Deck reads as text.
+            Ok(Message::Binary(bytes)) => {
+                if let Ok(text) = std::str::from_utf8(&bytes) {
+                    host.receive(conn, text);
+                }
+            }
             Ok(Message::Close(_)) => break,
             Ok(_) => {}
             Err(tungstenite::Error::Io(err))
@@ -1506,6 +1523,30 @@ mod tests {
             logs: host.dir.path().join("logs"),
         });
         assert_eq!(again.known_state("A1"), Some(1), "kept for the next start");
+    }
+
+    /// Plugins made with Qt reach `localhost` on IPv6 alone, and Elgato's SDK for native macOS
+    /// plugins sends its JSON as binary frames.
+    #[test]
+    fn plugins_reach_the_host_on_ipv6_and_may_send_binary_frames() {
+        let host = host();
+        let request = format!("ws://[::1]:{}/", host.port)
+            .into_client_request()
+            .unwrap();
+        let stream = TcpStream::connect(("::1", host.port)).unwrap();
+        let (mut socket, _) = tungstenite::client::client(request, stream)
+            .unwrap_or_else(|_| panic!("the handshake fails"));
+        socket
+            .get_ref()
+            .set_read_timeout(Some(Duration::from_millis(20)))
+            .unwrap();
+        let register = json!({ "event": "registerPlugin", "uuid": SD_PLUGIN }).to_string();
+        socket.send(Message::binary(register.into_bytes())).unwrap();
+        assert_eq!(next(&mut socket)["event"], "deviceDidConnect");
+        assert!(matches!(
+            host.input(),
+            PluginInput::MainConnected { plugin } if plugin == SD_PLUGIN
+        ));
     }
 
     #[test]

@@ -31,6 +31,10 @@ pub enum InstallError {
     BadManifest(String),
     #[error("{}", tr!("plugins.install.otherSystem"))]
     OtherSystem,
+    #[error("{}", tr!("plugins.install.protected"))]
+    Protected,
+    #[error("{}", tr!("plugins.install.device"))]
+    Device,
     #[error("{0}")]
     Io(#[from] io::Error),
     #[error("{}", trf!("plugins.install.damagedZip", reason = .0))]
@@ -45,11 +49,23 @@ pub fn install(source: &Path, plugins: &Path) -> Result<String, InstallError> {
     let result = (|| {
         let package = if source.is_dir() {
             copy_package(source, &staging)?
+        } else if let Some(inner) = packed_inside(source, &staging)? {
+            unzip(&inner, &staging)?
         } else {
             unzip(source, &staging)?
         };
+        if protected(&package) {
+            return Err(InstallError::Protected);
+        }
         let manifest =
             read_manifest(&package).map_err(|e| InstallError::BadManifest(e.to_string()))?;
+        if manifest
+            .device_namespace
+            .as_deref()
+            .is_some_and(|n| !n.trim().is_empty())
+        {
+            return Err(InstallError::Device);
+        }
         if !valid_plugin_id(&manifest.uuid) {
             return Err(InstallError::BadManifest(trf!(
                 "plugins.install.invalidId",
@@ -161,6 +177,33 @@ fn copy_dir(from: &Path, to: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// Some authors zip the `.streamDeckPlugin` file itself: that one, taken out, is the package.
+fn packed_inside(source: &Path, staging: &Path) -> Result<Option<PathBuf>, InstallError> {
+    let mut archive = zip::ZipArchive::new(File::open(source)?)?;
+    let names: Vec<String> = archive
+        .file_names()
+        .flatten()
+        .map(|n| n.into_owned())
+        .filter(|n| !n.starts_with("__MACOSX/"))
+        .collect();
+    if names
+        .iter()
+        .any(|n| n.replace('\\', "/").ends_with("manifest.json"))
+    {
+        return Ok(None);
+    }
+    let packed: Vec<&String> = names
+        .iter()
+        .filter(|n| n.to_ascii_lowercase().ends_with(".streamdeckplugin"))
+        .collect();
+    let [inner] = packed[..] else {
+        return Ok(None);
+    };
+    let target = staging.join("packed.zip");
+    io::copy(&mut archive.by_name(inner)?, &mut File::create(&target)?)?;
+    Ok(Some(target))
+}
+
 /// Every entry must sit under one package folder, without absolute paths or `..`. Leftovers of
 /// macOS archiving are skipped. A ZIP holds the package folder, or (as some packages do) its
 /// contents with the manifest at the top, which then go into a folder named after the plugin.
@@ -217,7 +260,7 @@ fn unzip(source: &Path, staging: &Path) -> Result<PathBuf, InstallError> {
     if !package.join("manifest.json").is_file() {
         return Err(InstallError::NotAPlugin);
     }
-    if !flat {
+    if !flat || protected(&package) {
         return Ok(package);
     }
     let manifest = read_manifest(&package).map_err(|e| InstallError::BadManifest(e.to_string()))?;
@@ -235,6 +278,15 @@ fn unzip(source: &Path, staging: &Path) -> Result<PathBuf, InstallError> {
     let named = staging.join(format!("{}{suffix}", manifest.uuid));
     fs::rename(&package, &named)?;
     Ok(named)
+}
+
+/// The Elgato Marketplace encrypts the files of its packages, which then only the Stream Deck can
+/// read: their manifest starts with this mark instead of JSON.
+fn protected(package: &Path) -> bool {
+    let mut start = [0u8; 6];
+    File::open(package.join("manifest.json"))
+        .and_then(|mut f| io::Read::read_exact(&mut f, &mut start))
+        .is_ok_and(|()| &start == b"ELGATO")
 }
 
 /// Only Stream Deck manifests have these, so a package without its folder can be told apart.
@@ -615,6 +667,73 @@ mod tests {
             install(&package, &plugins).unwrap(),
             "com.a.b",
             "scripts run anywhere, whatever systems the manifest lists"
+        );
+    }
+
+    #[test]
+    fn packages_the_marketplace_encrypted_are_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let package = zip(
+            dir.path(),
+            &[
+                (
+                    "com.a.b.sdPlugin/manifest.json",
+                    "ELGATO\u{1}\u{2}encrypted",
+                ),
+                ("com.a.b.sdPlugin/bin/plugin.js", "encrypted"),
+            ],
+        );
+        let plugins = dir.path().join("plugins");
+        assert!(matches!(
+            install(&package, &plugins),
+            Err(InstallError::Protected)
+        ));
+        let flat = zip(dir.path(), &[("manifest.json", "ELGATO\u{1}")]);
+        assert!(matches!(
+            install(&flat, &plugins),
+            Err(InstallError::Protected)
+        ));
+        assert!(!plugins.join("com.a.b.sdPlugin").exists());
+    }
+
+    #[test]
+    fn plugins_that_drive_devices_of_their_own_are_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = json!({ "UUID": "com.a.dev", "Name": "Dock", "SDKVersion": 2, "DeviceNamespace": "e9", "CodePath": "run.js" }).to_string();
+        let package = zip(
+            dir.path(),
+            &[("com.a.dev.sdPlugin/manifest.json", &manifest)],
+        );
+        assert!(matches!(
+            install(&package, &dir.path().join("plugins")),
+            Err(InstallError::Device)
+        ));
+    }
+
+    #[test]
+    fn a_zip_holding_the_package_file_installs_what_it_holds() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest =
+            json!({ "UUID": "com.a.inner", "Name": "P", "SDKVersion": 2, "CodePath": "app.js" })
+                .to_string();
+        let inner = zip(
+            dir.path(),
+            &[("com.a.inner.sdPlugin/manifest.json", &manifest)],
+        );
+        let inner = fs::read(inner).unwrap();
+        let outer = dir.path().join("outer.zip");
+        let mut writer = ZipWriter::new(File::create(&outer).unwrap());
+        writer
+            .start_file(
+                "com.a.inner.v1.streamDeckPlugin",
+                SimpleFileOptions::default(),
+            )
+            .unwrap();
+        writer.write_all(&inner).unwrap();
+        writer.finish().unwrap();
+        assert_eq!(
+            install(&outer, &dir.path().join("plugins")).unwrap(),
+            "com.a.inner"
         );
     }
 }

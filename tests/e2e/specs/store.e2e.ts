@@ -13,6 +13,8 @@ const PYTHON = 'com.taurilanzi.e2e.python'
 const PYTHON_FOLDER = 'com.taurilanzi.e2e.python.ulanziPlugin'
 const STREAM_DOCK = 'com.taurilanzi.streamdock'
 const STREAM_DOCK_FOLDER = 'com.taurilanzi.streamdock.sdPlugin'
+const OPEN_ACTION = 'com.taurilanzi.openaction'
+const ARCHIVED = 'com.taurilanzi.archived'
 const FIXTURES = join(import.meta.dirname, '..', 'fixtures')
 const BASE = `http://127.0.0.1:${STORE_PORT}`
 const ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#38bdf8"/></svg>'
@@ -29,6 +31,20 @@ function packageOf(folder: string, version: string, work: string) {
   return readFileSync(zip)
 }
 
+/** The Stream Dock fixture as another plugin, as OpenDeck's stores serve Stream Deck plugins. */
+function streamDeckPackage(id: string, work: string) {
+  const dir = join(work, id)
+  const folder = `${id}.sdPlugin`
+  cpSync(join(FIXTURES, STREAM_DOCK_FOLDER), join(dir, folder), { recursive: true })
+  for (const file of ['manifest.json', 'es.json']) {
+    const path = join(dir, folder, file)
+    writeFileSync(path, readFileSync(path, 'utf8').replaceAll(STREAM_DOCK, id))
+  }
+  const zip = join(work, `${id}.zip`)
+  execFileSync('/usr/bin/zip', ['-qr', zip, folder], { cwd: dir })
+  return readFileSync(zip)
+}
+
 async function installed(id: string) {
   return (await engine<PluginCatalog>('plugin_catalog')).plugins.find(p => p.id === id)
 }
@@ -38,6 +54,26 @@ describe('plugins of the stores', () => {
   const packages = { '1.0.0': packageOf(FOLDER, '1.0.0', work), '1.1.0': packageOf(FOLDER, '1.1.0', work) }
   const python = packageOf(PYTHON_FOLDER, '1.0.0', work)
   const streamDock = packageOf(STREAM_DOCK_FOLDER, '1.0.0', work)
+  const openAction = streamDeckPackage(OPEN_ACTION, work)
+  const archived = streamDeckPackage(ARCHIVED, work)
+  // Its four sections are sorted by repository each: official, native, for devices, Stream Deck.
+  const catalogue = {
+    'com.taurilanzi.oa.official': { name: 'Official', author: 'OpenAction', repository: 'https://github.com/zz/official', description: 'From the project.' },
+    'com.taurilanzi.oa.native': { name: 'Native', author: 'Someone', repository: 'https://github.com/mm/native', description: 'Made for OpenAction.' },
+    'com.taurilanzi.oa.device': { name: 'A dock', author: 'Someone', repository: 'https://github.com/dd/device', description: 'Drives a dock.' },
+    [OPEN_ACTION]: { name: 'OpenAction counter', author: 'Taurilanzi', repository: 'https://github.com/aa/counter', description: 'An open Stream Deck plugin.' },
+  }
+  const archive = [
+    {
+      id: ARCHIVED,
+      name: 'Archived counter',
+      author: 'Taurilanzi',
+      link: 'https://github.com/taurilanzi/archived',
+      version: '1.0.0',
+      download: `https://appstore.elgato.com/streamDeckPlugin/${ARCHIVED}/1.0.0/${ARCHIVED}.streamDeckPlugin`,
+    },
+  ]
+  const release = [{ tag_name: 'v1.0.0', assets: [{ name: `${OPEN_ACTION}.streamDeckPlugin`, browser_download_url: `${BASE}/openaction.zip` }] }]
   let offered: keyof typeof packages = '1.0.0'
   const catalog = () => ({
     plugins: [
@@ -159,8 +195,21 @@ describe('plugins of the stores', () => {
       '/shot.svg': ['image/svg+xml', SHOT],
       '/package.zip': ['application/zip', packages[offered]],
       '/python.zip': ['application/zip', python],
+      '/openaction/catalogue.json': ['application/json', JSON.stringify(catalogue)],
+      [`/openaction/icons/${OPEN_ACTION}.png`]: ['image/svg+xml', ICON],
+      '/github/repos/aa/counter/releases': ['application/json', JSON.stringify(release)],
+      '/openaction.zip': ['application/zip', openAction],
+      '/archive/catalogue.json': ['application/json', JSON.stringify(archive)],
+      [`/archive/icons/${ARCHIVED}.png`]: ['image/svg+xml', ICON],
+      [`/archive/rezipped/${ARCHIVED}.zip`]: ['application/zip', archived],
     }
-    const file = files[(req.url ?? '').split('?')[0]!]
+    const path = (req.url ?? '').split('?')[0]!
+    if (path === '/github/aa/counter/releases/latest') {
+      res.writeHead(302, { location: `${BASE}/github/aa/counter/releases/tag/v1.0.0` })
+      res.end()
+      return
+    }
+    const file = files[path]
     res.writeHead(file ? 200 : 404, { 'content-type': file?.[0] ?? 'text/plain' })
     res.end(file?.[1] ?? '')
   })
@@ -172,7 +221,7 @@ describe('plugins of the stores', () => {
   })
 
   after(async () => {
-    for (const id of [PLUGIN, PYTHON, STREAM_DOCK]) {
+    for (const id of [PLUGIN, PYTHON, STREAM_DOCK, OPEN_ACTION, ARCHIVED]) {
       if (await installed(id)) {
         await engine('uninstall_plugin', { id })
       }
@@ -195,13 +244,25 @@ describe('plugins of the stores', () => {
     await expect($('[data-store-plugin="ulanzi:8"]')).not.toBeExisting()
     await expect($('[data-store-plugin="com.taurilanzi.windows.ulanziPlugin"]')).not.toBeExisting()
     await expect($('[data-store-plugin="com.taurilanzi.dial.ulanziPlugin"]')).not.toBeExisting()
-    await expect(count()).toHaveText('4 plugins')
+    await expect($(`[data-store-plugin="openaction:${OPEN_ACTION}"]`)).toHaveText(expect.stringContaining('OpenAction Marketplace'))
+    await expect($(`[data-store-plugin="elgato:${ARCHIVED}"]`)).toHaveText(expect.stringContaining('Archivo de la Elgato App Store'))
+    await expect($('[data-store-plugin="openaction:com.taurilanzi.oa.device"]')).not.toBeExisting()
+    await expect(count()).toHaveText('8 plugins')
     const order = await $$('[data-store-plugin]').map(p => p.getAttribute('data-store-plugin'))
-    // The first of each store, then by name.
-    expect(order).toEqual([FOLDER, 'mirabox:77', 'ulanzi:7', 'com.taurilanzi.risky.ulanziPlugin'])
+    // The first of each store, then by name; stores that count no downloads last.
+    expect(order).toEqual([
+      FOLDER,
+      'mirabox:77',
+      'ulanzi:7',
+      'com.taurilanzi.risky.ulanziPlugin',
+      `elgato:${ARCHIVED}`,
+      'openaction:com.taurilanzi.oa.native',
+      'openaction:com.taurilanzi.oa.official',
+      `openaction:${OPEN_ACTION}`,
+    ])
     await browser.waitUntil(async () => await counter.$('img').getProperty('naturalWidth') as number > 0, { timeoutMsg: 'the icon did not load' })
     await button('Recargar listados').click()
-    await expect(count()).toHaveText('4 plugins')
+    await expect(count()).toHaveText('8 plugins')
     await button('Instalar a mano').click()
     for (const item of ['Instalar desde un archivo…', 'Instalar desde una carpeta…', 'Buscar plugins nuevos', 'Abrir la carpeta de plugins']) {
       await expect(menuItem(item)).toBeDisplayed()
@@ -215,6 +276,8 @@ describe('plugins of the stores', () => {
     await expect($('[data-store-source="ulanzi"]')).toHaveText(expect.stringContaining('1'))
     await expect($('[data-store-source="community"]')).toHaveText(expect.stringContaining('2'))
     await expect($('[data-store-source="mirabox"]')).toHaveText(expect.stringContaining('1'))
+    await expect($('[data-store-source="open_action"]')).toHaveText(expect.stringContaining('3'))
+    await expect($('[data-store-source="elgato_archive"]')).toHaveText(expect.stringContaining('1'))
     // Its place in the sidebar, which clicking may scroll.
     const place = () => browser.execute(() => (document.querySelector('[data-store-source="community"]') as HTMLElement).offsetTop)
     const before = await place()
@@ -243,7 +306,7 @@ describe('plugins of the stores', () => {
     await expect(count()).toHaveText('1 plugin')
     await expect($('[data-store-plugin="mirabox:77"]')).toBeDisplayed()
     await button('Quitar filtros').click()
-    await expect(count()).toHaveText('4 plugins')
+    await expect(count()).toHaveText('8 plugins')
     await expect($('[data-store-clear]')).not.toBeDisplayed()
   })
 
@@ -283,6 +346,26 @@ describe('plugins of the stores', () => {
     await browser.waitUntil(async () => (await installed(STREAM_DOCK))?.connected === true, { timeout: 20_000, timeoutMsg: 'the Stream Dock plugin did not connect' })
     const plugin = await installed(STREAM_DOCK)
     expect(plugin).toMatchObject({ protocol: 'stream_deck', runtime: 'node', name: 'Contador Stream Dock' })
+  })
+
+  it('installs from OpenDeck\'s stores the latest release and what the archive keeps', async () => {
+    await $(`[data-store-plugin="openaction:${OPEN_ACTION}"]`).click()
+    await expect(details().$('[data-store-origin]')).toHaveText('OpenAction Marketplace')
+    await button('Instalar', details()).click()
+    await expect($('[data-store-consent]')).toHaveText(expect.stringContaining('OpenAction Marketplace no revisa el código'))
+    await button('Instalar', $('[data-store-consent]')).click()
+    await details().$('[data-store-installed]').waitForDisplayed({ timeout: 20_000 })
+    await browser.waitUntil(async () => (await installed(OPEN_ACTION))?.connected === true, { timeout: 20_000, timeoutMsg: 'the OpenAction plugin did not connect' })
+    expect((await installed(OPEN_ACTION))?.website).toBe('https://github.com/aa/counter')
+
+    await $(`[data-store-plugin="elgato:${ARCHIVED}"]`).click()
+    await expect(details().$('[data-store-origin]')).toHaveText('Archivo de la Elgato App Store')
+    await button('Instalar', details()).click()
+    await button('Instalar', $('[data-store-consent]')).click()
+    await details().$('[data-store-installed]').waitForDisplayed({ timeout: 20_000 })
+    await browser.waitUntil(async () => (await installed(ARCHIVED))?.connected === true, { timeout: 20_000, timeoutMsg: 'the archived plugin did not connect' })
+    expect((await installed(ARCHIVED))?.website).toBe('https://github.com/taurilanzi/archived')
+    await shot('store-opendeck')
   })
 
   it('installs a plugin the community store checked in one click', async () => {

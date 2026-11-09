@@ -93,8 +93,9 @@ A carousel puts several of them on one key, the next one on each press.
 ### Plugins of Ulanzi Studio and the Stream Dock, unchanged
 - The plugins published for Ulanzi Studio and for Mirabox's Stream Dock run as they are, with their
   own settings pages: written in JavaScript, Python or HTML, or programs of their own.
-- One store for the Ulanzi Marketplace, the Ulanzi Community Store and Mirabox Space, with filters
-  and update notices; or install them from a file or a folder.
+- One store for the Ulanzi Marketplace, the Ulanzi Community Store, Mirabox Space, the OpenAction
+  Marketplace and OpenDeck's archive of the Elgato App Store, with filters and update notices; or
+  install them from a file or a folder.
 - Plugins run on a Node and a Python bundled with the app: nothing else to install.
 
 ### In your language
