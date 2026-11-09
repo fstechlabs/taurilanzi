@@ -1593,6 +1593,7 @@
     "update": {
       "title": "Versión {version} disponible",
       "body": "Al instalarla, la app se reinicia. Si la dejas para más adelante, te la recuerda dentro de una semana.",
+      "changes": "Ver los cambios",
       "installing": "Instalando y reiniciando…",
       "later": "Recordar más adelante",
       "install": "Instalar ahora"

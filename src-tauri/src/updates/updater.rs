@@ -35,6 +35,19 @@ pub enum Status {
 pub struct UpdateOffer {
     pub version: String,
     pub installing: bool,
+    /// The release on GitHub, with every change it brings.
+    pub notes_url: String,
+}
+
+impl UpdateOffer {
+    fn new(version: String, installing: bool) -> Self {
+        let notes_url = format!("{}/releases/tag/v{version}", env!("CARGO_PKG_REPOSITORY"));
+        Self {
+            version,
+            installing,
+            notes_url,
+        }
+    }
 }
 
 pub struct Updates {
@@ -66,14 +79,10 @@ impl Updates {
 
     pub fn offer(&self) -> Option<UpdateOffer> {
         match self.status() {
-            Status::Ready(version) if !self.reminder.postponed() => Some(UpdateOffer {
-                version,
-                installing: false,
-            }),
-            Status::Installing(version) => Some(UpdateOffer {
-                version,
-                installing: true,
-            }),
+            Status::Ready(version) if !self.reminder.postponed() => {
+                Some(UpdateOffer::new(version, false))
+            }
+            Status::Installing(version) => Some(UpdateOffer::new(version, true)),
             _ => None,
         }
     }

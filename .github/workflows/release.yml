@@ -40,19 +40,24 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      # The token only reads who wrote each commit, to name their GitHub account in the notes.
       - id: plan
         env:
           FORCE: ${{ github.event_name == 'workflow_dispatch' }}
+          GH_TOKEN: ${{ github.token }}
         run: bun scripts/release-plan.ts
       - if: steps.plan.outputs.release == 'true'
         env:
           NOTES: ${{ steps.plan.outputs.notes }}
-        run: cp "$NOTES" release-notes.md
+          UPDATE_NOTES: ${{ steps.plan.outputs.update_notes }}
+        run: cp "$NOTES" release-notes.md && cp "$UPDATE_NOTES" update-notes.txt
       - if: steps.plan.outputs.release == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: notes
-          path: release-notes.md
+          path: |
+            release-notes.md
+            update-notes.txt
           retention-days: 1
 
   build:
@@ -164,7 +169,7 @@ jobs:
           merge-multiple: true
       - env:
           VERSION: ${{ needs.plan.outputs.version }}
-        run: bun scripts/release-manifest.ts "$VERSION" .release/release-notes.md
+        run: bun scripts/release-manifest.ts "$VERSION" .release/update-notes.txt
 
       # A draft is never the latest release, so the updater only sees it once every file is up.
       - name: Publish
@@ -175,6 +180,7 @@ jobs:
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           mv .release/release-notes.md "$RUNNER_TEMP/release-notes.md"
+          rm .release/update-notes.txt
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --target "$SHA" \
             --title "$TITLE" --notes-file "$RUNNER_TEMP/release-notes.md" .release/*
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

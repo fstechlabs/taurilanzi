@@ -1049,6 +1049,8 @@ export type TileDrawing =
 export type UpdateOffer = {
 	version: string,
 	installing: boolean,
+	/**  The release on GitHub, with every change it brings. */
+	notes_url: string,
 };
 
 /**  The update the window offers, after any change in it; none when there is nothing to offer. */

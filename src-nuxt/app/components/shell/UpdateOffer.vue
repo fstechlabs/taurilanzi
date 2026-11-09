@@ -22,6 +22,9 @@ const { offer, install, remindLater } = useUpdateOffer()
         <p class="mt-0.5 text-xs text-muted-foreground">
           {{ offer.installing ? t('shell.update.installing') : t('shell.update.body') }}
         </p>
+        <ExternalLink :href="offer.notes_url" class="mt-1.5 text-xs" data-update-changes>
+          {{ t('shell.update.changes') }}
+        </ExternalLink>
       </div>
     </div>
     <div v-if="!offer.installing" class="mt-3 flex justify-end gap-2">

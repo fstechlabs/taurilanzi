@@ -1593,6 +1593,7 @@
     "update": {
       "title": "Version {version} available",
       "body": "Installing it restarts the app. Leave it for later and you will be reminded in a week.",
+      "changes": "See what changed",
       "installing": "Installing and restarting…",
       "later": "Remind me later",
       "install": "Install now"
