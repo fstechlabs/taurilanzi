@@ -155,24 +155,26 @@ Commits, versions and releases:
 - Commit messages follow **Conventional Commits**: `type(scope): description`, with `!` for a
   breaking change. Types: `feat`, `fix`, `perf`, `refactor`, `build`, `docs`, `test`, `ci`,
   `style`, `chore`, `revert`. `bun install` sets up a `commit-msg` hook that refuses anything else
-  (`scripts/check-commits.ts`), and the `commits` job of the tests checks every push.
+  (`scripts/check-commits.ts`), and the `commits` job of the tests checks every pull request and
+  every push to main.
 - Commits and pull requests carry only their authors' identity: never an attribution to an AI
   assistant (`Co-Authored-By: Claude …`, "Generated with Claude Code" or the like) in commit
   messages, pull request descriptions, files or release notes.
 - The version is the moment of the build in UTC, `YEAR.MONTHDAY.HOURMINUTE` (`2026.1220.2008`;
   `2027.105.930` is 5 January at 09:30), set by `scripts/build-app.ts` (`scripts/release-version.ts`).
   `tauri.conf.json` and `Cargo.toml` keep `0.0.0`: never write a version there by hand.
-- Two branches. Pull requests go to `develop`, the default branch, where pushes only run the
-  tests. `main` is what is released: `develop` reaches it through a merge commit when the owner
-  decides, and a hotfix may be committed to `main` directly, after which `main` is merged back
-  into `develop`. Never commit to `main` otherwise.
-- Every push to main that passes the tests is released by `.github/workflows/release.yml` if a
-  commit since the last release is a `feat`, `fix`, `perf`, `refactor` or `build`, or marked as
-  breaking (`scripts/release-plan.ts`). For now its notes only link to the changes since the
-  release before. Running the workflow by hand releases main anyway. Each system and processor
-  (macOS, Windows and Linux, on x64 and Arm) builds on a runner of its own
-  (`scripts/release-assets.ts`), and the release is published once all of them are in, with one
-  `latest.json` for every updater (`scripts/release-manifest.ts`).
+- One branch, `main`, the default: pull requests go to it, and changes that must be released
+  together are gathered first in a branch of their own, through pull requests to it, which then
+  reaches `main` as one pull request.
+- Every push to main is tested and released by `.github/workflows/release.yml`, which runs
+  `tests.yml` first and releases if those pass and a commit since the last release is a `feat`,
+  `fix`, `perf`, `refactor` or `build`, or marked as breaking (`scripts/release-plan.ts`). It does
+  not wait for a separate run of `tests.yml` (`workflow_run`): that runs in the context of the
+  default branch, and the `release` environment only lets main deploy. For now its notes only
+  link to the changes since the release before. Running the workflow by hand on main releases it
+  anyway. Each system and processor (macOS, Windows and Linux, on x64 and Arm) builds on a runner
+  of its own (`scripts/release-assets.ts`), and the release is published once all of them are in,
+  with one `latest.json` for every updater (`scripts/release-manifest.ts`).
 - Updates are signed in GitHub Actions only: the private key and its password are secrets of the
   `release` environment (limited to main), with a backup kept by the owner outside any computer
   the project runs on. Only the public key is in the repo (`plugins.updater.pubkey`). Releases are

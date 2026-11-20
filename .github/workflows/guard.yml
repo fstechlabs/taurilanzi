@@ -2,8 +2,9 @@ name: guard
 
 # Only the repository's admins change the CI, the release scripts, the updater configuration and
 # the .gitignore files: a pull request from anyone else that touches them is closed.
-# pull_request_target runs this file as it is on main, so a pull request cannot change it. It must
-# never check out or run the pull request's code: it only reads the list of files through the API.
+# pull_request_target runs this file as it is on the pull request's base branch, so a pull request
+# cannot change it. It must never check out or run the pull request's code: it only reads the list
+# of files through the API.
 on:
   pull_request_target:
     types: [opened, reopened, synchronize]
