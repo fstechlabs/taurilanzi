@@ -66,6 +66,10 @@ cd src-tauri && cargo clippy --all-targets
 cd src-tauri && cargo test --lib dock_check -- --ignored --nocapture
 cd src-tauri && cargo test --release --lib frame_rate -- --ignored --nocapture
 
+# Whether a real configuration still passes the rules (on a copy of its data folder, with its
+# config.json and assets)
+cd src-tauri && TAURILANZI_CHECK_DIR=<copy> cargo test --lib stored_configuration -- --ignored --nocapture
+
 # End-to-end tests against the real app (built with the e2e feature, temporary data, no dock)
 bun run e2e
 bun run e2e --skip-build --spec specs/canvas.e2e.ts   # a single one, without building
@@ -130,6 +134,8 @@ App environment variables:
   `TAURILANZI_GITHUB=<url>` another GitHub for its releases (pages and API on one server) and
   `TAURILANZI_ELGATO_ARCHIVE=<url>` another Elgato App Store archive (the e2e tests serve their own).
 - `TAURILANZI_LANGUAGE=es|en` stands in for the system's language.
+- `TAURILANZI_MCP_PORT=<port>` serves the MCP server on another port (3917 in the released app,
+  3918 in development builds).
 - `TAURILANZI_CLOUD=<url>` syncs with another cloud. Without it the released app syncs with
   `https://taurilanzi.com` and development builds with `taurilanzi-cloud` running locally
   (`http://localhost:3000`).
@@ -273,6 +279,34 @@ Commits, versions and releases:
   the cloud, and only name those installed from a file. Uninstalling stays on that computer
   (`declined_plugins`). Only the engine talks to the cloud, never the UI, and
   its API is a contract with installed versions: change it only in ways they still understand.
+- **Everything configurable is configurable through MCP too.** The app has a local MCP server
+  (`src/mcp`) for AI assistants: off by default, turned on from the "AI · MCP" button of the
+  sidebar, on 127.0.0.1 only, with a bearer token kept in `secrets.json` that never syncs. It has
+  nothing to do with the cloud. Rules for every change:
+  - Whatever makes a configuration valid lives in Rust (`src/config/rules`, and the engine's
+    `check_key`), never only in the UI: the UI and the MCP server go through the same engine
+    commands, and a value the editor cannot produce is refused there. A new setting, field,
+    widget, action or key kind gets its rule in Rust in the same change.
+  - Every new command of the UI gets an MCP tool that does the same (`src/mcp/tools`, one file
+    per area), or a line in `src/mcp/coverage.rs` saying why the assistant must not have it. Its
+    test fails until one of both is there.
+  - Edits of profiles, pages and keys go through the engine's lots (`Change`, `engine/batch.rs`):
+    all or none, one step of undo, in any profile. A new kind of edit is a new `Change`.
+  - Passwords, tokens and codes never pass through MCP, neither read nor written: the user types
+    them in the app. Fields of plugin settings and HTTP actions that look like secrets read as a
+    placeholder (`src/mcp/redaction.rs`). Sent back, a placeholder keeps the real value only
+    where it went before: the same origin for an HTTP action, the same plugin action with no
+    address changed for plugin settings. Moving an integration to another address forgets its
+    secret first.
+  - Assistants never install, uninstall or update anything: they search the stores and
+    `recommend_plugin` shows a plugin to the user.
+  - Tool descriptions, `instructions.md`, `guide.md` and tool errors are in English, for the
+    model; what the window shows of it is translated. The guide's key examples are tested
+    (`guide_examples.rs`): keep them valid when the rules change. The types the assistant reads
+    (`get_schema`) come from `bindings.ts`, so doc comments of config types are documentation
+    for it too.
+  - Clients that only start commands (Claude Desktop) reach the server through the app's own
+    program: `<app> --mcp-bridge <url>` with `TAURILANZI_MCP_TOKEN`, handled before Tauri starts.
 - Right click never shows the browser menu (blocked in the layout); custom context menus open
   with `useContextMenu().open(event, items)`.
 - In development Nuxt does not register new shadcn components and Tailwind does not see new files

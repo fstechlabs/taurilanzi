@@ -12,6 +12,8 @@ export const KEY_COUNT = 13
 export const STORE_PORT = 39072
 /** The cloud the app syncs with in the tests; the spec that needs it serves it. */
 export const CLOUD_PORT = 39073
+/** The MCP server of the app in the tests, away from the user's (3917 and 3918). */
+export const MCP_PORT = Number(process.env.TAURILANZI_E2E_MCP_PORT ?? 39074)
 
 type Element = ChainablePromiseElement | WebdriverIO.Element
 

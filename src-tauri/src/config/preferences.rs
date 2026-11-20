@@ -10,8 +10,9 @@ use crate::render::{Color, DEFAULT_FAMILY, VerticalPosition};
 
 const LONG_PRESS_MS: (u32, u32) = (250, 2000);
 const DOUBLE_PRESS_MS: (u32, u32) = (150, 800);
-const TEXT_SIZE: (f32, f32) = (8.0, 96.0);
+const TEXT_SIZE: (f32, f32) = (10.0, 80.0);
 const MAX_MINUTES: u32 = 24 * 60;
+const SCREENSAVER_BRIGHTNESS: (u8, u8) = (5, 100);
 
 /// Every field has a default, so configurations saved before a field existed still load.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, specta::Type)]
@@ -214,7 +215,9 @@ impl Preferences {
         let saver = &mut self.screensaver;
         saver.idle_minutes = saver.idle_minutes.min(MAX_MINUTES);
         saver.off_after_minutes = saver.off_after_minutes.min(MAX_MINUTES);
-        saver.brightness = saver.brightness.min(100);
+        saver.brightness = saver
+            .brightness
+            .clamp(SCREENSAVER_BRIGHTNESS.0, SCREENSAVER_BRIGHTNESS.1);
         self
     }
 }

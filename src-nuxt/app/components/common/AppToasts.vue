@@ -5,13 +5,25 @@ import { events } from '~/ipc/bindings'
 const { t } = useI18n()
 const { toasts, show, dismiss } = useToasts()
 const { catalog } = usePlugins()
+const { undo } = useHistory()
 
 onMounted(() => {
   events.pluginToast.listen(({ payload }) => {
     const plugin = catalog.value?.plugins.find(p => p.id === payload.plugin)
     show(plugin?.name ?? payload.plugin, payload.message)
   })
+  events.assistantEdited.listen(({ payload }) => {
+    show(t('mcp.notice.title'), t('mcp.notice.edited'), {
+      key: 'assistant-edited',
+      action: payload.undoable ? { label: t('mcp.notice.undo'), run: () => undo().catch(() => {}) } : undefined,
+    })
+  })
 })
+
+function act(id: number, run: () => unknown) {
+  dismiss(id)
+  run()
+}
 </script>
 
 <template>
@@ -31,6 +43,16 @@ onMounted(() => {
           {{ toast.message }}
         </p>
       </div>
+      <Button
+        v-if="toast.action"
+        variant="outline"
+        size="sm"
+        class="h-7 shrink-0 self-center px-2 text-xs"
+        data-toast-action
+        @click="act(toast.id, toast.action.run)"
+      >
+        {{ toast.action.label }}
+      </Button>
       <button type="button" class="text-muted-foreground hover:text-foreground" :aria-label="t('common.toasts.close')" @click="dismiss(toast.id)">
         <X class="size-3.5" />
       </button>

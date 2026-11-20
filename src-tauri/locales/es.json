@@ -355,5 +355,9 @@
       "offline": "No se pudo conectar con el cloud.",
       "failed": "No se pudo conectar con el cloud: {error}"
     }
+  },
+  "mcp": {
+    "portTaken": "Otro programa está usando el puerto {port}: ciérralo o reinicia la app.",
+    "failed": "El servidor MCP no ha podido arrancar: {error}"
   }
 }

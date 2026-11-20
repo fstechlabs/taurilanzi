@@ -329,6 +329,22 @@ impl Config {
         let id = self.active_profile;
         self.profiles.iter_mut().find(|p| p.id == id)
     }
+
+    /// The profile a page belongs to: page ids are unique across profiles.
+    pub fn page_owner(&self, page: Uuid) -> Option<&Profile> {
+        self.profiles.iter().find(|p| p.page(page).is_some())
+    }
+
+    pub fn page_owner_mut(&mut self, page: Uuid) -> Option<&mut Profile> {
+        self.profiles.iter_mut().find(|p| p.page(page).is_some())
+    }
+
+    /// Whether a page or a profile already has this id.
+    pub fn id_taken(&self, id: Uuid) -> bool {
+        self.profiles
+            .iter()
+            .any(|p| p.id == id || p.page(id).is_some())
+    }
 }
 
 /// Every image and sound the keys point to, edited copies and their originals included.

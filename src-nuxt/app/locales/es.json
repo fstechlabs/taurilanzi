@@ -1579,7 +1579,10 @@
       "sync": "Sincronizar",
       "syncOutgoing": "Hay cambios de este equipo sin subir al cloud",
       "syncIncoming": "Hay cambios de otros equipos en el cloud",
-      "accountConnected": "Este equipo está conectado al cloud"
+      "accountConnected": "Este equipo está conectado al cloud",
+      "mcp": "IA · MCP",
+      "mcpOff": "Conecta un asistente de IA para configurar el dock hablando con él",
+      "mcpRunning": "Los asistentes de IA pueden conectarse"
     },
     "statusBar": {
       "starting": "Arrancando…",
@@ -1981,5 +1984,75 @@
     "mergeHint": "Juntar: los perfiles de este equipo se suben y los del cloud llegan aquí. Todos los equipos ven todos.",
     "replace": "Usar solo los del cloud",
     "replaceHint": "Usar solo los del cloud: los perfiles de este equipo se borran y se quedan los del cloud."
+  },
+  "mcp": {
+    "title": "Asistentes de IA (MCP)",
+    "description": "Conecta un asistente de IA (Claude, Cursor, VS Code, Codex…) y configura el dock hablando con él: perfiles, páginas, teclas y acciones.",
+    "enable": "Dejar que los asistentes de IA configuren el dock",
+    "status": {
+      "running": "Activo en {url}",
+      "starting": "Arrancando…",
+      "off": "Apagado. Ningún asistente puede conectarse.",
+      "lastUsed": "Último uso: {client}, {when}",
+      "bridgeClient": "un asistente a través del puente",
+      "someClient": "un asistente"
+    },
+    "about": {
+      "local": "Funciona solo en este equipo: nada pasa por el cloud.",
+      "off": "Está apagado hasta que lo enciendes aquí, y puedes apagarlo cuando quieras.",
+      "rules": "Cada cambio sigue las mismas reglas que el editor, y un solo Deshacer quita cada tanda de cambios del asistente.",
+      "secrets": "El asistente nunca ve contraseñas ni tokens: esos los escribes tú en la app.",
+      "plugins": "No puede instalar plugins, solo recomendarlos: la tienda se abre en el plugin y tú decides."
+    },
+    "token": {
+      "label": "Token de acceso",
+      "show": "Mostrar el token",
+      "hide": "Ocultar el token",
+      "regenerate": "Generar otro",
+      "hint": "Los asistentes lo envían para entrar. No lo compartas: quien lo tenga puede cambiar tu configuración.",
+      "confirmTitle": "¿Generar un token nuevo?",
+      "confirmBody": "El token actual deja de valer al momento. Los asistentes que ya configuraste no podrán conectarse hasta que les pongas el nuevo.",
+      "cancel": "Cancelar",
+      "confirm": "Generar otro"
+    },
+    "copy": "Copiar",
+    "copyFailed": "No se pudo copiar: {reason}",
+    "close": "Cerrar",
+    "setup": {
+      "title": "Conectar un asistente",
+      "other": "Otro",
+      "hints": {
+        "claude-code": "Ejecuta este comando en un terminal. Queda disponible en todos tus proyectos.",
+        "claude-desktop": "En Claude Desktop, abre Settings → Developer → Edit Config y añade esto a claude_desktop_config.json (si ya tiene otros servidores, añade esta entrada dentro de mcpServers). Después reinicia Claude Desktop. Solo arranca programas, así que se conecta con el puente de la app.",
+        "cursor": "Añádelo a ~/.cursor/mcp.json (o al .cursor/mcp.json de un proyecto). Si ya tiene otros servidores, añade esta entrada dentro de mcpServers.",
+        "vscode": "En VS Code, ejecuta «MCP: Open User Configuration» desde la paleta de comandos y añade esto a mcp.json (dentro de servers si ya hay otros).",
+        "codex": "Añade esto a ~/.codex/config.toml. Codex lee el token de la variable de entorno {variable}.",
+        "gemini": "Ejecuta este comando en un terminal. Queda disponible en todos tus proyectos.",
+        "other": "Cualquier asistente compatible con MCP por HTTP (Streamable HTTP) se conecta con esta dirección y esta cabecera. Los que solo arrancan programas (stdio) usan el puente de la app."
+      },
+      "blocks": {
+        "command": "Comando",
+        "config": "Configuración",
+        "url": "Dirección (Streamable HTTP)",
+        "header": "Cabecera",
+        "bridge": "Puente para los que solo arrancan programas (stdio), con el token en la variable de entorno {variable}",
+        "variable": {
+          "unix": "El token, en la variable de entorno (añádelo a tu ~/.zshrc o ~/.bashrc para que dure)",
+          "windows": "El token, en la variable de entorno (solo la ven los terminales que abras después)"
+        }
+      }
+    },
+    "examples": {
+      "title": "Prueba a pedirle:",
+      "streaming": "Hazme un perfil para streaming con las escenas de OBS en la primera fila",
+      "meetings": "Crea una página para reuniones con teclas para silenciar el micro, apagar la cámara y salir de la llamada",
+      "tidy": "Ponle a cada tecla un icono que encaje y colores según lo que hace"
+    },
+    "notice": {
+      "title": "Asistente de IA",
+      "edited": "La IA ha cambiado la configuración",
+      "undo": "Deshacer"
+    },
+    "recommended": "Tu asistente de IA te recomienda {name}."
   }
 }

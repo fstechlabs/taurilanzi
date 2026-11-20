@@ -9,7 +9,19 @@ type Plugin = DeepReadonly<PluginInfo>
 const { catalog } = usePlugins()
 const store = useStorePlugins()
 const { t } = useI18n()
+const { recommendation } = useMcp()
 const browsing = ref(false)
+
+watch(recommendation, (plugin) => {
+  if (plugin) {
+    browsing.value = true
+  }
+})
+watch(browsing, (value) => {
+  if (!value) {
+    recommendation.value = null
+  }
+})
 
 onMounted(() => {
   if (!store.plugins.value) {
@@ -80,7 +92,7 @@ function status(plugin: Plugin): { color: string, label: string } {
       <span class="flex-1">{{ t('plugins.list.add') }}</span>
     </button>
 
-    <PluginStoreDialog v-model:open="browsing" @added="open = $event" />
+    <PluginStoreDialog v-model:open="browsing" :recommended="recommendation" @added="open = $event" />
     <PluginDialog v-if="opened" v-model:open="dialogOpen" :plugin="opened" :status="status(opened).label" />
   </div>
 </template>

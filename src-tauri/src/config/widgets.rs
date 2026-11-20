@@ -149,7 +149,7 @@ pub enum Widget {
     HassEntities {
         #[serde(default)]
         server: Uuid,
-        /// One to four; square keys show the first two.
+        /// One to three; square keys show the first two.
         entities: Vec<HassItem>,
         style: WidgetStyle,
     },

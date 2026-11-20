@@ -6,8 +6,9 @@ use tauri_specta::Event;
 
 use crate::cloud::{Cloud, CloudSetup, Open, PluginInstaller};
 use crate::engine::{self, Launch, LaunchError, PluginsLaunch};
-use crate::ipc::CloudChanged;
+use crate::ipc::{AssistantEdited, CloudChanged, McpChanged, PluginRecommended};
 use crate::login::Placement;
+use crate::mcp::{McpService, McpServiceSetup, Notice, Tools};
 use crate::plugin_desktop::TauriDesktop;
 use crate::secrets::Secrets;
 use crate::state::AppState;
@@ -84,6 +85,26 @@ pub fn setup(
     if let Some(plugins) = &running.plugins {
         crate::deep_links::listen(app.handle(), plugins.host());
     }
+    let mcp = McpService::start(McpServiceSetup {
+        data_dir: data_dir.clone(),
+        port: crate::mcp::port_for(&app.config().identifier),
+        secrets: Secrets::new(&data_dir, &app.config().identifier),
+        tools: Arc::new(Tools {
+            engine: running.engine.clone(),
+            plugins: running.plugins.clone(),
+            assets: running.assets.clone(),
+            notify: assistant_notices(app),
+        }),
+        notify: {
+            let handle = app.handle().clone();
+            Box::new(move |status| {
+                if let Err(err) = McpChanged(status).emit(&handle) {
+                    log::warn!("could not send the MCP status to the UI: {err}");
+                }
+            })
+        },
+    });
+    app.manage(mcp);
     app.manage(cloud);
     app.manage(running.engine.clone());
     app.manage(running.assets);
@@ -131,6 +152,23 @@ fn browser(_app: &App) -> Open {
             }
         });
         Ok(())
+    })
+}
+
+/// What the assistant did, for the window to offer undo or show the store.
+fn assistant_notices(app: &App) -> Arc<dyn Fn(Notice) + Send + Sync> {
+    let handle = app.handle().clone();
+    Arc::new(move |notice| {
+        let sent = match notice {
+            Notice::Edited { undoable } => AssistantEdited { undoable }.emit(&handle),
+            Notice::Recommended { id, name } => {
+                window::show(&handle);
+                PluginRecommended { id, name }.emit(&handle)
+            }
+        };
+        if let Err(err) = sent {
+            log::warn!("could not tell the UI what the assistant did: {err}");
+        }
     })
 }
 

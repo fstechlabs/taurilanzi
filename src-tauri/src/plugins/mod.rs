@@ -26,7 +26,7 @@ pub use catalog::CatalogPlugin;
 pub use desktop::Desktop;
 pub use elgato::protocol::DEVICE_ID;
 pub use elgato::qt_svg::as_qt_draws;
-pub use hub::{PluginHost, PluginInput, VisualChange};
+pub use hub::{NO_CONNECTION, PluginHost, PluginInput, VisualChange};
 pub use images::from_file as image_file;
 pub use manifest::{Protocol, StateManifest};
 pub use registry::{Registry, valid_action_id};

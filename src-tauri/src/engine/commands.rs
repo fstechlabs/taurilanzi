@@ -6,7 +6,7 @@ use super::snapshot::Snapshot;
 use crate::cloud::{SyncChanges, SyncExport};
 use crate::config::{
     Action, AppRef, Appearance, DeviceSettings, Integration, Key, KnownPlugin, Position,
-    Preferences,
+    Preferences, rules::Problem,
 };
 use crate::driver::d200::Event as DockEvent;
 use crate::hass::HassReport;
@@ -27,6 +27,8 @@ pub enum CommandError {
     DeleteHome,
     #[error("{0}")]
     InvalidActions(&'static str),
+    #[error("{0}")]
+    Invalid(String),
     #[error("could not save the configuration: {0}")]
     Save(#[from] std::io::Error),
     #[error("could not draw the key: {0}")]
@@ -39,6 +41,18 @@ pub enum CommandError {
     AppAlreadyLinked { app: String, profile: String },
     #[error("that is not an app")]
     UnknownApp,
+    #[error("the id {0} is already used by a page or a profile")]
+    IdTaken(Uuid),
+    #[error("no key has the plugin placement {0}")]
+    UnknownPlacement(Uuid),
+    #[error("change {at}: {error}")]
+    Change { at: usize, error: Box<CommandError> },
+}
+
+impl From<Problem> for CommandError {
+    fn from(problem: Problem) -> Self {
+        Self::Invalid(problem.to_string())
+    }
 }
 
 /// Changes to a page's name or place on the canvas; missing fields stay as they are.
@@ -53,6 +67,70 @@ pub struct PageChanges {
 pub struct KeySlot {
     pub page: Uuid,
     pub index: u8,
+}
+
+/// One edit of a lot applied all at once, which addresses pages and profiles by id, in any
+/// profile. New pages and profiles get the id the caller chose, so later edits of the same lot
+/// can point to them.
+#[derive(Debug, Clone)]
+pub enum Change {
+    SetKey {
+        page: Uuid,
+        index: u8,
+        key: Option<Key>,
+    },
+    MoveKey {
+        from: KeySlot,
+        to: KeySlot,
+    },
+    CreatePage {
+        profile: Uuid,
+        id: Uuid,
+        name: Option<String>,
+        position: Position,
+    },
+    UpdatePage {
+        page: Uuid,
+        changes: PageChanges,
+    },
+    DuplicatePage {
+        page: Uuid,
+        id: Uuid,
+    },
+    DeletePage {
+        page: Uuid,
+    },
+    SetHomePage {
+        page: Uuid,
+    },
+    CreateProfile {
+        id: Uuid,
+        home: Uuid,
+        name: Option<String>,
+    },
+    RenameProfile {
+        profile: Uuid,
+        name: String,
+    },
+    DuplicateProfile {
+        profile: Uuid,
+        id: Uuid,
+    },
+    DeleteProfile {
+        profile: Uuid,
+    },
+    MoveProfile {
+        profile: Uuid,
+        index: usize,
+    },
+    LinkApp {
+        profile: Uuid,
+        app: AppRef,
+    },
+    UnlinkApp {
+        profile: Uuid,
+        app: String,
+    },
 }
 
 pub(super) type Reply<T> = oneshot::Sender<T>;
@@ -210,6 +288,25 @@ pub enum Command {
     },
     /// Writes what is waiting to be saved, as the app quits.
     Flush(Reply<()>),
+    /// The whole configuration, every profile included.
+    Config(Reply<Box<crate::config::Config>>),
+    /// Edits applied all or none, and undone as one.
+    Apply {
+        changes: Vec<Change>,
+        reply: Reply<Result<bool, CommandError>>,
+    },
+    /// The settings of a plugin's key, as if its inspector had saved them.
+    SetPluginSettings {
+        placement: Uuid,
+        settings: serde_json::Value,
+        reply: Done,
+    },
+    /// What a plugin shares between its keys, as if the plugin had saved it.
+    SetGlobalPluginSettings {
+        plugin: String,
+        settings: serde_json::Value,
+        reply: Done,
+    },
 }
 
 pub enum Input {
@@ -254,6 +351,7 @@ impl Command {
                 | Self::Undo(_)
                 | Self::Redo(_)
                 | Self::DeleteProfile { .. }
+                | Self::Apply { .. }
         )
     }
 }

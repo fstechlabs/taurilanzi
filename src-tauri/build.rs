@@ -67,6 +67,9 @@ const COMMANDS: &[&str] = &[
     "cloud_set_paused",
     "cloud_join",
     "cloud_bring_back",
+    "mcp_status",
+    "set_mcp_enabled",
+    "regenerate_mcp_token",
 ];
 
 fn main() {

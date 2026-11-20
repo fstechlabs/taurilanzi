@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { ArrowUpCircle, Check, ChevronDown, Download, ExternalLink, FileArchive, FolderOpen, FolderSearch, LoaderCircle, PackagePlus, Puzzle, RefreshCw, Search, ShieldAlert, Star, X } from '@lucide/vue'
+import { ArrowUpCircle, Check, ChevronDown, Download, ExternalLink, FileArchive, FolderOpen, FolderSearch, LoaderCircle, PackagePlus, Puzzle, RefreshCw, Search, ShieldAlert, Sparkles, Star, X } from '@lucide/vue'
 import type { DeepReadonly } from 'vue'
 import { openExternal } from '~/lib/external'
 import { storeImage } from '~/lib/actions/plugins'
 import { facetCounts, filtered, filterPlugins, kindsOf, SORTS, sourcesOf, STATUSES } from '~/lib/store-filters'
 import type { StoreFilters, StoreSort } from '~/lib/store-filters'
 import type { CatalogPlugin } from '~/types/engine'
+import type { PluginRecommended } from '~/ipc/bindings'
 
 type Plugin = DeepReadonly<CatalogPlugin>
 
 const open = defineModel<boolean>('open', { required: true })
+/** A plugin an AI assistant suggested: the store opens on it. */
+const props = defineProps<{ recommended?: PluginRecommended | null }>()
 const emit = defineEmits<{ installed: [id: string], added: [id: string] }>()
 
 const { plugins, loading, failure, installing, sort: chosen, load, install } = useStorePlugins()
@@ -40,14 +43,46 @@ watch(searching, (now) => {
 })
 const picked = ref<string | null>(null)
 const search = ref<{ $el: HTMLInputElement } | null>(null)
+/** The recommended plugin waiting for the store to load before it is shown. */
+const focusing = ref<PluginRecommended | null>(null)
 
 watch(open, (value) => {
   if (value) {
     Object.assign(filters, { query: '', source: 'all', status: 'all', kind: 'all' })
     picked.value = null
     load()
+    focusRecommended()
   }
 }, { immediate: true })
+
+function focusRecommended() {
+  if (!props.recommended) {
+    return
+  }
+  Object.assign(filters, { query: '', source: 'all', status: 'all', kind: 'all' })
+  picked.value = props.recommended.id
+  focusing.value = props.recommended
+}
+
+watch(() => props.recommended, (value) => {
+  if (value && open.value) {
+    focusRecommended()
+  }
+})
+
+/** Shows the plugin in the list, or searches its name if the store does not list it by that id. */
+watch([focusing, plugins], async ([wanted, list]) => {
+  if (!wanted || !list) {
+    return
+  }
+  focusing.value = null
+  if (!list.some(p => p.id === wanted.id)) {
+    filters.query = wanted.name
+    return
+  }
+  await nextTick()
+  document.querySelector(`[data-store-plugin="${CSS.escape(wanted.id)}"]`)?.scrollIntoView({ block: 'nearest' })
+})
 
 /** The store and the category in the user's language, so a search finds them too. */
 function labels(plugin: { source: string, kind: string | null }) {
@@ -189,6 +224,10 @@ async function add(plugin: Plugin) {
           <DialogDescription>
             {{ t('plugins.store.description') }}
           </DialogDescription>
+          <p v-if="recommended" class="mt-2 flex items-center gap-1.5 text-sm text-sky-300" data-store-recommended>
+            <Sparkles class="size-4 shrink-0" />
+            {{ t('mcp.recommended', { name: recommended.name }) }}
+          </p>
         </div>
       </DialogHeader>
       <div class="flex min-h-0 flex-1">

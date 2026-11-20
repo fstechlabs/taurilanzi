@@ -20,7 +20,9 @@ use super::handle::Activity;
 use super::history::{History, Target};
 use super::key_widgets::KeyWidgets;
 use super::live::Live;
+use super::pages::NewPage;
 use super::plugins::{PluginKeys, plugin_action};
+use super::profiles::NewProfile;
 use super::results::Results;
 use super::screen::Screen;
 use super::snapshot::{EngineEvent, ProfileSummary, Snapshot};
@@ -29,7 +31,7 @@ use super::widgets::Feeds;
 use crate::actions;
 use crate::config::{
     AppRef, Config, DeviceSettings, Key, Navigation, Page, Profile, ScreensaverImage, Store,
-    Widget, assets_in,
+    Widget, assets_in, rules,
 };
 use crate::driver::d200::{D200, Event, KEY_COUNT, KEY_SIZE, WIDE_KEY, WIDE_KEY_SIZE};
 use crate::hass::{HassReport, Wants as HassWants};
@@ -86,6 +88,8 @@ pub struct Engine {
     /// When each profile, and the settings, were last edited since the app started.
     pub(super) edited: BTreeMap<Uuid, jiff::Timestamp>,
     pub(super) saved: Saved,
+    /// A lot of changes is being applied: saving and drawing wait until all of them went through.
+    pub(super) applying: bool,
 }
 
 /// How the engine talks to the rest of the app.
@@ -151,6 +155,7 @@ impl Engine {
             hass_wants: BTreeMap::new(),
             edited: BTreeMap::new(),
             saved,
+            applying: false,
         }
     }
 
@@ -279,12 +284,22 @@ impl Engine {
                     self.edit(Target::Key { page, index }, |e| e.set_key(page, index, key));
                 self.respond(reply, result);
             }
+            // Only what comes from outside is held to what the settings offer: sync brings what
+            // other computers saved, and Home Assistant any brightness.
             Command::SetDevice { settings, reply } => {
-                let result = self.set_device(settings);
+                let result = rules::check_device(&settings, &self.config.device)
+                    .map_err(CommandError::from)
+                    .and_then(|()| self.set_device(settings));
                 self.respond(reply, result);
             }
             Command::SetPreferences { preferences, reply } => {
-                let result = self.set_preferences(preferences);
+                let result = rules::check_preferences(
+                    &preferences,
+                    &self.config.preferences,
+                    &self.store.assets,
+                )
+                .map_err(CommandError::from)
+                .and_then(|()| self.set_preferences(preferences));
                 self.respond(reply, result);
             }
             Command::TryScreensaver { on, reply } => {
@@ -334,7 +349,9 @@ impl Engine {
                 position,
                 reply,
             } => {
-                let result = self.edit(Target::Other, |e| e.create_page(name, position));
+                let result = self.edit(Target::Other, |e| {
+                    e.create_page(NewPage::default(), name, position)
+                });
                 self.respond(reply, result);
             }
             Command::UpdatePage { id, changes, reply } => {
@@ -342,7 +359,7 @@ impl Engine {
                 self.respond(reply, result);
             }
             Command::DuplicatePage { id, reply } => {
-                let result = self.edit(Target::Other, |e| e.duplicate_page(id));
+                let result = self.edit(Target::Other, |e| e.duplicate_page(id, None));
                 self.respond(reply, result);
             }
             Command::DeletePage { id, reply } => {
@@ -383,7 +400,9 @@ impl Engine {
                 self.respond(reply, result);
             }
             Command::CreateProfile { name, reply } => {
-                let result = self.edit(Target::Other, |e| e.create_profile(name));
+                let result = self.edit(Target::Other, |e| {
+                    e.create_profile(NewProfile::default(), name)
+                });
                 self.respond(reply, result);
             }
             Command::RenameProfile { id, name, reply } => {
@@ -391,7 +410,7 @@ impl Engine {
                 self.respond(reply, result);
             }
             Command::DuplicateProfile { id, reply } => {
-                let result = self.edit(Target::Other, |e| e.duplicate_profile(id));
+                let result = self.edit(Target::Other, |e| e.duplicate_profile(id, None));
                 self.respond(reply, result);
             }
             Command::DeleteProfile { id, reply } => {
@@ -449,6 +468,29 @@ impl Engine {
                 let result = self.plugin_uninstalled(id);
                 self.respond(reply, result);
             }
+            Command::Config(reply) => {
+                let _ = reply.send(Box::new(self.config.clone()));
+            }
+            Command::Apply { changes, reply } => {
+                let result = self.apply(changes);
+                self.respond(reply, result);
+            }
+            Command::SetPluginSettings {
+                placement,
+                settings,
+                reply,
+            } => {
+                let result = self.set_plugin_settings(placement, settings);
+                self.respond(reply, result);
+            }
+            Command::SetGlobalPluginSettings {
+                plugin,
+                settings,
+                reply,
+            } => {
+                let result = self.set_global_plugin_settings(plugin, settings);
+                self.respond(reply, result);
+            }
         }
     }
 
@@ -502,14 +544,25 @@ impl Engine {
         }
     }
 
-    fn set_key(&mut self, page: Uuid, index: u8, key: Option<Key>) -> Result<(), CommandError> {
+    pub(super) fn set_key(
+        &mut self,
+        page: Uuid,
+        index: u8,
+        key: Option<Key>,
+    ) -> Result<(), CommandError> {
         check_index(index)?;
         let mut key = key;
         if let Some(key) = &mut key {
-            check_key(&self.config, self.profile()?, page, key)?;
+            check_key(
+                &self.config,
+                self.owner(page)?,
+                page,
+                key,
+                &self.store.assets,
+            )?;
             self.keep_plugin_settings(key);
             let here: Vec<Uuid> = self
-                .profile()?
+                .owner(page)?
                 .page(page)
                 .and_then(|p| p.keys.get(&index))
                 .map(|k| plugin_action(k).map(|(_, id, _)| id).into_iter().collect())
@@ -524,7 +577,7 @@ impl Engine {
             }
         }
         let target = self
-            .profile_mut()?
+            .owner_mut(page)?
             .page_mut(page)
             .ok_or(CommandError::UnknownPage(page))?;
         match key {
@@ -533,7 +586,10 @@ impl Engine {
         };
         self.save()?;
 
-        if self.screen.showing_keys() && self.current_page().is_some_and(|p| p.id == page) {
+        if !self.applying
+            && self.screen.showing_keys()
+            && self.current_page().is_some_and(|p| p.id == page)
+        {
             let design = self
                 .design_for(index)
                 .unwrap_or_else(|| KeyDesign::solid(Color::BLACK));
@@ -591,7 +647,7 @@ impl Engine {
     fn key_image(&mut self, page: Uuid, index: u8) -> Result<Vec<u8>, CommandError> {
         check_index(index)?;
         let design = self
-            .profile()?
+            .owner(page)?
             .page(page)
             .ok_or(CommandError::UnknownPage(page))?
             .keys
@@ -602,6 +658,10 @@ impl Engine {
     }
 
     pub(super) fn save(&mut self) -> Result<(), CommandError> {
+        if self.applying {
+            self.changed = true;
+            return Ok(());
+        }
         self.store.save(&mut self.config)?;
         self.note_edits();
         self.changed = true;
@@ -656,6 +716,19 @@ impl Engine {
             .ok_or(CommandError::NoActiveProfile)
     }
 
+    /// The profile of a page, active or not.
+    pub(super) fn owner(&self, page: Uuid) -> Result<&Profile, CommandError> {
+        self.config
+            .page_owner(page)
+            .ok_or(CommandError::UnknownPage(page))
+    }
+
+    pub(super) fn owner_mut(&mut self, page: Uuid) -> Result<&mut Profile, CommandError> {
+        self.config
+            .page_owner_mut(page)
+            .ok_or(CommandError::UnknownPage(page))
+    }
+
     pub(super) fn current_page(&self) -> Option<&Page> {
         let profile = self.config.active_profile()?;
         profile.page(self.navigation.current(profile))
@@ -673,6 +746,9 @@ impl Engine {
     }
 
     pub(super) fn save_navigation(&self) {
+        if self.applying {
+            return;
+        }
         if let Err(err) = self.store.save_navigation(&self.navigation) {
             warn!("could not save where the dock is: {err}");
         }
@@ -681,6 +757,9 @@ impl Engine {
     pub(super) fn show_current_page(&mut self) {
         self.gestures.cancel();
         self.changed = true;
+        if self.applying {
+            return;
+        }
         // The screensaver owns the screen; the page goes up when it ends.
         if !self.screen.showing_keys() {
             return;
@@ -914,7 +993,11 @@ impl Engine {
     }
 
     fn page_vars(&self, page: Uuid) -> PageVars {
-        let Some(profile) = self.config.active_profile() else {
+        let Some(profile) = self
+            .config
+            .page_owner(page)
+            .or_else(|| self.config.active_profile())
+        else {
             return PageVars::default();
         };
         let at = profile.pages.iter().position(|p| p.id == page);

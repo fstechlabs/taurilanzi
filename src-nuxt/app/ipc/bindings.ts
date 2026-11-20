@@ -144,14 +144,21 @@ export const commands = {
 	cloudJoin: (mode: JoinMode) => __TAURI_INVOKE<void>("cloud_join", { mode }),
 	/**  Brings back a profile of the cloud that was deleted on this computer only. */
 	cloudBringBack: (profile: string) => typedError<null, IpcError>(__TAURI_INVOKE("cloud_bring_back", { profile })),
+	mcpStatus: () => typedError<McpStatus, null>(__TAURI_INVOKE("mcp_status")),
+	setMcpEnabled: (enabled: boolean) => typedError<McpStatus, null>(__TAURI_INVOKE("set_mcp_enabled", { enabled })),
+	/**  Assistants given the old token are let in no more. */
+	regenerateMcpToken: () => typedError<McpStatus, null>(__TAURI_INVOKE("regenerate_mcp_token")),
 };
 
 /** Events */
 export const events = {
+	assistantEdited: makeEvent<AssistantEdited, AssistantEdited>("assistant-edited"),
 	cloudChanged: makeEvent<CloudChanged, CloudChanged>("cloud-changed"),
 	historyShortcut: makeEvent<HistoryShortcut, HistoryShortcut>("history-shortcut"),
 	keyChanged: makeEvent<KeyChanged, KeyChanged>("key-changed"),
 	keyImageChanged: makeEvent<KeyImageChanged, KeyImageChanged>("key-image-changed"),
+	mcpChanged: makeEvent<McpChanged, McpChanged>("mcp-changed"),
+	pluginRecommended: makeEvent<PluginRecommended, PluginRecommended>("plugin-recommended"),
 	pluginToast: makeEvent<PluginToast, PluginToast>("plugin-toast"),
 	stateChanged: makeEvent<StateChanged, StateChanged>("state-changed"),
 	updateOffered: makeEvent<UpdateOffered, UpdateOffered>("update-offered"),
@@ -233,6 +240,12 @@ export type AppRef = {
 export type Appearance = {
 	background: Background,
 	layers: LayerConfig[],
+};
+
+/**  An assistant changed the configuration through the MCP server. */
+export type AssistantEdited = {
+	/**  Undo takes the change back. */
+	undoable: boolean,
 };
 
 export type Background = { type: "solid"; color: Color } | 
@@ -726,6 +739,25 @@ export type LockAction =
 /**  Turns the screen dark. */
 "off";
 
+/**  How the MCP server is doing, after any change or a while after an assistant called it. */
+export type McpChanged = McpStatus;
+
+/**  How the MCP server is doing, for the window. */
+export type McpStatus = {
+	enabled: boolean,
+	running: boolean,
+	url: string,
+	/**  What assistants send to be let in; only while it is on. */
+	token: string | null,
+	/**  The app's own program, which connects assistants that only start commands. */
+	bridge: string,
+	/**  Why it is on but not running. */
+	error: string | null,
+	/**  The `User-Agent` of the last assistant that called. */
+	last_client: string | null,
+	last_used: string | null,
+};
+
 export type MediaKey = "play_pause" | "next" | "previous" | "volume_up" | "volume_down" | "mute" | "brightness_up" | "brightness_down";
 
 export type Metric = "cpu" | "ram" | "gpu" | 
@@ -898,6 +930,13 @@ export type PluginProtocol =
 "ulanzi" | 
 /**  Made for the Stream Deck or for Mirabox's Stream Dock. */
 "stream_deck";
+
+/**  An assistant suggests a plugin of a store, for the user to install. */
+export type PluginRecommended = {
+	/**  Its id in the store. */
+	id: string,
+	name: string,
+};
 
 export type PluginRuntime = "node" | "html" | "python" | 
 /**  A program of its own. */
@@ -1158,7 +1197,7 @@ icons?: { [key in string]: string }; style: WidgetStyle } |
 { kind: "hass_graph"; server?: string; entity: string; hours?: number; label?: string; style: WidgetStyle } | 
 /**  Several entities of Home Assistant side by side. */
 { kind: "hass_entities"; server?: string; 
-/**  One to four; square keys show the first two. */
+/**  One to three; square keys show the first two. */
 entities: HassItem[]; style: WidgetStyle } | 
 /**  What a camera sees, an image entity, what a media player plays or a person's picture. */
 { kind: "hass_picture"; server?: string; entity: string; 

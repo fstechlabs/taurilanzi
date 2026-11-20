@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { ChevronDown, CircleUserRound, Cloud, MonitorSmartphone, RefreshCw, Settings } from '@lucide/vue'
+import { ChevronDown, CircleUserRound, Cloud, MonitorSmartphone, RefreshCw, Settings, Sparkles } from '@lucide/vue'
 
 const { snapshot } = useEngine()
 const { t } = useI18n()
 const cloud = useCloud()
+const mcp = useMcp()
+const mcpOpen = ref(false)
+
+const mcpMark = computed(() => ({
+  off: { color: 'bg-neutral-500', text: t('shell.sidebar.mcpOff') },
+  starting: { color: 'bg-amber-400', text: t('mcp.status.starting') },
+  running: { color: 'bg-emerald-500', text: t('shell.sidebar.mcpRunning') },
+  error: { color: 'bg-red-500', text: mcp.status.value?.error ?? '' },
+})[mcp.state.value])
 
 /** Shown only when there is something to upload or download, and nothing stops it. */
 const canSync = computed(() => {
@@ -55,6 +64,18 @@ const mark = computed(() => {
     </ScrollArea>
 
     <nav class="flex flex-col gap-0.5 border-t border-neutral-800 p-2 text-sm">
+      <button
+        type="button"
+        class="flex items-center gap-2 rounded px-2 py-1.5 text-left text-muted-foreground hover:bg-neutral-800/60 hover:text-foreground"
+        :title="mcpMark.text"
+        data-sidebar-mcp
+        :data-mcp-state="mcp.state.value"
+        @click="mcpOpen = true"
+      >
+        <Sparkles class="size-4" />
+        <span class="flex-1">{{ t('shell.sidebar.mcp') }}</span>
+        <span class="mr-1 size-1.5 rounded-full" :class="mcpMark.color" role="img" :aria-label="mcpMark.text" />
+      </button>
       <div class="group flex items-center gap-1 rounded pr-1.5 text-muted-foreground hover:bg-neutral-800/60 hover:text-foreground">
         <NuxtLink
           :to="{ path: '/settings', query: { tab: 'cloud' } }"
@@ -102,5 +123,6 @@ const mark = computed(() => {
         {{ t('shell.sidebar.settings') }}
       </NuxtLink>
     </nav>
+    <McpDialog v-model:open="mcpOpen" />
   </aside>
 </template>

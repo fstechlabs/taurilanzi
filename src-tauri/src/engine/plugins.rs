@@ -9,14 +9,15 @@ use log::warn;
 use serde_json::{Value, json};
 use uuid::Uuid;
 
-use super::commands::KeySlot;
+use super::commands::{CommandError, KeySlot};
 use super::runtime::Engine;
 use super::snapshot::EngineEvent;
 use crate::config::{Action, Key, LayerConfig};
 use crate::driver::d200::KEY_SIZE;
 use crate::plugins::{
-    Instance, PluginHost, PluginInput, Protocol, Registry, StateManifest, VisualChange,
-    as_qt_draws, event, image_file, key_fields, key_name, settings_object, with_settings,
+    Instance, NO_CONNECTION, PluginHost, PluginInput, Protocol, Registry, StateManifest,
+    VisualChange, as_qt_draws, event, image_file, key_fields, key_name, settings_object,
+    with_settings,
 };
 use crate::render::{Color, DEFAULT_FAMILY, Fit, ImageData, Layer, Outline, VerticalPosition};
 
@@ -790,6 +791,65 @@ impl Engine {
         self.plugin_instance(actionid).map(|(_, settings)| settings)
     }
 
+    /// Settings written for a key from outside its inspector: saved and told to the plugin and
+    /// the inspector, as when the inspector saves them.
+    pub(super) fn set_plugin_settings(
+        &mut self,
+        placement: Uuid,
+        settings: Value,
+    ) -> Result<(), CommandError> {
+        let actionid = placement.to_string();
+        let Some((instance, _)) = self.plugin_instance(&actionid) else {
+            return Err(CommandError::UnknownPlacement(placement));
+        };
+        let settings = settings_object(&settings);
+        self.store_plugin_settings(&actionid, settings.clone());
+        self.flush_plugin_settings();
+        // A key off view tells its plugin nothing: it gets these settings as it appears.
+        if self.plugin_keys.visible.contains_key(&actionid)
+            && let Some(host) = self.plugin_keys.host()
+        {
+            let told = with_settings(
+                &event("didReceiveSettings", &instance, json!({})),
+                "didReceiveSettings",
+                settings,
+            );
+            host.to_instance_except(
+                NO_CONNECTION,
+                &host.plugin_id(&instance.action),
+                &actionid,
+                &told,
+            );
+        }
+        self.changed = true;
+        Ok(())
+    }
+
+    /// What a plugin shares between its keys, written from outside the plugin.
+    pub(super) fn set_global_plugin_settings(
+        &mut self,
+        plugin: String,
+        settings: Value,
+    ) -> Result<(), CommandError> {
+        let settings = settings_object(&settings);
+        if self.config.plugin_settings.get(&plugin) == Some(&settings) {
+            return Ok(());
+        }
+        self.config
+            .plugin_settings
+            .insert(plugin.clone(), settings.clone());
+        self.save()?;
+        if let Some(host) = self.plugin_keys.host() {
+            let told = with_settings(
+                &json!({ "uuid": plugin }),
+                "didReceiveGlobalSettings",
+                settings,
+            );
+            host.to_plugin(&plugin, &told);
+        }
+        Ok(())
+    }
+
     /// Settings belong to the plugin: saved as they come, outside undo.
     fn store_plugin_settings(&mut self, actionid: &str, settings: Value) {
         let mut found = false;
@@ -884,7 +944,7 @@ impl Engine {
     /// The settings of placements already saved win over those in an edit of the key, which
     /// may have been loaded before the plugin changed them.
     pub(super) fn keep_plugin_settings(&self, key: &mut Key) {
-        let current: HashMap<Uuid, Value> = self
+        let current: HashMap<Uuid, (String, Value)> = self
             .config
             .profiles
             .iter()
@@ -892,16 +952,34 @@ impl Engine {
             .flat_map(|page| page.keys.values())
             .flat_map(|key| &key.actions)
             .filter_map(|action| match action {
-                Action::Plugin { id, settings, .. } => Some((*id, settings.clone())),
+                Action::Plugin {
+                    id,
+                    action,
+                    settings,
+                    ..
+                } => Some((*id, (action.clone(), settings.clone()))),
                 _ => None,
             })
             .collect();
         for action in &mut key.actions {
-            if let Action::Plugin { id, settings, .. } = action {
-                if let Some(saved) = current.get(id) {
-                    *settings = saved.clone();
-                } else if let Some(early) = self.plugin_keys.pending.get(&id.to_string()) {
-                    *settings = early.clone();
+            if let Action::Plugin {
+                id,
+                action,
+                settings,
+                ..
+            } = action
+            {
+                match current.get(id) {
+                    Some((saved_action, saved)) if saved_action == action => {
+                        *settings = saved.clone();
+                    }
+                    // What one plugin saved, such as its accounts, never goes to another.
+                    Some(_) => *id = Uuid::new_v4(),
+                    None => {
+                        if let Some(early) = self.plugin_keys.pending.get(&id.to_string()) {
+                            *settings = early.clone();
+                        }
+                    }
                 }
             }
         }
@@ -1545,6 +1623,98 @@ mod tests {
     }
 
     #[test]
+    fn settings_written_from_outside_reach_the_plugin_and_its_inspector() {
+        let (x, z) = (Uuid::new_v4(), Uuid::new_v4());
+        let mut setup = setup(x, z);
+        let mut main = setup.main();
+        let (mut inspector, _) = setup.inspector(x);
+        setup.engine.sync_plugins();
+        drain(&mut main);
+        drain(&mut inspector);
+
+        let settings = json!({ "city": "Madrid" });
+        setup
+            .engine
+            .set_plugin_settings(x, settings.clone())
+            .unwrap();
+        let told = |messages: Vec<Value>| {
+            messages.iter().any(|m| {
+                m["cmd"] == "didReceiveSettings"
+                    && m["actionid"] == x.to_string()
+                    && m["settings"] == settings
+            })
+        };
+        assert!(told(drain(&mut main)), "the plugin hears of them");
+        assert!(told(drain(&mut inspector)), "and so does its inspector");
+        let reloaded = setup.engine.store.load().unwrap().unwrap();
+        assert!(
+            reloaded.profiles[0]
+                .pages
+                .iter()
+                .any(|page| page.keys.values().any(|key| {
+                    plugin_action(key).is_some_and(|(_, id, stored)| id == x && *stored == settings)
+                }))
+        );
+        setup
+            .engine
+            .set_plugin_settings(z, json!({ "off": "view" }))
+            .unwrap();
+        assert!(
+            drain(&mut main).is_empty(),
+            "a key off view is not told until it appears"
+        );
+        assert!(matches!(
+            setup.engine.set_plugin_settings(Uuid::new_v4(), json!({})),
+            Err(CommandError::UnknownPlacement(_))
+        ));
+
+        let shared = json!({ "account": "me" });
+        setup
+            .engine
+            .set_global_plugin_settings(PLUGIN.into(), shared.clone())
+            .unwrap();
+        assert!(
+            drain(&mut main)
+                .iter()
+                .any(|m| { m["cmd"] == "didReceiveGlobalSettings" && m["settings"] == shared })
+        );
+        assert_eq!(
+            setup.engine.store.load().unwrap().unwrap().plugin_settings[PLUGIN],
+            shared
+        );
+    }
+
+    #[test]
+    fn a_placement_of_another_plugin_never_gets_its_settings() {
+        let (x, z) = (Uuid::new_v4(), Uuid::new_v4());
+        let setup = setup(x, z);
+        let mut key = Key {
+            kind: None,
+            appearance: crate::config::Appearance {
+                background: crate::render::Background::Solid {
+                    color: Color::BLACK,
+                },
+                layers: Vec::new(),
+            },
+            actions: vec![Action::Plugin {
+                action: "com.other.plugin.action".into(),
+                id: x,
+                settings: json!({ "mine": true }),
+                resources: Value::Null,
+            }],
+            double_press: Vec::new(),
+            long_press: Vec::new(),
+            second_state: None,
+        };
+        setup.engine.keep_plugin_settings(&mut key);
+        let Some((_, id, settings)) = plugin_action(&key) else {
+            panic!("the plugin action")
+        };
+        assert_ne!(id, x, "it is a placement of its own");
+        assert_eq!(*settings, json!({ "mine": true }));
+    }
+
+    #[test]
     fn an_edit_keeps_the_settings_the_plugin_saved() {
         let (x, z) = (Uuid::new_v4(), Uuid::new_v4());
         let mut setup = setup(x, z);
@@ -1572,7 +1742,7 @@ mod tests {
         let (x, z) = (Uuid::new_v4(), Uuid::new_v4());
         let mut setup = setup(x, z);
         let home = setup.home;
-        let copy = setup.engine.duplicate_page(home).unwrap();
+        let copy = setup.engine.duplicate_page(home, None).unwrap();
         let (action, id, settings) = {
             let key = &setup.engine.config.profiles[0].page(copy).unwrap().keys[&7];
             let (action, id, settings) = plugin_action(key).unwrap();
@@ -1591,7 +1761,7 @@ mod tests {
         let original = setup.engine.config.profiles[0].id;
         let before = setup.engine.used_plugin_ids();
         assert_eq!(before, HashSet::from([x, z, id]));
-        let copied = setup.engine.duplicate_profile(original).unwrap();
+        let copied = setup.engine.duplicate_profile(original, None).unwrap();
         let profile = setup
             .engine
             .config

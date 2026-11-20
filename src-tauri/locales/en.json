@@ -355,5 +355,9 @@
       "offline": "Could not reach the cloud.",
       "failed": "Could not reach the cloud: {error}"
     }
+  },
+  "mcp": {
+    "portTaken": "Port {port} is taken by another program: close it, or restart the app.",
+    "failed": "The MCP server could not start: {error}"
   }
 }
