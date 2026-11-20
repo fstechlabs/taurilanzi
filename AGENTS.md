@@ -150,6 +150,9 @@ Commits, versions and releases:
   breaking change. Types: `feat`, `fix`, `perf`, `refactor`, `build`, `docs`, `test`, `ci`,
   `style`, `chore`, `revert`. `bun install` sets up a `commit-msg` hook that refuses anything else
   (`scripts/check-commits.ts`), and the `commits` job of the tests checks every push.
+- Commits and pull requests carry only their authors' identity: never an attribution to an AI
+  assistant (`Co-Authored-By: Claude …`, "Generated with Claude Code" or the like) in commit
+  messages, pull request descriptions, files or release notes.
 - The version is the moment of the build in UTC, `YEAR.MONTHDAY.HOURMINUTE` (`2026.1220.2008`;
   `2027.105.930` is 5 January at 09:30), set by `scripts/build-app.ts` (`scripts/release-version.ts`).
   `tauri.conf.json` and `Cargo.toml` keep `0.0.0`: never write a version there by hand.
