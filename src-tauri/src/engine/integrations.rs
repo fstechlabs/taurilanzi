@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use super::commands::{CommandError, Input};
 use super::runtime::Engine;
-use crate::config::{Action, Config, Integration};
+use crate::config::{Action, Config, Integration, rules};
 use crate::hass::{Hass, code_account, token_account};
 use crate::obs::{Obs, password_account};
 
@@ -60,6 +60,7 @@ impl Engine {
         if let Some(problem) = integration.problem() {
             return Err(CommandError::InvalidActions(problem));
         }
+        rules::check_integration(&integration)?;
         let id = integration.id();
         match self.config.integrations.iter_mut().find(|i| i.id() == id) {
             Some(existing) => {

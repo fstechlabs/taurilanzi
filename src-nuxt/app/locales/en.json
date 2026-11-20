@@ -1579,7 +1579,10 @@
       "sync": "Sync",
       "syncOutgoing": "This computer has changes not in the cloud yet",
       "syncIncoming": "Other computers have changes in the cloud",
-      "accountConnected": "This computer is connected to the cloud"
+      "accountConnected": "This computer is connected to the cloud",
+      "mcp": "AI · MCP",
+      "mcpOff": "Connect an AI assistant to configure the dock by talking to it",
+      "mcpRunning": "AI assistants can connect"
     },
     "statusBar": {
       "starting": "Starting…",
@@ -1981,5 +1984,75 @@
     "mergeHint": "Keep both: this computer's profiles go up and the cloud's come here. Every computer sees all of them.",
     "replace": "Use only the cloud's",
     "replaceHint": "Use only the cloud's: this computer's profiles are deleted and the cloud's stay."
+  },
+  "mcp": {
+    "title": "AI assistants (MCP)",
+    "description": "Connect an AI assistant (Claude, Cursor, VS Code, Codex…) and configure the dock by talking to it: profiles, pages, keys and actions.",
+    "enable": "Let AI assistants configure the dock",
+    "status": {
+      "running": "Running at {url}",
+      "starting": "Starting…",
+      "off": "Off. No assistant can connect.",
+      "lastUsed": "Last used by {client} {when}",
+      "bridgeClient": "an assistant through the bridge",
+      "someClient": "an assistant"
+    },
+    "about": {
+      "local": "It runs only on this computer: nothing goes through the cloud.",
+      "off": "It stays off until you turn it on here, and you can turn it off at any time.",
+      "rules": "Every change follows the same rules as the editor, and a single Undo takes back each batch of the assistant's changes.",
+      "secrets": "The assistant never sees passwords or tokens: you type those in the app yourself.",
+      "plugins": "It cannot install plugins, only recommend them: the store opens on the plugin and you decide."
+    },
+    "token": {
+      "label": "Access token",
+      "show": "Show the token",
+      "hide": "Hide the token",
+      "regenerate": "Regenerate",
+      "hint": "Assistants send it to get in. Keep it to yourself: whoever has it can change your configuration.",
+      "confirmTitle": "Regenerate the token?",
+      "confirmBody": "The current token stops working at once. Assistants you already set up cannot connect until you give them the new one.",
+      "cancel": "Cancel",
+      "confirm": "Regenerate"
+    },
+    "copy": "Copy",
+    "copyFailed": "Could not copy: {reason}",
+    "close": "Close",
+    "setup": {
+      "title": "Connect an assistant",
+      "other": "Other",
+      "hints": {
+        "claude-code": "Run this command in a terminal. It is then available in all your projects.",
+        "claude-desktop": "In Claude Desktop, open Settings → Developer → Edit Config and add this to claude_desktop_config.json (if it already has other servers, add this entry inside mcpServers). Then restart Claude Desktop. It only starts programs, so it connects through the app's bridge.",
+        "cursor": "Add it to ~/.cursor/mcp.json (or to a project's .cursor/mcp.json). If it already has other servers, add this entry inside mcpServers.",
+        "vscode": "In VS Code, run “MCP: Open User Configuration” from the command palette and add this to mcp.json (inside servers if there are others).",
+        "codex": "Add this to ~/.codex/config.toml. Codex reads the token from the {variable} environment variable.",
+        "gemini": "Run this command in a terminal. It is then available in all your projects.",
+        "other": "Any assistant that speaks MCP over HTTP (Streamable HTTP) connects with this address and this header. Those that only start programs (stdio) use the app's bridge."
+      },
+      "blocks": {
+        "command": "Command",
+        "config": "Configuration",
+        "url": "Address (Streamable HTTP)",
+        "header": "Header",
+        "bridge": "Bridge for those that only start programs (stdio), with the token in the {variable} environment variable",
+        "variable": {
+          "unix": "The token, in the environment variable (add it to your ~/.zshrc or ~/.bashrc to keep it)",
+          "windows": "The token, in the environment variable (only terminals opened afterwards see it)"
+        }
+      }
+    },
+    "examples": {
+      "title": "Try asking:",
+      "streaming": "Make me a streaming profile with my OBS scenes on the top row",
+      "meetings": "Add a meetings page with keys to mute the mic, turn off the camera and leave the call",
+      "tidy": "Give every key a fitting icon and color them by what they do"
+    },
+    "notice": {
+      "title": "AI assistant",
+      "edited": "The AI changed your configuration",
+      "undo": "Undo"
+    },
+    "recommended": "Your AI assistant recommends {name}."
   }
 }

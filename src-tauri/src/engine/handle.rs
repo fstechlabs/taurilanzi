@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, oneshot};
 use uuid::Uuid;
 
-use super::commands::{Command, CommandError, Input, KeySlot, PageChanges, Reply};
+use super::commands::{Change, Command, CommandError, Input, KeySlot, PageChanges, Reply};
 use super::gestures::Gesture;
 use super::snapshot::{EngineEvent, Snapshot};
 use crate::clients::Clients;
@@ -296,6 +296,42 @@ impl EngineHandle {
 
     pub fn apply_sync_blocking(&self, changes: SyncChanges) -> Result<SyncExport, CommandError> {
         self.ask_blocking(|reply| Command::ApplySync { changes, reply })?
+    }
+
+    /// The whole configuration, every profile included.
+    pub async fn config(&self) -> Result<crate::config::Config, CommandError> {
+        self.ask(Command::Config).await.map(|config| *config)
+    }
+
+    /// Applies every change or none, as one step of undo; answers whether anything changed.
+    pub async fn apply(&self, changes: Vec<Change>) -> Result<bool, CommandError> {
+        self.ask(|reply| Command::Apply { changes, reply }).await?
+    }
+
+    pub async fn set_plugin_settings(
+        &self,
+        placement: Uuid,
+        settings: serde_json::Value,
+    ) -> Result<(), CommandError> {
+        self.ask(|reply| Command::SetPluginSettings {
+            placement,
+            settings,
+            reply,
+        })
+        .await?
+    }
+
+    pub async fn set_global_plugin_settings(
+        &self,
+        plugin: String,
+        settings: serde_json::Value,
+    ) -> Result<(), CommandError> {
+        self.ask(|reply| Command::SetGlobalPluginSettings {
+            plugin,
+            settings,
+            reply,
+        })
+        .await?
     }
 
     fn ask_blocking<T>(

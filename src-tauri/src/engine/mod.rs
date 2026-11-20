@@ -1,6 +1,7 @@
 mod actions;
 mod app_profiles;
 mod appearance;
+mod batch;
 mod commands;
 mod display;
 mod editing;
@@ -29,7 +30,7 @@ mod snapshot;
 mod sync;
 mod widgets;
 
-pub use commands::{CommandError, KeySlot, PageChanges};
+pub use commands::{Change, CommandError, KeySlot, PageChanges};
 pub use gestures::Gesture;
 pub use handle::EngineHandle;
 pub use launch::{Launch, LaunchError, PluginsLaunch, start};

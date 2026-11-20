@@ -12,6 +12,7 @@ mod status;
 mod stream;
 mod watch;
 
+pub use address::Address;
 pub use catalog::HassCatalog;
 pub use connection::{Hass, code_account, token_account};
 pub use domains::is_on;

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { APP_BINARY } from './build'
-import { CLOUD_PORT, STORE_PORT, shot } from './helpers'
+import { CLOUD_PORT, MCP_PORT, STORE_PORT, shot } from './helpers'
 
 // The launcher and each worker load this file; they share the folder through the environment.
 const data = (process.env.TAURILANZI_E2E_DATA ??= mkdtempSync(join(tmpdir(), 'taurilanzi-e2e-')))
@@ -21,6 +21,7 @@ const appOptions = {
     TAURILANZI_GITHUB: `http://127.0.0.1:${STORE_PORT}/github`,
     TAURILANZI_ELGATO_ARCHIVE: `http://127.0.0.1:${STORE_PORT}/archive/catalogue.json`,
     TAURILANZI_CLOUD: `http://127.0.0.1:${CLOUD_PORT}`,
+    TAURILANZI_MCP_PORT: String(MCP_PORT),
     // Set it to see the messages of every plugin in its trace log.
     TAURILANZI_PLUGIN_TRACE: process.env.TAURILANZI_PLUGIN_TRACE ?? "",
   },

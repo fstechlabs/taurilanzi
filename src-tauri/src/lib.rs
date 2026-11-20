@@ -13,6 +13,7 @@ mod foreground;
 mod hass;
 mod ipc;
 mod login;
+mod mcp;
 mod monitor;
 mod obs;
 mod os;
@@ -34,6 +35,12 @@ use tauri::{Manager, RunEvent, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Started by an assistant to reach the running app, not as the app itself.
+    let mut args = std::env::args().skip_while(|arg| arg != mcp::BRIDGE_ARG);
+    if args.next().is_some() {
+        mcp::run_bridge(&args.next().unwrap_or_default());
+        return;
+    }
     let background = std::env::args().any(|arg| arg == BACKGROUND_ARG);
     let bindings = ipc::builder();
     let mut builder = tauri::Builder::default();

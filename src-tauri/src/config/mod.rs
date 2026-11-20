@@ -10,6 +10,7 @@ mod model;
 mod navigation;
 mod obs;
 mod preferences;
+pub mod rules;
 mod store;
 mod widgets;
 

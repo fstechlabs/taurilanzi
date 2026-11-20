@@ -7,12 +7,17 @@ import type { Connection, Edge, Node, NodeDragEvent } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
+import { events } from '~/ipc/bindings'
 import { REDO_SHORTCUT, UNDO_SHORTCUT } from '~/lib/actions/keys'
 import type { PageNodeData } from '~/types/canvas'
 
 const FLOW = 'mesa'
 const CARD = { width: 320, height: 240 }
 const GAP = 80
+/** How recent pages must be to count as the assistant's when it says it edited. */
+const ASSISTANT_PAGES_MS = 2000
+/** Time for new pages to be measured before fitting the view to them. */
+const MEASURE_MS = 100
 
 const { snapshot, refresh } = useEngine()
 const { pages, current, focusRequest, selectedLink, clear } = useWorkspace()
@@ -123,6 +128,25 @@ function initialized() {
     fitView({ padding: 0.2, duration: 300 })
   }
 }
+
+/** Pages an assistant adds appear wherever it put them, maybe off view: the canvas shows them. */
+let added: { ids: string[], at: number } | null = null
+watch(() => pages.value.map(page => page.id), (now, before) => {
+  const fresh = before ? now.filter(id => !before.includes(id)) : []
+  if (fresh.length) {
+    added = { ids: fresh, at: Date.now() }
+  }
+})
+let stopListening: (() => void) | undefined
+onMounted(async () => {
+  stopListening = await events.assistantEdited.listen(() => {
+    if (added && Date.now() - added.at < ASSISTANT_PAGES_MS) {
+      added = null
+      setTimeout(() => fitView({ padding: 0.2, duration: 300 }), MEASURE_MS)
+    }
+  })
+})
+onBeforeUnmount(() => stopListening?.())
 
 function startRename(id: string) {
   renaming.value = { id, name: actions.page(id)?.name ?? '' }

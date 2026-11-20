@@ -28,6 +28,10 @@ const runs = chosen
 const failed: string[] = []
 for (const runArgs of runs) {
   const { TAURILANZI_E2E_DATA: _, ...env } = process.env
+  // The README shows the port assistants reach the released app on.
+  if (releaseName) {
+    env.TAURILANZI_E2E_MCP_PORT = '3917'
+  }
   const run = await $`bun x wdio run wdio.conf.ts ${runArgs}`.cwd(import.meta.dir).env(env).nothrow()
   if (run.exitCode !== 0) {
     failed.push(chosen ? 'the chosen specs' : runArgs[1]!)

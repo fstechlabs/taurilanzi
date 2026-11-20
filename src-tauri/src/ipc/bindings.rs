@@ -2,7 +2,7 @@ use tauri::Wry;
 use tauri::ipc::Invoke;
 
 use super::{
-    assets, cloud, commands, events, hass, http, integrations, obs, plugins, profiles, system,
+    assets, cloud, commands, events, hass, http, integrations, mcp, obs, plugins, profiles, system,
     updates,
 };
 
@@ -77,6 +77,9 @@ pub fn builder() -> tauri_specta::Builder<Wry> {
             cloud::cloud_set_paused,
             cloud::cloud_join,
             cloud::cloud_bring_back,
+            mcp::mcp_status,
+            mcp::set_mcp_enabled,
+            mcp::regenerate_mcp_token,
         ])
         .events(tauri_specta::collect_events![
             events::StateChanged,
@@ -85,7 +88,10 @@ pub fn builder() -> tauri_specta::Builder<Wry> {
             events::PluginToast,
             events::HistoryShortcut,
             events::UpdateOffered,
-            events::CloudChanged
+            events::CloudChanged,
+            events::McpChanged,
+            events::AssistantEdited,
+            events::PluginRecommended
         ])
 }
 

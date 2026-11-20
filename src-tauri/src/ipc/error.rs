@@ -31,19 +31,24 @@ impl IpcError {
 
 impl From<CommandError> for IpcError {
     fn from(err: CommandError) -> Self {
-        let kind = match err {
-            CommandError::InvalidKey(_)
-            | CommandError::UnknownProfile(_)
-            | CommandError::UnknownPage(_) => ErrorKind::NotFound,
-            CommandError::NoActiveProfile | CommandError::DeleteHome => ErrorKind::Conflict,
-            CommandError::LastProfile | CommandError::AppAlreadyLinked { .. } => {
-                ErrorKind::Conflict
-            }
-            CommandError::UnknownApp => ErrorKind::Invalid,
-            CommandError::InvalidActions(_) => ErrorKind::Invalid,
-            CommandError::EngineStopped => ErrorKind::Unavailable,
-            CommandError::Save(_) | CommandError::Render(_) => ErrorKind::Failed,
-        };
-        Self::new(kind, err.to_string())
+        Self::new(kind_of(&err), err.to_string())
+    }
+}
+
+fn kind_of(err: &CommandError) -> ErrorKind {
+    match err {
+        CommandError::InvalidKey(_)
+        | CommandError::UnknownProfile(_)
+        | CommandError::UnknownPage(_)
+        | CommandError::UnknownPlacement(_) => ErrorKind::NotFound,
+        CommandError::NoActiveProfile | CommandError::DeleteHome => ErrorKind::Conflict,
+        CommandError::LastProfile
+        | CommandError::AppAlreadyLinked { .. }
+        | CommandError::IdTaken(_) => ErrorKind::Conflict,
+        CommandError::UnknownApp => ErrorKind::Invalid,
+        CommandError::InvalidActions(_) | CommandError::Invalid(_) => ErrorKind::Invalid,
+        CommandError::EngineStopped => ErrorKind::Unavailable,
+        CommandError::Save(_) | CommandError::Render(_) => ErrorKind::Failed,
+        CommandError::Change { error, .. } => kind_of(error),
     }
 }

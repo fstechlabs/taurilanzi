@@ -197,6 +197,17 @@ describe('screenshots for the README', () => {
     await browser.keys('Escape')
   })
 
+  it('connecting an AI assistant', async () => {
+    await clickOn($('[data-sidebar-mcp]'))
+    await $('[data-mcp-dialog]').waitForDisplayed()
+    await clickOn($('[data-mcp-switch]'))
+    await browser.waitUntil(async () => (await $('[data-mcp-status]').getAttribute('data-mcp-state')) === 'running')
+    await $('[data-mcp-snippet]').waitForDisplayed()
+    await save('mcp')
+    await browser.keys('Escape')
+    await $('[data-mcp-dialog]').waitForExist({ reverse: true })
+  })
+
   it('the settings', async () => {
     await $('a[href="/settings"]').click()
     await expect($('h1=Settings')).toBeDisplayed()

@@ -14,9 +14,23 @@ const MAX_NAME: usize = 60;
 
 impl Engine {
     /// A new profile has one empty page, its home.
-    pub(super) fn create_profile(&mut self, name: Option<String>) -> Result<Uuid, CommandError> {
+    pub(super) fn create_profile(
+        &mut self,
+        ids: NewProfile,
+        name: Option<String>,
+    ) -> Result<Uuid, CommandError> {
+        for taken in [ids.id, ids.home].into_iter().flatten() {
+            if self.config.id_taken(taken) {
+                return Err(CommandError::IdTaken(taken));
+            }
+        }
+        if let (Some(id), Some(home)) = (ids.id, ids.home)
+            && id == home
+        {
+            return Err(CommandError::IdTaken(id));
+        }
         let page = Page {
-            id: Uuid::new_v4(),
+            id: ids.home.unwrap_or_else(Uuid::new_v4),
             name: tr!("profiles.homePage").into(),
             keys: BTreeMap::new(),
             position: Position::default(),
@@ -26,7 +40,7 @@ impl Engine {
             .filter(|n| !n.is_empty())
             .unwrap_or_else(|| self.free_profile_name());
         let profile = Profile {
-            id: Uuid::new_v4(),
+            id: ids.id.unwrap_or_else(Uuid::new_v4),
             name,
             home_page: page.id,
             pages: vec![page],
@@ -50,10 +64,17 @@ impl Engine {
 
     /// The copy gets pages of its own, with the lines between them, right after the original.
     /// Apps stay with the original, since an app belongs to one profile.
-    pub(super) fn duplicate_profile(&mut self, id: Uuid) -> Result<Uuid, CommandError> {
+    pub(super) fn duplicate_profile(
+        &mut self,
+        id: Uuid,
+        copy_id: Option<Uuid>,
+    ) -> Result<Uuid, CommandError> {
+        if let Some(taken) = copy_id.filter(|&c| self.config.id_taken(c)) {
+            return Err(CommandError::IdTaken(taken));
+        }
         let at = self.profile_index(id)?;
         let mut copy = self.config.profiles[at].clone();
-        copy.id = Uuid::new_v4();
+        copy.id = copy_id.unwrap_or_else(Uuid::new_v4);
         copy.name = clean_name(&trf!("profiles.copy", name = copy.name));
         copy.apps.clear();
         Self::renew_plugin_ids(copy.pages.iter_mut().flat_map(|p| p.keys.values_mut()));
@@ -260,6 +281,13 @@ impl Engine {
     }
 }
 
+/// The ids a new profile and its home page get; new ones by default.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NewProfile {
+    pub id: Option<Uuid>,
+    pub home: Option<Uuid>,
+}
+
 /// Every list of actions of a key, on press, on its gestures and in its second state.
 fn actions_mut(key: &mut Key) -> impl Iterator<Item = &mut Action> {
     key.actions
@@ -407,7 +435,7 @@ mod tests {
     fn a_new_profile_has_one_empty_home_page() {
         let mut setup = engine(vec![profile("Perfil 1")]);
         let engine = &mut setup.engine;
-        let id = engine.create_profile(None).unwrap();
+        let id = engine.create_profile(NewProfile::default(), None).unwrap();
         let created = find(engine, id);
         assert_eq!(created.name, "Perfil 2");
         assert!(created.apps.is_empty());
@@ -417,9 +445,13 @@ mod tests {
         assert_eq!(home.name, "Inicio");
         assert_eq!(created.home_page, home.id);
         assert!(home.keys.is_empty());
-        let named = engine.create_profile(Some("  Trabajo ".into())).unwrap();
+        let named = engine
+            .create_profile(NewProfile::default(), Some("  Trabajo ".into()))
+            .unwrap();
         assert_eq!(find(engine, named).name, "Trabajo");
-        let blank = engine.create_profile(Some("   ".into())).unwrap();
+        let blank = engine
+            .create_profile(NewProfile::default(), Some("   ".into()))
+            .unwrap();
         assert_eq!(find(engine, blank).name, "Perfil 4");
     }
 
@@ -448,7 +480,7 @@ mod tests {
         let mut setup = engine(vec![original.clone(), other]);
         let engine = &mut setup.engine;
 
-        let copy_id = engine.duplicate_profile(id).unwrap();
+        let copy_id = engine.duplicate_profile(id, None).unwrap();
         assert_eq!(ids(engine), [id, copy_id, other_id]);
         assert_eq!(find(engine, id), &original);
         let copy = find(engine, copy_id);

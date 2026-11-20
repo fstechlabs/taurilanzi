@@ -573,7 +573,7 @@ mod tests {
         assert!(export.profiles.iter().all(|p| p.id != b_id));
         assert!(!export.settings.profile_order.contains(&b_id));
 
-        let copy = engine.duplicate_profile(b_id).unwrap();
+        let copy = engine.duplicate_profile(b_id, None).unwrap();
         assert!(
             engine.sync_export().local.contains(&copy),
             "a copy of a local profile is local too"

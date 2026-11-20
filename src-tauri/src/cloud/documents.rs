@@ -21,7 +21,7 @@ pub const SETTINGS_ID: Uuid = Uuid::nil();
 pub const TOKEN_ACCOUNT: &str = "cloud:token";
 
 pub fn is_synced_account(account: &str) -> bool {
-    account != TOKEN_ACCOUNT
+    account != TOKEN_ACCOUNT && account != crate::mcp::TOKEN_ACCOUNT
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -318,6 +318,7 @@ mod tests {
             serde_json::from_value(docs[&SETTINGS_ID].content.clone()).unwrap();
         assert_eq!(settings.secrets, secrets);
         assert!(!is_synced_account(TOKEN_ACCOUNT));
+        assert!(!is_synced_account(crate::mcp::TOKEN_ACCOUNT));
         assert!(is_synced_account("obs:x"));
     }
 

@@ -25,6 +25,9 @@ use crate::render::ImageData;
 
 pub type ConnId = u64;
 
+/// Stands for the host itself where a message excludes the connection that sent it.
+pub const NO_CONNECTION: ConnId = ConnId::MAX;
+
 /// Writes every message between the host and each plugin to `<plugin>.trace.log`, to see what
 /// a plugin that misbehaves says and hears.
 pub const TRACE_ENV: &str = "TAURILANZI_PLUGIN_TRACE";
@@ -402,6 +405,11 @@ impl PluginHost {
 
     pub fn to_conn(&self, conn: ConnId, message: &Value) {
         self.hub().send(conn, message.clone());
+    }
+
+    /// Sends to every connection of a plugin: its main service and its inspectors.
+    pub fn to_plugin(&self, plugin: &str, message: &Value) {
+        self.hub().to_plugin_except(plugin, NO_CONNECTION, message);
     }
 
     /// Main services connected now, so the UI can tell which plugins run.

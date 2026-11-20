@@ -72,6 +72,14 @@ impl AssetStore {
         parse_id(id).is_some() && self.dir.join(id).exists()
     }
 
+    pub fn has_image(&self, id: &str) -> bool {
+        matches!(parse_id(id), Some(Kind::Image(_))) && self.dir.join(id).exists()
+    }
+
+    pub fn has_sound(&self, id: &str) -> bool {
+        matches!(parse_id(id), Some(Kind::Sound)) && self.dir.join(id).exists()
+    }
+
     /// The stored bytes of an image or a sound, as they were uploaded.
     pub fn bytes(&self, id: &str) -> io::Result<Vec<u8>> {
         match parse_id(id) {

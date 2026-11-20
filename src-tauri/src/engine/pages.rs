@@ -1,4 +1,4 @@
-//! Pages of the active profile as the canvas edits them.
+//! Pages as the canvas edits them, in the active profile or, for the assistant, in any other.
 
 use std::collections::BTreeMap;
 
@@ -17,13 +17,25 @@ impl Engine {
     /// New pages come with a back key, so there is always a way out of them.
     pub(super) fn create_page(
         &mut self,
+        new: NewPage,
         name: Option<String>,
         position: Position,
     ) -> Result<Uuid, CommandError> {
+        if let Some(taken) = new.id.filter(|&id| self.config.id_taken(id)) {
+            return Err(CommandError::IdTaken(taken));
+        }
         let back = back_key(&self.store.assets, &self.config.preferences.new_keys)?;
-        let profile = self.profile_mut()?;
+        let profile = match new.profile {
+            Some(id) => self
+                .config
+                .profiles
+                .iter_mut()
+                .find(|p| p.id == id)
+                .ok_or(CommandError::UnknownProfile(id))?,
+            None => self.profile_mut()?,
+        };
         let page = Page {
-            id: Uuid::new_v4(),
+            id: new.id.unwrap_or_else(Uuid::new_v4),
             name: name
                 .map(|n| clean_name(&n))
                 .filter(|n| !n.is_empty())
@@ -43,7 +55,7 @@ impl Engine {
         changes: PageChanges,
     ) -> Result<(), CommandError> {
         let page = self
-            .profile_mut()?
+            .owner_mut(id)?
             .page_mut(id)
             .ok_or(CommandError::UnknownPage(id))?;
         if let Some(name) = changes
@@ -60,11 +72,18 @@ impl Engine {
     }
 
     /// The copy keeps the keys and their lines, and sits a little below and to the right.
-    pub(super) fn duplicate_page(&mut self, id: Uuid) -> Result<Uuid, CommandError> {
-        let profile = self.profile_mut()?;
+    pub(super) fn duplicate_page(
+        &mut self,
+        id: Uuid,
+        copy_id: Option<Uuid>,
+    ) -> Result<Uuid, CommandError> {
+        if let Some(taken) = copy_id.filter(|&c| self.config.id_taken(c)) {
+            return Err(CommandError::IdTaken(taken));
+        }
+        let profile = self.owner_mut(id)?;
         let original = profile.page(id).ok_or(CommandError::UnknownPage(id))?;
         let mut copy = Page {
-            id: Uuid::new_v4(),
+            id: copy_id.unwrap_or_else(Uuid::new_v4),
             name: clean_name(&trf!("pages.copy", name = original.name)),
             keys: original.keys.clone(),
             position: Position {
@@ -81,8 +100,10 @@ impl Engine {
 
     /// Lines into the page go with it: keys that led there stop navigating.
     pub(super) fn delete_page(&mut self, id: Uuid) -> Result<(), CommandError> {
-        let on_screen = self.navigation.current(self.profile()?) == id;
-        let profile = self.profile_mut()?;
+        let owner = self.owner(id)?;
+        let on_screen =
+            owner.id == self.config.active_profile && self.navigation.current(owner) == id;
+        let profile = self.owner_mut(id)?;
         if profile.home_page == id {
             return Err(CommandError::DeleteHome);
         }
@@ -105,11 +126,7 @@ impl Engine {
     }
 
     pub(super) fn set_home_page(&mut self, id: Uuid) -> Result<(), CommandError> {
-        let profile = self.profile_mut()?;
-        if profile.page(id).is_none() {
-            return Err(CommandError::UnknownPage(id));
-        }
-        profile.home_page = id;
+        self.owner_mut(id)?.home_page = id;
         self.save()
     }
 
@@ -120,12 +137,12 @@ impl Engine {
         if from == to {
             return Ok(());
         }
-        let profile = self.profile_mut()?;
-        for page in [from.page, to.page] {
-            if profile.page(page).is_none() {
-                return Err(CommandError::UnknownPage(page));
-            }
+        let active = self.config.active_profile;
+        let profile = self.owner_mut(from.page)?;
+        if profile.page(to.page).is_none() {
+            return Err(CommandError::UnknownPage(to.page));
         }
+        let on_dock = profile.id == active;
         let Some(mut moving) = profile
             .page_mut(from.page)
             .and_then(|p| p.keys.remove(&from.index))
@@ -147,7 +164,7 @@ impl Engine {
         }
         self.save()?;
         let on_screen = self.navigation.current(self.profile()?);
-        if on_screen == from.page || on_screen == to.page {
+        if on_dock && (on_screen == from.page || on_screen == to.page) {
             self.show_current_page();
         }
         Ok(())
@@ -160,6 +177,13 @@ impl Engine {
         self.navigate(|nav, profile| nav.open(profile, id));
         Ok(())
     }
+}
+
+/// Where a new page goes and the id it gets; by default, the active profile and a new id.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NewPage {
+    pub profile: Option<Uuid>,
+    pub id: Option<Uuid>,
 }
 
 /// A key moved onto the page it leads to would lead nowhere.

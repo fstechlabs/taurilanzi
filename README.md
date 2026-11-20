@@ -17,7 +17,7 @@
 
 Design your keys, wire up pages on a canvas, put live information on the wide key and keep using the
 plugins made for Ulanzi Studio and for Mirabox's Stream Dock, all from a native app that lives in
-your menu bar or system tray.
+your menu bar or system tray. Or tell your AI assistant what you want and let it build it.
 
 **[taurilanzi.com](https://taurilanzi.com)**
 
@@ -98,6 +98,22 @@ A carousel puts several of them on one key, the next one on each press.
   install them from a file or a folder.
 - Plugins run on a Node and a Python bundled with the app: nothing else to install.
 
+### Configure it by talking to an AI (MCP)
+- Ask the AI assistant you already use (Claude Code, Codex, Gemini CLI, Claude Desktop, Cursor,
+  VS Code or any other MCP client) to set up the dock for you: profiles, pages and their links, every key with
+  its look, text, icons, images, widgets, actions, gestures and two states, the settings, OBS and
+  Home Assistant controls, sounds and the keys of your installed plugins, their settings included.
+- The MCP server runs inside the app, on your computer only (`127.0.0.1`), and is off until you
+  turn it on. It needs no account and has nothing to do with Taurilanzi Cloud: nothing goes
+  through our servers. The conversation goes to whichever AI you use, as usual.
+- Every change follows the same rules as the editor, so the AI cannot build an impossible
+  configuration. The window updates while it works, whatever it does in one go is undone with a
+  single Undo, and it can render a key or a whole page to see the result.
+- It does not install plugins: it searches the stores and recommends one, the app opens the store
+  on it and you click Install. Passwords and tokens, such as those of OBS and Home Assistant, are
+  never readable or writable through MCP: you enter them in the app. Secret fields of plugin
+  settings and HTTP headers are hidden from the AI.
+
 ### In your language
 - Spanish and English, following your system's language, or the one you pick in the settings. Even
   the texts drawn on the keys (dates, the clock in words, the moon phases) change with it.
@@ -143,6 +159,16 @@ cd src-tauri && cargo test         # engine tests
 bun run e2e                        # end-to-end tests against the real app
 ```
 
+### Connect an AI assistant
+
+Click **AI · MCP** in the sidebar, right above Account, and turn the server on. The dialog shows
+the exact command to run, or the snippet to paste, for Claude Code, Codex, Gemini CLI, Claude
+Desktop, Cursor, VS Code and other MCP clients, with the access token the app generates (you can
+make a new one at any time). Then ask for what you want, for example: *"Make me a streaming
+profile with OBS scenes on the first row"*.
+
+<img src="docs/screenshots/mcp.png" alt="The AI · MCP dialog: the server on, and the command that connects Claude Code" width="900">
+
 ## How it works
 
 ```
@@ -161,6 +187,8 @@ bun run e2e                        # end-to-end tests against the real app
 - **Driver**: speaks the D200's HID protocol directly, with no vendor library.
 - **Plugin host**: speaks the plugin protocols of Ulanzi Studio and of the Stream Deck, which the
   Stream Dock shares, serves the plugins' pages and runs them on the bundled Node and Python.
+- **MCP server**: off by default; once turned on, it listens on `127.0.0.1` for AI assistants and
+  applies their changes through the engine, with the same rules as the editor.
 
 ## Contributing
 

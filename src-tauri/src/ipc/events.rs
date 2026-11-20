@@ -34,6 +34,25 @@ pub struct UpdateOffered(pub Option<UpdateOffer>);
 #[derive(Debug, Clone, Serialize, specta::Type, tauri_specta::Event)]
 pub struct CloudChanged(pub CloudStatus);
 
+/// How the MCP server is doing, after any change or a while after an assistant called it.
+#[derive(Debug, Clone, Serialize, specta::Type, tauri_specta::Event)]
+pub struct McpChanged(pub crate::mcp::McpStatus);
+
+/// An assistant changed the configuration through the MCP server.
+#[derive(Debug, Clone, Serialize, specta::Type, tauri_specta::Event)]
+pub struct AssistantEdited {
+    /// Undo takes the change back.
+    pub undoable: bool,
+}
+
+/// An assistant suggests a plugin of a store, for the user to install.
+#[derive(Debug, Clone, Serialize, specta::Type, tauri_specta::Event)]
+pub struct PluginRecommended {
+    /// Its id in the store.
+    pub id: String,
+    pub name: String,
+}
+
 /// A plugin redrew a key: its image is to be loaded again.
 #[derive(Debug, Clone, Serialize, specta::Type, tauri_specta::Event)]
 pub struct KeyImageChanged {

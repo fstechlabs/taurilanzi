@@ -69,4 +69,7 @@ permissions = [
   "allow-cloud-set-paused",
   "allow-cloud-join",
   "allow-cloud-bring-back",
+  "allow-mcp-status",
+  "allow-set-mcp-enabled",
+  "allow-regenerate-mcp-token",
 ]

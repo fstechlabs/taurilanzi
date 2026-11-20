@@ -9,7 +9,7 @@ use super::commands::{CommandError, Input, KeySlot};
 use super::gestures::Gesture;
 use super::runtime::Engine;
 use crate::actions;
-use crate::config::{Action, Config, Integration, Key, Profile};
+use crate::config::{Action, AssetStore, Config, Integration, Key, Profile, rules};
 use crate::plugins::{Instance, event, key_fields, key_name, settings_object};
 
 const MAX_DELAY_MS: u32 = 60_000;
@@ -127,12 +127,13 @@ impl Engine {
 }
 
 /// Each list of a key follows the rules of a list; the line on the canvas is only for a simple
-/// press, and two states do not mix with gestures.
+/// press, and two states do not mix with gestures. The rest is what the editor could make.
 pub(super) fn check_key(
     config: &Config,
     profile: &Profile,
     page: Uuid,
     key: &Key,
+    assets: &AssetStore,
 ) -> Result<(), CommandError> {
     check_actions(config, profile, page, &key.actions)?;
     let plugins = key
@@ -171,7 +172,10 @@ pub(super) fn check_key(
         }
         check_actions(config, profile, page, list)?;
     }
-    Ok(())
+    Ok(rules::check_key(
+        key,
+        &rules::KnownAssets::new(assets, &config.profiles),
+    )?)
 }
 
 /// A key may move the dock once, only to another page of its profile, and never from inside
@@ -315,6 +319,12 @@ mod tests {
         }
     }
 
+    fn assets() -> (tempfile::TempDir, AssetStore) {
+        let dir = tempfile::tempdir().unwrap();
+        let store = AssetStore::open(dir.path().to_path_buf()).unwrap();
+        (dir, store)
+    }
+
     fn open_page(page: Uuid) -> Action {
         Action::OpenPage {
             page,
@@ -369,7 +379,8 @@ mod tests {
             long_press,
             second_state,
         };
-        let check = |key: &Key| check_key(&config, p, home, key);
+        let (_dir, assets) = assets();
+        let check = |key: &Key| check_key(&config, p, home, key, &assets);
         assert!(check(&key(vec![Action::Home], None)).is_ok());
         assert!(
             check(&key(vec![open_page(other)], None)).is_err(),
@@ -437,7 +448,8 @@ mod tests {
             long_press: Vec::new(),
             second_state: None,
         };
-        let check = |key: &Key| check_key(&config, p, home, key);
+        let (_dir, assets) = assets();
+        let check = |key: &Key| check_key(&config, p, home, key, &assets);
         assert!(check(&key(vec![plugin()])).is_ok());
         assert!(check(&key(vec![Action::StopSounds, plugin(), Action::Back])).is_ok());
         assert!(
@@ -489,5 +501,55 @@ mod tests {
         let mut in_second = key(Vec::new());
         in_second.second_state = Some(state(vec![plugin()]));
         assert!(check(&in_second).is_err());
+    }
+
+    /// Whether a configuration of a real data folder still passes every rule, so an update
+    /// with stricter rules does not leave keys the editor cannot save. Run on a copy:
+    /// `TAURILANZI_CHECK_DIR=<copy> cargo test --lib stored_configuration -- --ignored --nocapture`
+    #[test]
+    #[ignore = "reads the data folder in TAURILANZI_CHECK_DIR"]
+    fn stored_configuration_passes_the_rules() {
+        use crate::config::{Store, rules};
+
+        let dir = std::env::var_os("TAURILANZI_CHECK_DIR").expect("TAURILANZI_CHECK_DIR");
+        let store = Store::open(dir.into()).unwrap();
+        let config = store.load().unwrap().expect("a configuration");
+        let mut problems = Vec::new();
+        for profile in &config.profiles {
+            for page in &profile.pages {
+                for (index, key) in &page.keys {
+                    if let Err(err) = check_key(&config, profile, page.id, key, &store.assets) {
+                        problems.push(format!(
+                            "{} / {} / key {index}: {err}",
+                            profile.name, page.name
+                        ));
+                    }
+                }
+            }
+        }
+        let defaults = crate::config::Preferences::default();
+        if let Err(err) = rules::check_preferences(&config.preferences, &defaults, &store.assets) {
+            problems.push(format!("preferences: {err}"));
+        }
+        let device = DeviceSettings {
+            brightness: 100,
+            sleep_minutes: 0,
+        };
+        if let Err(err) = rules::check_device(&config.device, &device) {
+            problems.push(format!("device: {err}"));
+        }
+        for integration in &config.integrations {
+            if let Err(err) = rules::check_integration(integration) {
+                problems.push(format!("integration: {err}"));
+            }
+        }
+        let keys: usize = config
+            .profiles
+            .iter()
+            .flat_map(|p| &p.pages)
+            .map(|p| p.keys.len())
+            .sum();
+        println!("{keys} keys checked");
+        assert!(problems.is_empty(), "{}", problems.join("\n"));
     }
 }
