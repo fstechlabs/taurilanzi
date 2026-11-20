@@ -131,6 +131,56 @@ fn only_assistants_with_the_token_from_this_computer_get_in() {
 }
 
 #[test]
+fn a_refused_request_leaves_its_connection_usable_for_the_next() {
+    use std::io::{BufRead, BufReader, Read, Write};
+
+    let server = Server::start();
+    let address = server
+        .url
+        .trim_start_matches("http://")
+        .trim_end_matches(PATH);
+    let mut stream = std::net::TcpStream::connect(address).unwrap();
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    let body = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
+    let head = |token: &str| {
+        format!(
+            "POST {PATH} HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {token}\r\n\
+             Accept: application/json, text/event-stream\r\nContent-Type: application/json\r\n\
+             Content-Length: {}\r\n\r\n",
+            body.len()
+        )
+    };
+    let status = |reader: &mut BufReader<std::net::TcpStream>| {
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        let status = line.split(' ').nth(1).unwrap_or_default().to_owned();
+        let mut length = 0;
+        loop {
+            line.clear();
+            reader.read_line(&mut line).unwrap();
+            if line == "\r\n" {
+                break;
+            }
+            if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                length = value.trim().parse().unwrap();
+            }
+        }
+        reader.read_exact(&mut vec![0; length]).unwrap();
+        status
+    };
+
+    // The body comes late, as from a client that writes it apart from the head.
+    stream.write_all(head("wrong").as_bytes()).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    stream.write_all(body.as_bytes()).unwrap();
+    assert_eq!(status(&mut reader), "401");
+
+    stream.write_all(head(TOKEN).as_bytes()).unwrap();
+    stream.write_all(body.as_bytes()).unwrap();
+    assert_eq!(status(&mut reader), "200");
+}
+
+#[test]
 fn an_assistant_builds_a_profile_sees_it_and_undoes_it() {
     let server = Server::start();
     let init = server.call(

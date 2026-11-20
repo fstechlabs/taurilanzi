@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
-use http_body_util::{BodyExt, Full};
+use http_body_util::{BodyExt, Full, LengthLimitError, Limited};
 use hyper::body::Incoming;
 use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode, header};
@@ -25,6 +25,7 @@ use super::tools::Tools;
 pub const PATH: &str = "/mcp";
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
 const ACCEPT_RETRY: Duration = Duration::from_millis(50);
+const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
 
 type Body = BoxBody<Bytes, Infallible>;
 type Service = StreamableHttpService<Assistant, NeverSessionManager>;
@@ -51,6 +52,7 @@ impl Listener {
             .with_legacy_session_mode(false)
             .with_json_response(true)
             .with_sse_keep_alive(None)
+            .with_max_request_body_bytes(MAX_BODY_BYTES)
             .with_allowed_hosts(["127.0.0.1", "localhost", "[::1]"].map(|h| format!("{h}:{port}")))
             .with_allowed_origins([
                 "null",
@@ -161,6 +163,25 @@ async fn route(
     expected: &str,
     on_request: &OnRequest,
 ) -> Response<Body> {
+    // Read whole before any answer, refusals included: a connection answered with part of its
+    // request unread is closed without saying so, the client sends its next request on it, and
+    // Windows aborts it.
+    let (parts, body) = request.into_parts();
+    let body = match Limited::new(body, MAX_BODY_BYTES).collect().await {
+        Ok(body) => body.to_bytes(),
+        Err(err) => {
+            let mut response = if err.is::<LengthLimitError>() {
+                plain(StatusCode::PAYLOAD_TOO_LARGE, "Payload Too Large")
+            } else {
+                plain(StatusCode::BAD_REQUEST, "Bad Request")
+            };
+            response
+                .headers_mut()
+                .insert(header::CONNECTION, "close".parse().expect("a header"));
+            return response;
+        }
+    };
+    let request = Request::from_parts(parts, Full::new(body));
     if request.uri().path() != PATH {
         return plain(StatusCode::NOT_FOUND, "Not Found");
     }
