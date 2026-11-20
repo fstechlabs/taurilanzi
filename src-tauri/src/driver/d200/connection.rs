@@ -17,7 +17,8 @@ const READ_TIMEOUT_MS: i32 = 20;
 const BUSY_READ_TIMEOUT_MS: i32 = 2;
 const BUSY_FOR: Duration = Duration::from_millis(500);
 const RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
-const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(15);
+/// Firmware 5.0.9 shows its own screensaver after about 10 s without hearing from the host.
+const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(5);
 /// Mode 2 makes the firmware show only our image on the wide key, without its clock or stats.
 const WIDE_KEY_BACKGROUND: &[u8] = b"2|0|0|00:00:00|0";
 
