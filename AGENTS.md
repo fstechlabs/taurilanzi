@@ -156,6 +156,10 @@ Commits, versions and releases:
 - The version is the moment of the build in UTC, `YEAR.MONTHDAY.HOURMINUTE` (`2026.1220.2008`;
   `2027.105.930` is 5 January at 09:30), set by `scripts/build-app.ts` (`scripts/release-version.ts`).
   `tauri.conf.json` and `Cargo.toml` keep `0.0.0`: never write a version there by hand.
+- Two branches. Pull requests go to `develop`, the default branch, where pushes only run the
+  tests. `main` is what is released: `develop` reaches it through a merge commit when the owner
+  decides, and a hotfix may be committed to `main` directly, after which `main` is merged back
+  into `develop`. Never commit to `main` otherwise.
 - Every push to main that passes the tests is released by `.github/workflows/release.yml` if a
   commit since the last release is a `feat`, `fix`, `perf`, `refactor` or `build`, or marked as
   breaking (`scripts/release-plan.ts`). For now its notes only link to the changes since the
