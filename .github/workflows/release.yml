@@ -1,13 +1,13 @@
 name: release
 
-# Every push to main that passes the tests is released, if it changes the app (see
-# scripts/release-plan.ts). Run it by hand to release main even without such a change.
+# Every push to main is tested and, if it changes the app (see scripts/release-plan.ts),
+# released. Run it by hand on main to release even without such a change.
 # Each system and processor is built on a machine of its own; the release is published once all
 # of them are in, with one latest.json for every updater.
+# The tests run here, not in a workflow_run after tests.yml: that would run in the context of the
+# default branch, and the release environment only lets main deploy.
 on:
-  workflow_run:
-    workflows: [tests]
-    types: [completed]
+  push:
     branches: [main]
   workflow_dispatch:
 
@@ -22,10 +22,12 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  tests:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/tests.yml
+
   plan:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    needs: tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -36,7 +38,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -89,7 +90,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -160,7 +160,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -177,7 +176,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.plan.outputs.tag }}
           TITLE: ${{ needs.plan.outputs.title }}
-          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          SHA: ${{ github.sha }}
         run: |
           mv .release/release-notes.md "$RUNNER_TEMP/release-notes.md"
           rm .release/update-notes.txt

@@ -1,14 +1,15 @@
 name: tests
 
+# Pushes to main are tested by release.yml, which calls this workflow before releasing them.
 on:
   pull_request:
-    branches: [main, develop]
-  push:
-    branches: [main, develop]
+  workflow_call:
   workflow_dispatch:
 
+# Called by release.yml, github.workflow is "release": its tests never cancel, nor are cancelled
+# by, a run started by hand.
 concurrency:
-  group: tests-${{ github.ref }}
+  group: tests-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
