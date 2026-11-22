@@ -151,6 +151,8 @@ pub enum Layer {
     Widget { view: WidgetView },
     /// A tick or a cross in a corner: how the key's last request went.
     Status { ok: bool },
+    /// A warning in the other corner: the key's action cannot run on this dock.
+    Unsupported,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { failure, reasonOf } from '~/lib/errors'
 import { Loader2, Search, X } from '@lucide/vue'
 import type { IconBrowsePage, IconPalette, IconSearchResult, IconStyle } from '~/lib/iconify'
 import { browseCollection, preload, searchIcons } from '~/lib/iconify'
@@ -25,6 +26,8 @@ const browseCategory = ref(ANY)
 const found = ref<IconSearchResult>({ icons: [], collections: {}, truncated: false })
 const browsed = ref<IconBrowsePage | null>(null)
 const status = ref<'idle' | 'loading' | 'more' | 'error'>('idle')
+/** Why the last search failed. */
+const reason = ref('')
 const active = ref<string | null>(null)
 
 const mode = computed(() => query.value.trim() ? 'search' : prefix.value !== ANY ? 'browse' : 'home')
@@ -98,9 +101,10 @@ async function refresh() {
       status.value = 'idle'
     }
   }
-  catch {
+  catch (err) {
     if (run === generation) {
       status.value = 'error'
+      reason.value = reasonOf(err)
     }
   }
 }
@@ -281,7 +285,7 @@ function count(value: number) {
           <Loader2 class="mr-2 size-4 animate-spin" /> {{ t('icons.picker.searching') }}
         </div>
         <div v-else-if="status === 'error'" class="flex h-full items-center justify-center text-sm text-muted-foreground">
-          {{ t('icons.picker.error') }}
+          {{ failure(t('icons.picker.error'), reason) }}
         </div>
         <div v-else-if="mode === 'home'" class="flex flex-col gap-4 p-1">
           <section v-if="icons.length" class="flex flex-col gap-2">

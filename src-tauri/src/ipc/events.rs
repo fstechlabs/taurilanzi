@@ -4,6 +4,7 @@ use serde::Serialize;
 use tauri::AppHandle;
 use tauri_specta::Event;
 use tokio::sync::broadcast::error::RecvError;
+use uuid::Uuid;
 
 use crate::cloud::CloudStatus;
 use crate::engine::{EngineEvent, EngineHandle, Snapshot};
@@ -62,6 +63,7 @@ pub struct KeyImageChanged {
 
 #[derive(Debug, Clone, Serialize, specta::Type, tauri_specta::Event)]
 pub struct KeyChanged {
+    pub device: Uuid,
     pub index: u8,
     pub pressed: bool,
 }
@@ -73,7 +75,16 @@ pub fn forward(app: AppHandle, engine: &EngineHandle) {
         loop {
             let sent = match events.recv().await {
                 Ok(EngineEvent::State(snapshot)) => StateChanged(snapshot).emit(&app),
-                Ok(EngineEvent::Key { index, pressed }) => KeyChanged { index, pressed }.emit(&app),
+                Ok(EngineEvent::Key {
+                    device,
+                    index,
+                    pressed,
+                }) => KeyChanged {
+                    device,
+                    index,
+                    pressed,
+                }
+                .emit(&app),
                 Ok(EngineEvent::KeyImage { page, index }) => {
                     KeyImageChanged { page, index }.emit(&app)
                 }

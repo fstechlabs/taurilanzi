@@ -61,7 +61,9 @@ async fn respond(
             let index = index.parse().map_err(|_| not_found())?;
             let appearance = query_value(query, "appearance")
                 .and_then(|json| serde_json::from_str::<Appearance>(&json).ok())
-                .ok_or_else(|| IpcError::new(ErrorKind::Invalid, "missing or bad appearance"))?;
+                .ok_or_else(|| {
+                    IpcError::new(ErrorKind::Invalid, tr!("errors.missingAppearance"))
+                })?;
             let page = query_value(query, "page").and_then(|id| id.parse::<Uuid>().ok());
             Ok(png(engine(app)?.preview(page, index, appearance).await?))
         }
@@ -70,20 +72,23 @@ async fn respond(
             let width = query_value(query, "width")
                 .and_then(|w| w.parse().ok())
                 .unwrap_or(PREVIEW_WIDTH);
-            let image =
-                tauri::async_runtime::spawn_blocking(move || screensaver::preview(scene, width))
-                    .await
-                    .ok()
-                    .flatten()
-                    .ok_or_else(|| {
-                        IpcError::new(ErrorKind::Failed, "could not draw the preview")
-                    })?;
+            let model = query_value(query, "model")
+                .and_then(|id| crate::driver::model(&id))
+                .or_else(|| crate::driver::model(crate::driver::FIRST_MODEL))
+                .ok_or_else(not_found)?;
+            let image = tauri::async_runtime::spawn_blocking(move || {
+                screensaver::preview(scene, model, width)
+            })
+            .await
+            .ok()
+            .flatten()
+            .ok_or_else(|| IpcError::new(ErrorKind::Failed, tr!("errors.preview")))?;
             Ok(png(image))
         }
         ["asset", id] => {
             let assets = app
                 .try_state::<AssetStore>()
-                .ok_or_else(|| IpcError::new(ErrorKind::Unavailable, "starting"))?;
+                .ok_or_else(|| IpcError::new(ErrorKind::Unavailable, tr!("errors.starting")))?;
             let image = assets.get(id).map_err(|_| not_found())?;
             Ok(
                 response(image.format.mime(), "public, max-age=31536000, immutable")
@@ -147,7 +152,7 @@ async fn respond(
 fn engine(app: &AppHandle) -> Result<EngineHandle, IpcError> {
     app.try_state::<EngineHandle>()
         .map(|engine| engine.inner().clone())
-        .ok_or_else(|| IpcError::new(ErrorKind::Unavailable, "starting"))
+        .ok_or_else(|| IpcError::new(ErrorKind::Unavailable, tr!("errors.starting")))
 }
 
 fn query_value<'a>(query: Option<&'a str>, name: &str) -> Option<Cow<'a, str>> {
@@ -173,7 +178,7 @@ fn response(mime: &str, cache: &str) -> tauri::http::response::Builder {
 }
 
 fn not_found() -> IpcError {
-    IpcError::new(ErrorKind::NotFound, "not found")
+    IpcError::new(ErrorKind::NotFound, tr!("errors.notFound"))
 }
 
 fn failure(err: &IpcError) -> Response<Vec<u8>> {

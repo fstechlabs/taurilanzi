@@ -4,6 +4,7 @@ mod appearance;
 mod batch;
 mod commands;
 mod display;
+mod docks;
 mod editing;
 mod follow;
 mod gestures;
@@ -26,8 +27,12 @@ mod profiles;
 mod results;
 mod runtime;
 mod screen;
+mod shared_docks;
 mod snapshot;
 mod sync;
+#[cfg(test)]
+mod test_engine;
+mod transfer;
 mod widgets;
 
 pub use commands::{Change, CommandError, KeySlot, PageChanges};
@@ -35,3 +40,4 @@ pub use gestures::Gesture;
 pub use handle::EngineHandle;
 pub use launch::{Launch, LaunchError, PluginsLaunch, start};
 pub use snapshot::{EngineEvent, ProfileSummary, Snapshot};
+pub use transfer::TransferPlan;

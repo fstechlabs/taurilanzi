@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { failure } from '~/lib/errors'
 import { KeyRound, Trash2 } from '@lucide/vue'
 import { commands } from '~/ipc/bindings'
 
@@ -10,7 +11,7 @@ const hass = useHass()
 const saved = ref(false)
 const code = ref('')
 const busy = ref(false)
-const failed = ref(false)
+const failed = ref<string | null>(null)
 
 /** Home Assistant says whether the entity asks for a code at all. */
 const asks = computed(() => {
@@ -31,14 +32,14 @@ watch(() => props.entity, refresh, { immediate: true })
 
 async function save(value: string | null) {
   busy.value = true
-  failed.value = false
+  failed.value = null
   try {
     await call(commands.hassSetCode(hass.id.value, props.entity, value))
     code.value = ''
     await refresh()
   }
-  catch {
-    failed.value = true
+  catch (err) {
+    failed.value = failure(t('actions.hass.codeFailed'), err)
   }
   finally {
     busy.value = false
@@ -67,7 +68,7 @@ async function save(value: string | null) {
       </Button>
     </div>
     <p class="text-[11px]" :class="failed ? 'text-destructive' : 'text-muted-foreground'">
-      {{ failed ? t('actions.hass.codeFailed') : saved ? t('actions.hass.codeSaved') : t('actions.hass.codeHint') }}
+      {{ failed ?? (saved ? t('actions.hass.codeSaved') : t('actions.hass.codeHint')) }}
     </p>
   </div>
 </template>

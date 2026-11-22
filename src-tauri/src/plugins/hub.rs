@@ -3,7 +3,7 @@
 //! between them and hands what concerns keys and their settings to the engine.
 
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
@@ -16,11 +16,11 @@ use serde_json::Value;
 
 use super::desktop::Desktop;
 use super::elgato::connections::{read_states, states_file};
-use super::elgato::protocol::{self as streamdeck, Contexts, Side};
+use super::elgato::protocol::{self as streamdeck, Contexts, PluginDock, Side};
 use super::images;
 use super::manifest::{Protocol, Runtime};
 use super::registry::{Registry, is_plugin_id};
-use super::ulanzi::protocol::{self, Instance, ack, text};
+use super::ulanzi::protocol::{self, Instance, ack, for_plugin, text};
 use crate::render::ImageData;
 
 pub type ConnId = u64;
@@ -152,8 +152,10 @@ pub struct Hub {
     pub(super) connections: HashMap<ConnId, Connection>,
     /// The instances each main service has been told of, so none hears of one twice.
     pub(super) told: RefCell<HashMap<ConnId, Told>>,
-    /// Whether the dock is connected, which Stream Deck plugins are told.
-    pub(super) dock: bool,
+    /// Every known dock, which Stream Deck plugins are told of as they start.
+    pub(super) docks: Vec<PluginDock>,
+    /// The docks connected now, by id, which Stream Deck plugins are told of as they come and go.
+    pub(super) connected_docks: BTreeSet<String>,
     /// Apps running now, as plugins name them to be told of them, in lower case.
     pub(super) apps: HashSet<String>,
     /// The state each instance of a Stream Deck plugin was left in, kept across restarts as the
@@ -192,7 +194,8 @@ impl PluginHost {
         Self(Arc::new(Mutex::new(Hub {
             connections: HashMap::new(),
             told: RefCell::default(),
-            dock: true,
+            docks: Vec::new(),
+            connected_docks: BTreeSet::new(),
             apps: HashSet::new(),
             saved_states: RefCell::new(read_states(&states_file(&setup.logs))),
             states_file: states_file(&setup.logs),
@@ -280,7 +283,11 @@ impl PluginHost {
         match connection.peer {
             Peer::Main { plugin } => info!("plugin {plugin} disconnected"),
             Peer::Inspector { plugin, instance } if connection.protocol == Protocol::StreamDeck => {
-                let closed = streamdeck::inspector_closed(&instance.action, &instance.actionid);
+                let closed = streamdeck::inspector_closed(
+                    &instance.action,
+                    &instance.actionid,
+                    &instance.device,
+                );
                 hub.to_mains(&plugin, &closed);
             }
             _ => {}
@@ -459,7 +466,7 @@ impl Hub {
             return;
         }
         if connection.protocol == Protocol::Ulanzi {
-            let text = message.to_string();
+            let text = for_plugin(&message).to_string();
             self.trace(conn, &message, "->", &text);
             let _ = connection.out.send(text);
             return;
@@ -606,6 +613,7 @@ impl Hub {
                 action: uuid.clone(),
                 key: text(message, "key"),
                 actionid: text(message, "actionid"),
+                device: String::new(),
             };
             if instance.actionid.is_empty()
                 && let Some(opened) = self.opened.get(&uuid)

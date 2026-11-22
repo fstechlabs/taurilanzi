@@ -1,8 +1,5 @@
 <script setup lang="ts">
-const KEY_COUNT = 13
-const WIDE_KEY = 13
-/** The D200 panel is 1220 px wide: 196 px keys separated by 60 px gaps, no outer margin. */
-const GAP = 'calc(100cqw * 60 / 1220)'
+import { keyAspect, placement } from '~/lib/dock'
 
 const props = defineProps<{ page: string, selected?: number | null, compact?: boolean }>()
 const emit = defineEmits<{ select: [index: number] }>()
@@ -11,14 +8,19 @@ defineSlots<{
   key?: (props: { index: number }) => unknown
 }>()
 
-const { snapshot, pressed, keyImageUrl } = useEngine()
+const { snapshot, pressed, keyImageUrl, model } = useEngine()
 
-const keys = computed(() => [...Array(KEY_COUNT).keys(), WIDE_KEY])
 const page = computed(() => snapshot.value?.pages.find(p => p.id === props.page))
 const onDock = computed(() => snapshot.value?.path.at(-1) === props.page)
+/** The face of the dock the editor shows, every control where it sits on it. */
+const face = computed(() => model.value ? `${model.value.panel.width} / ${model.value.panel.height}` : '1220 / 708')
 
 function configured(index: number) {
   return Boolean(page.value?.keys[index])
+}
+
+function unsupported(index: number) {
+  return Boolean(snapshot.value?.unsupported.some(s => s.page === props.page && s.index === index))
 }
 </script>
 
@@ -28,24 +30,24 @@ function configured(index: number) {
     :class="props.compact ? 'rounded-2xl px-[4%] pt-[2.5%] pb-[4%]' : 'rounded-2xl p-[4%]'"
   >
     <slot name="header" />
-    <div class="@container">
-      <div class="grid grid-cols-5" :style="{ gap: GAP }">
-        <DockKey
-          v-for="index in keys"
-          :key="index"
-          :page="props.page"
-          :index="index"
-          :wide="index === WIDE_KEY"
-          :image-url="keyImageUrl(props.page, index)"
-          :configured="configured(index)"
-          :pressed="onDock && pressed.has(index)"
-          :selected="props.selected === index"
-          :compact="props.compact"
-          @select="emit('select', $event)"
-        >
-          <slot name="key" :index="index" />
-        </DockKey>
-      </div>
+    <div v-if="model" class="relative w-full" :style="{ aspectRatio: face }" :data-dock-model="model.id">
+      <DockKey
+        v-for="control in model.controls"
+        :key="control.index"
+        :page="props.page"
+        :index="control.index"
+        :aspect="keyAspect(model, control.index)"
+        :style="placement(model, control)"
+        :image-url="keyImageUrl(props.page, control.index)"
+        :configured="configured(control.index)"
+        :unsupported="unsupported(control.index)"
+        :pressed="onDock && pressed.has(control.index)"
+        :selected="props.selected === control.index"
+        :compact="props.compact"
+        @select="emit('select', $event)"
+      >
+        <slot name="key" :index="control.index" />
+      </DockKey>
     </div>
   </div>
 </template>

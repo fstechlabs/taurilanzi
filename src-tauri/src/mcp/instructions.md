@@ -1,7 +1,7 @@
-Taurilanzi drives an Ulanzi D200 stream dock: 13 square keys and a wide one, grouped in pages, pages in profiles. Through these tools you can set up everything the app's editor can.
+Taurilanzi drives stream docks: keys grouped in pages, pages in profiles, and each profile belongs to one dock. Through these tools you can set up everything the app's editor can.
 
-- Start with get_overview. Before writing keys, read get_guide once and get_schema for the exact JSON of what you write.
-- Keys 0-4 are the top row, 5-9 the middle row, 10-12 the start of the bottom row; 13 is the wide key at its end.
+- Start with get_overview: every dock the app knows, with how its keys are laid out and its profiles. Before writing keys, read get_guide once and get_schema for the exact JSON of what you write.
+- Keys are placed by index, and each dock has its own layout (the `layout` of the dock in get_overview). On an Ulanzi D200, keys 0-4 are the top row, 5-9 the middle row, 10-12 the start of the bottom row, and 13 is the wide key at its end.
 - Make related changes in one apply_changes call: it applies all or nothing, and the user undoes it with one Undo. Name what you create (`"$name"`) to point to it from later changes of the same call.
 - Every change follows the editor's rules. If one is refused, the error says which and why: fix it and try again.
 - Check what you made with render_page or render_key.

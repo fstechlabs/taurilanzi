@@ -10,8 +10,8 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::config::{
-    Config, DeviceSettings, Integration, KnownPlugin, Preferences, Profile, SCHEMA_VERSION,
-    ScreensaverImage, assets_in,
+    Config, DeviceSettings, FIRST_DOCK, Integration, KnownDevice, KnownPlugin, Preferences,
+    Profile, SCHEMA_VERSION, ScreensaverImage, assets_in,
 };
 use crate::i18n::LanguageChoice;
 
@@ -34,7 +34,11 @@ pub enum Kind {
 /// The settings every computer of the account shares. The language stays each computer's own.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SharedSettings {
+    /// The first dock's settings, for versions of the app that knew one dock.
     pub device: DeviceSettings,
+    /// Every dock seen on a computer of the account; missing from versions that knew one.
+    #[serde(default)]
+    pub devices: Vec<KnownDevice>,
     pub preferences: Preferences,
     /// The synced profiles, in the order of the sidebar.
     pub profile_order: Vec<Uuid>,
@@ -49,8 +53,17 @@ pub struct SharedSettings {
 
 impl SharedSettings {
     pub fn of(config: &Config) -> Self {
+        let first = config
+            .device(FIRST_DOCK)
+            .or_else(|| config.devices.first())
+            .map(|d| d.settings.clone())
+            .unwrap_or(DeviceSettings {
+                brightness: 70,
+                sleep_minutes: 0,
+            });
         Self {
-            device: config.device.clone(),
+            device: first,
+            devices: config.devices.clone(),
             preferences: Preferences {
                 language: LanguageChoice::default(),
                 ..config.preferences.clone()
@@ -291,7 +304,7 @@ mod tests {
         let before = docs(&config)[&SETTINGS_ID].hash.clone();
         config.preferences.language = LanguageChoice::En;
         assert_eq!(docs(&config)[&SETTINGS_ID].hash, before);
-        config.device.brightness = 7;
+        config.devices[0].settings.brightness = 7;
         assert_ne!(docs(&config)[&SETTINGS_ID].hash, before);
     }
 

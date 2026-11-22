@@ -77,8 +77,19 @@ impl Engine {
     /// Takes in what other computers changed. Undo forgets everything before it, since going back
     /// would undo their changes too.
     pub(super) fn apply_sync(&mut self, changes: SyncChanges) -> Result<SyncExport, CommandError> {
-        let before = self.config.active_profile;
+        let before = self.active_profiles();
         let local = self.config.local_profiles.clone();
+        // Docks another computer forgot: the account's list no longer has them.
+        let forgotten: BTreeSet<Uuid> = match &changes.settings {
+            Some(settings) if !settings.devices.is_empty() => self
+                .config
+                .devices
+                .iter()
+                .map(|d| d.id)
+                .filter(|id| !settings.devices.iter().any(|d| d.id == *id))
+                .collect(),
+            _ => BTreeSet::new(),
+        };
         for profile in changes.profiles {
             if local.contains(&profile.id) {
                 continue;
@@ -95,8 +106,11 @@ impl Engine {
             if local.contains(id) {
                 continue;
             }
-            if self.config.profiles.len() == 1 {
-                // The dock always has a profile: the last one stays, on this computer only.
+            let device = self.config.profiles[at].device;
+            let keeps_one = self.docks.get(device).is_some() || !forgotten.contains(&device);
+            if keeps_one && self.config.profiles_of(device).count() == 1 {
+                // A dock always has a profile, unless another computer forgot it and it is not
+                // connected here: the last one stays, on this computer only.
                 self.config.local_profiles.insert(*id);
                 continue;
             }
@@ -111,7 +125,7 @@ impl Engine {
             self.config.plugin_settings = settings.plugin_settings;
             self.config.integrations = settings.integrations;
             self.config.plugins = settings.plugins;
-            self.set_device(settings.device)?;
+            self.take_devices(settings.devices, settings.device)?;
             let preferences = crate::config::Preferences {
                 language: self.config.preferences.language,
                 ..settings.preferences
@@ -123,17 +137,15 @@ impl Engine {
             self.restart_clients(&changed);
         }
         self.sync_integrations();
-        if self.config.active_profile().is_none()
-            && let Some(first) = self.config.profiles.first()
-        {
-            self.config.active_profile = first.id;
+        for device in self.docks.ids() {
+            self.give_a_profile(device);
         }
-        self.profiles_restored(before);
+        self.profiles_restored(&before);
         self.history = History::default();
         self.save()?;
         self.edited.extend(changes.edited);
         self.forget_stale_states();
-        self.show_current_page();
+        self.show_all_pages();
         Ok(self.sync_export())
     }
 
@@ -236,7 +248,6 @@ mod tests {
     use crate::actions::{Context, SoundPlayer};
     use crate::cloud::TOKEN_ACCOUNT;
     use crate::config::{DeviceSettings, Page, Position, Store};
-    use crate::driver::d200::D200;
     use crate::engine::handle::Activity;
     use crate::engine::history::Target;
     use crate::engine::runtime::Links;
@@ -258,6 +269,7 @@ mod tests {
         };
         Profile {
             id: Uuid::new_v4(),
+            device: crate::config::FIRST_DOCK,
             name: name.into(),
             home_page: home.id,
             pages: vec![home],
@@ -269,14 +281,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path().to_path_buf()).unwrap();
         let config = Config {
-            schema: 2,
+            schema: crate::config::SCHEMA_VERSION,
             revision: 0,
-            device: DeviceSettings {
+            devices: vec![crate::config::first_device(DeviceSettings {
                 brightness: 50,
                 sleep_minutes: 0,
-            },
+            })],
             preferences: Default::default(),
-            active_profile: profiles[0].id,
+            active_profiles: std::collections::BTreeMap::from([(
+                crate::config::FIRST_DOCK,
+                profiles[0].id,
+            )]),
             profiles,
             plugin_settings: Default::default(),
             integrations: Vec::new(),
@@ -284,7 +299,6 @@ mod tests {
             plugins: Default::default(),
             declined_plugins: Default::default(),
         };
-        let (dock, _) = D200::detached();
         let (events, _) = broadcast::channel(16);
         let context = Context {
             assets: store.assets.clone(),
@@ -299,7 +313,7 @@ mod tests {
             inputs: mpsc::channel().0,
             plugins: super::super::plugins::PluginKeys::new(None, Default::default()),
         };
-        let engine = Engine::new(store, config, Renderer::new(), dock, links, context);
+        let engine = Engine::new(store, config, Renderer::new(), links, context);
         Setup { engine, _dir: dir }
     }
 
@@ -335,7 +349,7 @@ mod tests {
         );
         assert!(!engine.edited.contains_key(&SETTINGS_ID));
 
-        engine.config.device.brightness = 10;
+        engine.config.devices[0].settings.brightness = 10;
         engine.save().unwrap();
         assert!(engine.edited.contains_key(&SETTINGS_ID));
     }
@@ -426,14 +440,28 @@ mod tests {
         let (a_id, b_id) = (a.id, b.id);
         let mut setup = engine(vec![a, b]);
         let engine = &mut setup.engine;
-        assert_eq!(engine.config.active_profile, a_id);
+        assert_eq!(
+            engine
+                .config
+                .active_profile_of(crate::config::FIRST_DOCK)
+                .unwrap()
+                .id,
+            a_id
+        );
         engine
             .apply_sync(SyncChanges {
                 deleted: vec![a_id],
                 ..SyncChanges::default()
             })
             .unwrap();
-        assert_eq!(engine.config.active_profile, b_id);
+        assert_eq!(
+            engine
+                .config
+                .active_profile_of(crate::config::FIRST_DOCK)
+                .unwrap()
+                .id,
+            b_id
+        );
     }
 
     #[test]
@@ -446,7 +474,7 @@ mod tests {
         engine.set_profile_local(local_id, true).unwrap();
         let mut settings = SharedSettings::of(&engine.config);
         settings.profile_order = vec![b_id, a_id];
-        settings.device.brightness = 12;
+        settings.devices[0].settings.brightness = 12;
         settings.preferences.language = LanguageChoice::Es;
         let server = Integration::Obs {
             id: Uuid::new_v4(),
@@ -464,7 +492,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(names(engine), ["B", "Local", "A"]);
-        assert_eq!(engine.config.device.brightness, 12);
+        assert_eq!(engine.config.devices[0].settings.brightness, 12);
         assert_eq!(engine.config.preferences.language, LanguageChoice::En);
         assert_eq!(engine.config.integrations, vec![server]);
     }
@@ -591,5 +619,209 @@ mod tests {
             engine.set_profile_local(Uuid::new_v4(), true),
             Err(CommandError::UnknownProfile(_))
         ));
+    }
+
+    fn unit(id: Uuid, serial: &str) -> crate::config::KnownDevice {
+        crate::config::KnownDevice {
+            id,
+            model: crate::driver::FIRST_MODEL.into(),
+            name: String::new(),
+            serial: Some(serial.into()),
+            settings: DeviceSettings {
+                brightness: 50,
+                sleep_minutes: 0,
+            },
+        }
+    }
+
+    fn sync_docks(engine: &mut Engine, devices: Vec<crate::config::KnownDevice>) {
+        let mut settings = SharedSettings::of(&engine.config);
+        settings.devices = devices;
+        engine
+            .apply_sync(SyncChanges {
+                settings: Some(settings),
+                ..SyncChanges::default()
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn a_dock_has_the_same_id_on_every_computer() {
+        let model = crate::driver::FIRST_MODEL;
+        assert_eq!(
+            crate::config::dock_id(model, "A1"),
+            crate::config::dock_id(model, "A1")
+        );
+        assert_ne!(
+            crate::config::dock_id(model, "A1"),
+            crate::config::dock_id(model, "A2")
+        );
+        assert_ne!(
+            crate::config::dock_id(model, "A1"),
+            crate::config::dock_id("other.model", "A1")
+        );
+    }
+
+    #[test]
+    fn one_unit_met_on_two_computers_is_joined_into_one_dock() {
+        let (mine, theirs) = (profile("Aquí"), profile("Allí"));
+        let mut setup = engine(vec![profile("Primero"), mine.clone()]);
+        let engine = &mut setup.engine;
+        let (here, there) = (Uuid::new_v4(), Uuid::new_v4());
+        engine.config.devices.push(unit(here, "S"));
+        engine.config.profiles[1].device = here;
+        let mut theirs = theirs;
+        theirs.device = there;
+        engine
+            .apply_sync(SyncChanges {
+                profiles: vec![theirs.clone()],
+                ..SyncChanges::default()
+            })
+            .unwrap();
+        let mut devices = engine.config.devices.clone();
+        devices.push(unit(there, "S"));
+        sync_docks(engine, devices);
+
+        let keep = here.min(there);
+        assert_eq!(
+            engine
+                .config
+                .devices
+                .iter()
+                .filter(|d| d.serial.as_deref() == Some("S"))
+                .map(|d| d.id)
+                .collect::<Vec<_>>(),
+            [keep]
+        );
+        let names: Vec<&str> = engine
+            .config
+            .profiles_of(keep)
+            .map(|p| p.name.as_str())
+            .collect();
+        assert_eq!(names, ["Aquí", "Allí"], "no profile is lost");
+    }
+
+    #[test]
+    fn two_units_that_took_the_first_dock_are_told_apart_and_both_keep_their_profiles() {
+        let shared = profile("Compartido");
+        let local = profile("Solo aquí");
+        let mut setup = engine(vec![shared.clone(), local.clone()]);
+        let engine = &mut setup.engine;
+        engine.config.local_profiles.insert(local.id);
+        engine.config.devices[0].serial = Some("T".into());
+        let mut first = engine.config.devices[0].clone();
+        first.serial = Some("S".into());
+        sync_docks(engine, vec![first]);
+
+        let first_dock = crate::config::FIRST_DOCK;
+        assert_eq!(
+            engine.config.device(first_dock).unwrap().serial.as_deref(),
+            Some("S"),
+            "the smaller serial keeps the first dock"
+        );
+        let own = crate::config::dock_id(crate::driver::FIRST_MODEL, "T");
+        assert_eq!(
+            engine.config.device(own).unwrap().serial.as_deref(),
+            Some("T")
+        );
+        let on_first: Vec<&str> = engine
+            .config
+            .profiles_of(first_dock)
+            .map(|p| p.name.as_str())
+            .collect();
+        assert_eq!(on_first, ["Compartido"]);
+        let mut on_own: Vec<&str> = engine
+            .config
+            .profiles_of(own)
+            .map(|p| p.name.as_str())
+            .collect();
+        on_own.sort_unstable();
+        assert_eq!(on_own, ["Compartido", "Solo aquí"]);
+        let copy = engine
+            .config
+            .profiles_of(own)
+            .find(|p| p.name == "Compartido")
+            .unwrap();
+        assert_eq!(copy.id, crate::config::derived_id(shared.id, own));
+        assert_ne!(copy.home_page, shared.home_page);
+    }
+
+    #[test]
+    fn the_unit_with_the_smaller_serial_keeps_the_dock() {
+        let mut setup = engine(vec![profile("Compartido")]);
+        let engine = &mut setup.engine;
+        engine.config.devices[0].serial = Some("A".into());
+        let mut first = engine.config.devices[0].clone();
+        first.serial = Some("B".into());
+        sync_docks(engine, vec![first]);
+        assert_eq!(engine.config.devices.len(), 1);
+        assert_eq!(engine.config.devices[0].serial.as_deref(), Some("A"));
+        assert_eq!(engine.config.profiles.len(), 1);
+    }
+
+    #[test]
+    fn a_dock_forgotten_elsewhere_goes_with_its_profiles_when_it_is_not_connected_here() {
+        let mut setup = engine(vec![profile("A")]);
+        let engine = &mut setup.engine;
+        let other = Uuid::new_v4();
+        engine.config.devices.push(unit(other, "O"));
+        let mut gone = profile("Del otro");
+        gone.device = other;
+        engine.config.profiles.push(gone.clone());
+        let first = engine.config.devices[0].clone();
+        engine
+            .apply_sync(SyncChanges {
+                deleted: vec![gone.id],
+                settings: Some(SharedSettings {
+                    devices: vec![first],
+                    ..SharedSettings::of(&engine.config)
+                }),
+                ..SyncChanges::default()
+            })
+            .unwrap();
+        assert!(engine.config.device(other).is_none());
+        assert!(engine.config.profiles.iter().all(|p| p.id != gone.id));
+    }
+
+    #[test]
+    fn a_dock_forgotten_elsewhere_while_connected_here_keeps_showing_a_profile() {
+        let mut setup = engine(vec![profile("A")]);
+        let engine = &mut setup.engine;
+        let (found, events) = mpsc::channel();
+        let model = crate::driver::model(crate::driver::FIRST_MODEL).unwrap();
+        crate::driver::start_virtual(&[model], &found);
+        for event in events.try_iter() {
+            engine.on_dock(event);
+        }
+        let dock = crate::config::dock_id(model.id, "VIRTUAL-1");
+        assert!(
+            engine.docks.get(dock).is_some(),
+            "connected as a dock of its own"
+        );
+        let starter = engine.config.profiles_of(dock).next().unwrap().clone();
+        assert_eq!(starter.id, crate::config::derived_id(dock, dock));
+
+        let first = engine.config.devices[0].clone();
+        engine
+            .apply_sync(SyncChanges {
+                deleted: vec![starter.id],
+                settings: Some(SharedSettings {
+                    devices: vec![first],
+                    ..SharedSettings::of(&engine.config)
+                }),
+                ..SyncChanges::default()
+            })
+            .unwrap();
+        assert!(engine.config.device(dock).is_some());
+        assert_eq!(
+            engine
+                .config
+                .profiles_of(dock)
+                .map(|p| p.id)
+                .collect::<Vec<_>>(),
+            [starter.id],
+            "its last profile stays, here only"
+        );
+        assert!(engine.config.local_profiles.contains(&starter.id));
     }
 }

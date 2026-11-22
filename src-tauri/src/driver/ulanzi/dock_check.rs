@@ -13,7 +13,8 @@ use std::io::{self, BufRead};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use super::{D200, Event, KEY_SIZE, WIDE_KEY, WIDE_KEY_SIZE};
+use super::{KEY_SIZE, WIDE_KEY, WIDE_KEY_SIZE};
+use crate::driver::{Event, watch};
 use crate::render::{
     Background, Color, Fit, ImageData, ImageFormat, KeyDesign, Layer, Renderer, VerticalPosition,
 };
@@ -23,11 +24,14 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 #[test]
 #[ignore = "needs the real dock; see the module docs"]
 fn dock_check() {
-    let (dock, events) = D200::start();
+    let (sender, events) = std::sync::mpsc::channel();
+    watch(sender).unwrap();
     let deadline = Instant::now() + CONNECT_TIMEOUT;
+    let mut dock = None;
     let device = loop {
         let left = deadline.saturating_duration_since(Instant::now());
-        match events.recv_timeout(left) {
+        match events.recv_timeout(left).map(|e| e.event) {
+            Ok(Event::Attached { dock: found, .. }) => dock = Some(found),
             Ok(Event::Connected(device)) => break device,
             Ok(_) => {}
             Err(_) => panic!(
@@ -36,6 +40,7 @@ fn dock_check() {
         }
     };
     println!("{} connected, firmware {}", device.model, device.firmware);
+    let dock = dock.expect("attached before connected");
     dock.replace_page(test_keys());
 
     println!("Key 1: two color emoji over a gradient, with Ñandú below.");

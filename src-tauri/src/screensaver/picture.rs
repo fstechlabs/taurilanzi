@@ -9,8 +9,9 @@ use base64::engine::general_purpose::STANDARD;
 use resvg::tiny_skia::{Color, FillRule, Mask, Path, PathBuilder, Pixmap, PixmapPaint, Transform};
 use resvg::usvg;
 
-use super::layout::{self, PANEL};
+use super::layout;
 use crate::config::Scene;
+use crate::driver::{DeviceModel, Size};
 use crate::render::ImageData;
 
 /// The corners of the keys on the dock, as a fraction of their height.
@@ -23,7 +24,7 @@ pub enum Source {
     Image(ImageData),
 }
 
-fn document(source: &Source) -> String {
+fn document(source: &Source, panel: Size) -> String {
     match source {
         Source::Scene(scene) => match scene {
             Scene::Sunset => include_str!("presets/sunset.svg"),
@@ -38,30 +39,36 @@ fn document(source: &Source) -> String {
             r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}"><image width="{w}" height="{h}" preserveAspectRatio="xMidYMid slice" href="data:{};base64,{}"/></svg>"#,
             image.format.mime(),
             STANDARD.encode(&image.bytes),
-            w = PANEL.0,
-            h = PANEL.1,
+            w = panel.width,
+            h = panel.height,
         ),
     }
 }
 
-/// The whole panel at `scale`, where 1 is the size of the dock, over black.
-pub fn draw(source: &Source, scale: f32) -> Option<Pixmap> {
-    let tree = usvg::Tree::from_str(&document(source), &usvg::Options::default()).ok()?;
-    let width = (PANEL.0 as f32 * scale).round() as u32;
-    let height = (PANEL.1 as f32 * scale).round() as u32;
-    let mut pixmap = Pixmap::new(width, height)?;
+/// The whole panel at `scale`, where 1 is the size of the dock, over black. Scenes are drawn
+/// for one panel and cover others, centered.
+pub fn draw(source: &Source, panel: Size, scale: f32) -> Option<Pixmap> {
+    let tree = usvg::Tree::from_str(&document(source, panel), &usvg::Options::default()).ok()?;
+    let (width, height) = (panel.width as f32, panel.height as f32);
+    let art = tree.size();
+    let cover = (width / art.width()).max(height / art.height());
+    let pixmap_width = (width * scale).round() as u32;
+    let pixmap_height = (height * scale).round() as u32;
+    let mut pixmap = Pixmap::new(pixmap_width, pixmap_height)?;
     pixmap.fill(Color::BLACK);
-    resvg::render(
-        &tree,
-        Transform::from_scale(scale, scale),
-        &mut pixmap.as_mut(),
-    );
+    let placed = Transform::from_translate(
+        (width - art.width() * cover) / 2.0,
+        (height - art.height() * cover) / 2.0,
+    )
+    .pre_scale(cover, cover)
+    .post_scale(scale, scale);
+    resvg::render(&tree, placed, &mut pixmap.as_mut());
     Some(pixmap)
 }
 
 /// One PNG per key, cut out of a panel at the size of the dock.
-pub fn keys(panel: &Pixmap) -> BTreeMap<u8, Vec<u8>> {
-    layout::keys()
+pub fn keys(model: &DeviceModel, panel: &Pixmap) -> BTreeMap<u8, Vec<u8>> {
+    layout::keys(model)
         .filter_map(|(index, rect)| {
             let png = panel.clone_rect(rect)?.encode_png().ok()?;
             Some((index, png))
@@ -71,12 +78,13 @@ pub fn keys(panel: &Pixmap) -> BTreeMap<u8, Vec<u8>> {
 
 /// How the dock shows a scene while the app puts it up: seen through its rounded keys, with the
 /// gaps dark. `width` in pixels, the height follows.
-pub fn preview(scene: Scene, width: u32) -> Option<Vec<u8>> {
-    let scale = width.clamp(64, PANEL.0) as f32 / PANEL.0 as f32;
-    let art = draw(&Source::Scene(scene), scale)?;
+pub fn preview(scene: Scene, model: &DeviceModel, width: u32) -> Option<Vec<u8>> {
+    let panel = model.panel;
+    let scale = width.clamp(64, panel.width) as f32 / panel.width as f32;
+    let art = draw(&Source::Scene(scene), panel, scale)?;
     let mut mask = Mask::new(art.width(), art.height())?;
     let ts = Transform::from_scale(scale, scale);
-    for (_, key) in layout::keys() {
+    for (_, key) in layout::keys(model) {
         let area = (
             key.x() as f32,
             key.y() as f32,
@@ -128,8 +136,12 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::driver::d200::{KEY_SIZE, WIDE_KEY, WIDE_KEY_SIZE};
+    use crate::driver::ulanzi::{KEY_SIZE, WIDE_KEY, WIDE_KEY_SIZE};
     use crate::render::ImageFormat;
+
+    fn d200() -> &'static DeviceModel {
+        crate::driver::model("ulanzi.d200").unwrap()
+    }
 
     fn size(png: &[u8]) -> (u32, u32) {
         let decoder = png::Decoder::new(std::io::Cursor::new(png));
@@ -140,7 +152,7 @@ mod tests {
     #[test]
     fn every_scene_parses() {
         for scene in Scene::ALL {
-            let doc = document(&Source::Scene(scene));
+            let doc = document(&Source::Scene(scene), d200().panel);
             assert!(
                 usvg::Tree::from_str(&doc, &usvg::Options::default()).is_ok(),
                 "{scene:?}"
@@ -150,9 +162,9 @@ mod tests {
 
     #[test]
     fn a_picture_gives_every_key() {
-        let panel = draw(&Source::Scene(Scene::Mountains), 1.0).unwrap();
-        assert_eq!((panel.width(), panel.height()), PANEL);
-        let images = keys(&panel);
+        let panel = draw(&Source::Scene(Scene::Mountains), d200().panel, 1.0).unwrap();
+        assert_eq!((panel.width(), panel.height()), (1220, 708));
+        let images = keys(d200(), &panel);
         assert_eq!(images.len(), 14);
         assert_eq!(size(&images[&0]), KEY_SIZE);
         assert_eq!(size(&images[&WIDE_KEY]), WIDE_KEY_SIZE);
@@ -166,14 +178,14 @@ mod tests {
             format: ImageFormat::Png,
             bytes: Arc::from(tall.encode_png().unwrap()),
         };
-        let panel = draw(&Source::Image(image), 0.1).unwrap();
+        let panel = draw(&Source::Image(image), d200().panel, 0.1).unwrap();
         let corner = panel.pixel(0, 0).unwrap();
         assert_eq!((corner.red(), corner.green(), corner.blue()), (255, 0, 0));
     }
 
     #[test]
     fn previews_keep_the_panel_shape() {
-        let png = preview(Scene::Graphite, 610).unwrap();
+        let png = preview(Scene::Graphite, d200(), 610).unwrap();
         assert_eq!(size(&png), (610, 354));
     }
 }

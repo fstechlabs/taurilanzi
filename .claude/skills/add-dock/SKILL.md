@@ -27,9 +27,10 @@ Read before starting, in this order:
 - Stop any running `tauri dev`.
 - Find out which model(s) were asked for, and their family in [families.md](families.md). A
   "model" here is one hardware layout: rebrands of identical hardware are variants of one model.
-- Check whether the **multi-device base** exists (see "Is the base in place?" in
-  [architecture.md](architecture.md)). If it does not, it is built first, as its own change and
-  checked on the D200, before any new model. Tell the user that this is what happens first.
+- Read what the multi-device base already has and what it still lacks ("The base, as built" in
+  [architecture.md](architecture.md)). What a new model needs and the base lacks (dials, another
+  image format, another transport) is added to the base first, checked on the D200, then the
+  model.
 - Check whether the family already has a folder in `src-tauri/src/driver/`. A new model of a
   known family is mostly a model file; a new family is a new folder.
 

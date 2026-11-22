@@ -359,5 +359,31 @@
   "mcp": {
     "portTaken": "Port {port} is taken by another program: close it, or restart the app.",
     "failed": "The MCP server could not start: {error}"
+  },
+  "errors": {
+    "invalidKey": "The dock has no key {key}.",
+    "noActiveProfile": "No profile is active.",
+    "unknownDevice": "That dock no longer exists.",
+    "otherDevice": "A key can only move within the same dock.",
+    "deviceConnected": "A dock cannot be forgotten while it is connected: disconnect it first.",
+    "lastDevice": "The only dock the app knows cannot be forgotten.",
+    "unknownProfile": "That profile no longer exists.",
+    "unknownPage": "That page no longer exists in the profile.",
+    "deleteHome": "The home page cannot be deleted.",
+    "invalid": "The change is not valid: {reason}",
+    "save": "The configuration could not be saved: {reason}",
+    "render": "The key could not be drawn: {reason}",
+    "engineStopped": "The app's engine is not running. Restart the app.",
+    "lastProfile": "It is the only profile of its dock and cannot be deleted.",
+    "onlyProfile": "It is the only profile of its dock, which is connected and cannot be left without one: copy it instead of moving it.",
+    "appAlreadyLinked": "{app} is already linked to “{profile}”.",
+    "unknownApp": "That is not an app.",
+    "idTaken": "A page or a profile already has that id.",
+    "unknownPlacement": "No key has that plugin action any more.",
+    "change": "Change {at}: {reason}",
+    "missingAppearance": "The key's look is missing or not valid.",
+    "preview": "The preview could not be drawn.",
+    "starting": "The app is still starting.",
+    "notFound": "Not found."
   }
 }

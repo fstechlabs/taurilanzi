@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { failure } from '~/lib/errors'
 import { Maximize, Plus, Redo2, Undo2 } from '@lucide/vue'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -69,8 +70,8 @@ async function attempt(work: () => Promise<unknown>, message: string) {
   try {
     await work()
   }
-  catch {
-    error.value = message
+  catch (err) {
+    error.value = failure(message, err)
   }
 }
 

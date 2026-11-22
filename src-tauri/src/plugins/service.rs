@@ -8,16 +8,18 @@ use serde::Serialize;
 
 use super::catalog::{Catalog, CatalogError, CatalogPlugin};
 use super::desktop::Desktop;
+use super::elgato::protocol::PluginDock;
 use super::hub::{HubSetup, PluginHost, PluginInput};
 use super::install::{self, InstallError};
 use super::launcher::{Launcher, RunState};
-use super::manifest::{Protocol, Runtime};
+use super::manifest::{ActionManifest, Protocol, Runtime};
 use super::node;
 use super::pages::{self, Pages};
 use super::python;
 use super::registry::{Plugin, Registry};
 use super::server;
 use super::ulanzi::protocol::settings_object;
+use crate::driver::DeviceModel;
 
 pub struct PluginsSetup {
     pub data_dir: PathBuf,
@@ -26,6 +28,8 @@ pub struct PluginsSetup {
     pub language: String,
     pub notify: Box<dyn Fn(PluginInput) + Send>,
     pub desktop: Arc<dyn Desktop>,
+    /// The known docks, which Stream Deck plugins are told of as they start.
+    pub docks: Vec<PluginDock>,
 }
 
 pub struct Plugins {
@@ -126,8 +130,8 @@ pub struct PluginActionInfo {
     pub icon: Option<String>,
     /// Its property inspector page, relative to the plugin folder.
     pub inspector: Option<String>,
-    /// Can go on a key of the D200: dials and other models are not supported yet.
-    pub supported: bool,
+    /// The dock models it can go on a key of, by id: dials are not supported yet.
+    pub models: Vec<String>,
     /// What a new key of it starts with.
     #[specta(type = specta_typescript::Any)]
     pub settings: serde_json::Value,
@@ -147,6 +151,7 @@ impl Plugins {
             desktop: Arc::clone(&setup.desktop),
             logs: setup.data_dir.join("plugin-logs"),
         });
+        host.set_docks(setup.docks, Default::default());
         let port = server::start(host.clone())?;
         if let Err(err) = super::elgato::system_events::watch(host.clone(), Arc::clone(&registry)) {
             warn!("plugins will not hear of apps and sleep: {err}");
@@ -204,7 +209,7 @@ impl Plugins {
     fn start_all(&self) {
         let registry = self.registry.read().unwrap_or_else(PoisonError::into_inner);
         for plugin in registry.plugins() {
-            self.launcher.start(plugin);
+            self.launcher.start(plugin, &self.host.docks());
         }
     }
 
@@ -264,7 +269,11 @@ impl Plugins {
                                 .or_else(|| a.state_image(0).map(str::to_owned)),
                             inspector: Some(a.property_inspector_path.clone())
                                 .filter(|p| !p.is_empty()),
-                            supported: a.supports_keys() && a.supports_device("D200"),
+                            models: crate::driver::models()
+                                .iter()
+                                .filter(|model| a.supports_keys() && runs_on(a, model))
+                                .map(|model| model.id.to_owned())
+                                .collect(),
                             settings: settings_object(&a.settings),
                             visible: a.visible_in_actions_list,
                         })
@@ -322,7 +331,7 @@ impl Plugins {
             .write()
             .unwrap_or_else(PoisonError::into_inner) = fresh;
         for plugin in &changed {
-            self.launcher.start(plugin);
+            self.launcher.start(plugin, &self.host.docks());
         }
     }
 
@@ -354,7 +363,7 @@ impl Plugins {
         let registry = self.registry.read().unwrap_or_else(PoisonError::into_inner);
         if let Some(plugin) = registry.plugin(id) {
             self.host.drop_plugin(id);
-            self.launcher.start(plugin);
+            self.launcher.start(plugin, &self.host.docks());
         }
     }
 
@@ -391,4 +400,9 @@ impl Plugins {
     pub fn stop_all(&self) {
         self.launcher.stop_all();
     }
+}
+
+/// Whether an action can go on a dock of this model, as its manifest's `Devices` says.
+pub fn runs_on(action: &ActionManifest, model: &DeviceModel) -> bool {
+    action.supports_device(model.plugins.ulanzi_model.unwrap_or(model.name))
 }

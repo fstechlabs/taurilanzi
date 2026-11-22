@@ -2,6 +2,7 @@ mod assets;
 mod bindings;
 mod cloud;
 mod commands;
+mod devices;
 mod error;
 mod events;
 mod hass;

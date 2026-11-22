@@ -102,6 +102,7 @@
   if (context) {
     const action = query.get('uuid') || ''
     const key = query.get('key') || '0_0'
+    const device = query.get('deviceId') || deck.device
     const [column, row] = key.split('_').map(Number)
     let settings = {}
     try {
@@ -115,7 +116,7 @@
         try {
           const message = JSON.parse(data)
           if (message.event === 'registerPropertyInspector') {
-            message.taurilanzi = { action, key, settings }
+            message.taurilanzi = { action, key, settings, device }
             data = JSON.stringify(message)
           }
         }
@@ -144,7 +145,7 @@
     const actionInfo = {
       action,
       context,
-      device: deck.device,
+      device,
       payload: { settings, coordinates: { column, row }, controller: 'Keypad', state: deck.state || 0, isInMultiAction: false, resources: {} },
     }
     connect(context, 'registerPropertyInspector', JSON.stringify(actionInfo))

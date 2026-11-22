@@ -395,7 +395,8 @@
     "plugins": {
       "sectionBy": "Plugin by {author}",
       "section": "Plugin",
-      "forDials": "It is for dials or other models: the D200 cannot use it"
+      "forDials": "It is for dials: a dock without them cannot use it",
+      "otherDock": "It is for other models: this dock cannot use it"
     },
     "keys": {
       "space": "Space",
@@ -1045,7 +1046,8 @@
     "key": {
       "label": "Key {n}",
       "empty": "Empty",
-      "remove": "Delete key"
+      "remove": "Delete key",
+      "unsupported": "This dock cannot do what this key does"
     }
   },
   "editor": {
@@ -1080,8 +1082,10 @@
     "errors": {
       "save": "Could not save the key.",
       "try": "Could not try the key.",
-      "upload": "Could not upload the image. Formats: PNG, JPG, WebP, GIF or SVG up to 10 MB.",
-      "icon": "Could not download the icon. Try again in a few seconds."
+      "upload": "Could not upload the image.",
+      "icon": "Could not download the icon.",
+        "undo": "Could not undo.",
+        "redo": "Could not redo."
     },
     "validation": {
       "urlMissing": "Enter an address",
@@ -1175,7 +1179,8 @@
         "remove": "Could not delete the page.",
         "show": "Could not show the page.",
         "duplicate": "Could not duplicate the page.",
-        "home": "Could not change the home page."
+        "home": "Could not change the home page.",
+        "route": "Could not change the path of the link."
       }
     },
     "page": {
@@ -1465,7 +1470,8 @@
       "brightnessLabel": "Dock brightness",
       "sleep": "Sleep",
       "sleepHint": "The dock turns its screen off after this long without key presses.",
-      "sleepLabel": "Dock sleep"
+      "sleepLabel": "Dock sleep",
+      "of": "The settings of {name}, the dock the editor shows."
     },
     "presses": {
       "long": "Long press",
@@ -1582,7 +1588,8 @@
       "accountConnected": "This computer is connected to the cloud",
       "mcp": "AI · MCP",
       "mcpOff": "Connect an AI assistant to configure the dock by talking to it",
-      "mcpRunning": "AI assistants can connect"
+      "mcpRunning": "AI assistants can connect",
+      "resize": "Resize the sidebar"
     },
     "statusBar": {
       "starting": "Starting…",
@@ -1625,8 +1632,9 @@
         "duplicate": "Duplicate",
         "apps": "Linked apps…",
         "delete": "Delete",
-        "sync": "Sync with the cloud",
-        "local": "This computer only…"
+        "sync": "Turn on cloud sync",
+        "local": "Turn off cloud sync…",
+        "transfer": "Move or copy to another dock…"
       },
       "errors": {
         "rename": "The profile could not be renamed.",
@@ -1678,6 +1686,48 @@
         "needs_relogin": "The extension is in place. Log out and back in for GNOME to load it.",
         "unavailable": "This desktop does not tell which app is in front, so profiles will not switch by themselves.",
         "install": "Install the extension"
+      }
+    },
+    "docks": {
+      "options": "Options of {name}",
+      "rename": "Rename",
+      "renameTitle": "Rename the dock",
+      "renameHint": "Empty goes back to the name of its model.",
+      "nameLabel": "Name of the dock",
+      "save": "Save",
+      "cancel": "Cancel",
+      "forget": "Forget this dock…",
+      "forgetTitle": "Forget {name}?",
+      "forgetBody": "The dock and all its profiles are deleted, in the cloud and on your other computers too. It cannot be undone. To keep a profile, move it to another dock first.",
+      "forgetConfirm": "Forget the dock",
+      "untested": "Nobody has tried this model on the real dock yet. If something does not work, open an issue on GitHub.",
+      "report": "Open an issue",
+      "understood": "Got it",
+      "errors": {
+        "focus": "That dock could not be shown",
+        "rename": "The dock could not be renamed",
+        "forget": "The dock could not be forgotten"
+      },
+      "model": "Model",
+      "serial": "Serial number",
+      "noSerial": "Not connected yet"
+    },
+    "transfer": {
+      "title": "Take “{name}” to another dock",
+      "hint": "Keys the target dock does not support will be removed.",
+      "target": "Dock to take it to",
+      "fits": "Every key fits and works on that dock.",
+      "removed": "Left out, as that dock has no place for them:",
+      "unsupported": "With an alert, as that dock cannot do what they do:",
+      "key": "{page}: key {number}",
+      "move": "Move",
+      "copy": "Copy",
+      "cancel": "Cancel",
+      "onlyProfile": "It is the only profile of its dock, which is connected and cannot be left without one: you can copy it, but not move it.",
+      "errors": {
+        "plan": "Could not tell what fits on that dock",
+        "move": "The profile could not be moved",
+        "copy": "The profile could not be copied"
       }
     }
   },
@@ -1978,7 +2028,7 @@
     "empty": "No {kind} server yet."
   },
   "cloudJoin": {
-    "title": "Your account already has profiles",
+    "title": "The cloud already has profiles",
     "body": "There are {count} profiles in the cloud. What should happen to this computer's?",
     "merge": "Keep both",
     "mergeHint": "Keep both: this computer's profiles go up and the cloud's come here. Every computer sees all of them.",

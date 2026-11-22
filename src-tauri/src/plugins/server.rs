@@ -21,7 +21,7 @@ use tungstenite::handshake::derive_accept_key;
 use tungstenite::protocol::Role;
 use tungstenite::{Message, WebSocket};
 
-use super::elgato::protocol as streamdeck;
+use super::elgato::protocol::{self as streamdeck, PluginDock};
 use super::hub::PluginHost;
 use super::manifest::Protocol;
 use super::registry::Registry;
@@ -127,10 +127,12 @@ fn serve(mut stream: TcpStream, host: &PluginHost, token: &str, port: u16) {
                 action,
                 key: query_value(&request.query, "key").unwrap_or_default(),
                 actionid,
+                device: query_value(&request.query, "deviceId").unwrap_or_default(),
             });
         }
         let registry = host.registry();
-        file(&mut stream, &registry, rest, token, port, state)
+        let docks = host.docks();
+        file(&mut stream, &registry, &docks, rest, token, port, state)
     } else if let Some(folder) = referring_plugin(&request, port) {
         // Ulanzi Studio opens pages from their files, so some take the root of the server they
         // are served from for the root of the plugin: `/en.json`, `/images/a.png`.
@@ -138,6 +140,7 @@ fn serve(mut stream: TcpStream, host: &PluginHost, token: &str, port: u16) {
         file(
             &mut stream,
             &registry,
+            &host.docks(),
             &format!("{folder}{}", request.path),
             token,
             port,
@@ -310,6 +313,7 @@ fn websocket(mut stream: TcpStream, request: Request, host: &PluginHost) {
 fn file(
     stream: &mut TcpStream,
     registry: &RwLock<Registry>,
+    docks: &[PluginDock],
     rest: &str,
     token: &str,
     port: u16,
@@ -327,8 +331,9 @@ fn file(
                     "plugin": p.manifest.uuid,
                     // Stream Dock calls the function of its own SDK only for plugins made with it.
                     "mirabox": !p.manifest.api_version.is_null(),
-                    "device": streamdeck::DEVICE_ID,
-                    "info": streamdeck::info(p, crate::i18n::current().tag()),
+                    // The page's own dock comes in its query; this one is for those without.
+                    "device": docks.first().map(|d| d.id.clone()).unwrap_or_default(),
+                    "info": streamdeck::info(p, crate::i18n::current().tag(), docks),
                     "state": state.unwrap_or_default(),
                 })
             });
@@ -702,6 +707,7 @@ mod tests {
                             action: ACTION.into(),
                             key: "2_1".into(),
                             actionid: actionid.into(),
+                            device: String::new(),
                         }
                     );
                     (socket, conn)
@@ -715,6 +721,16 @@ mod tests {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../tests/e2e/fixtures")
             .join(FOLDER)
+    }
+
+    const TEST_DOCK: &str = "dock-1";
+
+    fn dock() -> crate::plugins::KeyDock {
+        crate::plugins::KeyDock {
+            model: "D200".into(),
+            width: 196,
+            height: 196,
+        }
     }
 
     fn host() -> Host {
@@ -732,6 +748,16 @@ mod tests {
             desktop: Arc::new(Headless),
             logs: dir.path().join("logs"),
         });
+        host.set_docks(
+            vec![PluginDock {
+                id: TEST_DOCK.into(),
+                name: "Ulanzi D200".into(),
+                columns: 5,
+                rows: 3,
+                kind: 0,
+            }],
+            [TEST_DOCK.to_owned()].into(),
+        );
         let port = start(host.clone()).unwrap();
         assert_eq!(host.port(), port);
         Host {
@@ -1362,6 +1388,7 @@ mod tests {
             action: SD_ACTION.into(),
             key: "2_1".into(),
             actionid: "A1".into(),
+            device: TEST_DOCK.into(),
         }
     }
 
@@ -1379,7 +1406,7 @@ mod tests {
     fn stream_deck_plugins_hear_the_engine_in_their_own_protocol() {
         let host = host();
         let mut main = stream_deck_main(&host);
-        let fields = key_fields(&json!({ "step": 1 }));
+        let fields = key_fields(&json!({ "step": 1 }), &dock());
         host.host
             .to_main(SD_PLUGIN, &event("add", &sd_instance(), fields.clone()));
         let appeared = next(&mut main);
@@ -1593,7 +1620,7 @@ mod tests {
     fn a_main_service_hears_of_a_key_once() {
         let host = host();
         let mut main = stream_deck_main(&host);
-        let fields = key_fields(&json!({}));
+        let fields = key_fields(&json!({}), &dock());
         for _ in 0..2 {
             host.host
                 .to_main(SD_PLUGIN, &event("add", &sd_instance(), fields.clone()));
@@ -1621,9 +1648,10 @@ mod tests {
 
         host.host.system_woke();
         assert_eq!(next(&mut main), json!({ "event": "systemDidWakeUp" }));
-        host.host.set_dock(false);
+        let known = host.host.docks();
+        host.host.set_docks(known.clone(), Default::default());
         assert_eq!(next(&mut main)["event"], "deviceDidDisconnect");
-        host.host.set_dock(true);
+        host.host.set_docks(known, [TEST_DOCK.to_owned()].into());
         assert_eq!(next(&mut main)["event"], "deviceDidConnect");
 
         #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1712,7 +1740,7 @@ mod tests {
             json!({
                 "event": "registerPropertyInspector",
                 "uuid": "A1",
-                "taurilanzi": { "action": SD_ACTION, "key": "2_1", "settings": { "step": 1 } },
+                "taurilanzi": { "action": SD_ACTION, "key": "2_1", "settings": { "step": 1 }, "device": TEST_DOCK },
             }),
         );
         match host.input() {
@@ -1765,7 +1793,7 @@ mod tests {
                 "event": "propertyInspectorDidDisappear",
                 "action": SD_ACTION,
                 "context": "A1",
-                "device": streamdeck::DEVICE_ID,
+                "device": TEST_DOCK,
             })
         );
     }
@@ -1855,6 +1883,7 @@ mod tests {
                     action: ACTION.into(),
                     key: "1_0".into(),
                     actionid: "A9".into(),
+                    device: String::new(),
                 }
             ),
             other => panic!("{other:?}"),

@@ -12,6 +12,8 @@ const appOptions = {
   env: {
     TAURILANZI_DATA_DIR: data,
     TAURILANZI_NO_DOCK: '1',
+    // Docks that exist only in the app, for the specs that ask run.ts for them.
+    TAURILANZI_VIRTUAL_DOCKS: process.env.TAURILANZI_E2E_VIRTUAL_DOCKS ?? '',
     // The specs read the Spanish texts.
     TAURILANZI_LANGUAGE: 'es',
     TAURILANZI_COMMUNITY_CATALOG: `http://127.0.0.1:${STORE_PORT}/catalog.json`,

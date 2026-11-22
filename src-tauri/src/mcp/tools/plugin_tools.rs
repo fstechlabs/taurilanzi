@@ -68,7 +68,7 @@ pub struct GlobalSettingsParams {
 #[tool_router(router = plugin_tools, vis = "pub(in crate::mcp)")]
 impl Assistant {
     #[tool(
-        description = "Plugins installed, whether they run, and their actions: the id to put in a plugin action, whether it fits a D200 key (`supported`), and the settings a new key starts with.",
+        description = "Plugins installed, whether they run, and their actions: the id to put in a plugin action, the dock models whose keys it fits (`models`, ids as in the layout of each dock in get_overview), and the settings a new key starts with.",
         annotations(read_only_hint = true)
     )]
     async fn list_plugins(&self) -> Answer {
@@ -92,7 +92,7 @@ impl Assistant {
                         "action": action.uuid,
                         "name": action.name,
                         "tooltip": action.tooltip,
-                        "supported": action.supported,
+                        "models": action.models,
                         "has_inspector": action.inspector.is_some(),
                         "default_settings": action.settings,
                     })).collect::<Vec<_>>(),
@@ -156,7 +156,7 @@ impl Assistant {
             "action": action.uuid,
             "name": action.name,
             "tooltip": action.tooltip,
-            "supported": action.supported,
+            "models": action.models,
             "default_settings": action.settings,
             "settings_of_existing_keys": examples,
             "inspector": inspector,

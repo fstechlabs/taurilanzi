@@ -1,5 +1,6 @@
 //! A key's actions: checked before they are saved, run in order when it is pressed.
 
+use std::collections::HashMap;
 use std::thread;
 
 use log::warn;
@@ -10,7 +11,7 @@ use super::gestures::Gesture;
 use super::runtime::Engine;
 use crate::actions;
 use crate::config::{Action, AssetStore, Config, Integration, Key, Profile, rules};
-use crate::plugins::{Instance, event, key_fields, key_name, settings_object};
+use crate::plugins::{event, key_fields, settings_object};
 
 const MAX_DELAY_MS: u32 = 60_000;
 
@@ -24,6 +25,15 @@ impl Engine {
         let inputs = self.inputs.clone();
         let context = self.context.clone();
         let plugins = self.plugin_keys.host().cloned();
+        let placements: HashMap<Uuid, _> = list
+            .iter()
+            .filter_map(|action| match action {
+                Action::Plugin { action, id, .. } => {
+                    Some((*id, self.placement(action, slot.page, slot.index, *id)))
+                }
+                _ => None,
+            })
+            .collect();
         thread::spawn(move || {
             for action in list {
                 if let Action::Plugin {
@@ -39,21 +49,26 @@ impl Engine {
                         if let Err(err) = actions::press_hotkey(&combo) {
                             warn!("plugin shortcut {action}: {err}");
                         }
-                    } else if let Some(host) = &plugins {
-                        let instance = Instance {
-                            action: action.clone(),
-                            key: key_name(slot.index),
-                            actionid: id.to_string(),
-                        };
+                    } else if let Some(host) = &plugins
+                        && let Some((instance, dock)) = placements.get(id)
+                    {
                         host.to_main(
                             &host.plugin_id(action),
-                            &event("run", &instance, key_fields(&settings_object(settings))),
+                            &event(
+                                "run",
+                                instance,
+                                key_fields(&settings_object(settings), dock),
+                            ),
                         );
                     }
                     continue;
                 }
                 if action.navigates() {
-                    if inputs.send(Input::Navigate(action)).is_err() {
+                    let step = Input::Navigate {
+                        page: slot.page,
+                        step: action,
+                    };
+                    if inputs.send(step).is_err() {
                         break;
                     }
                     continue;
@@ -79,8 +94,8 @@ impl Engine {
         index: u8,
         gesture: Gesture,
     ) -> Result<(), CommandError> {
-        let profile = self.profile()?;
-        let page_keys = &profile
+        let page_keys = &self
+            .owner(page)?
             .page(page)
             .ok_or(CommandError::UnknownPage(page))?
             .keys;
@@ -91,13 +106,19 @@ impl Engine {
         Ok(())
     }
 
-    pub(super) fn navigate_to(&mut self, step: Action) {
+    /// Moves the dock of `from`, the page of the key that asked.
+    pub(super) fn navigate_to(&mut self, from: Uuid, step: Action) {
+        let Some(device) = self.config.device_of_page(from) else {
+            return;
+        };
         match step {
-            Action::OpenPage { page, .. } => self.navigate(|nav, profile| nav.open(profile, page)),
-            Action::Back => self.navigate(|nav, profile| nav.back(profile)),
-            Action::Home => self.navigate(|nav, profile| nav.home(profile)),
-            Action::PreviousPage => self.step_page(-1),
-            Action::NextPage => self.step_page(1),
+            Action::OpenPage { page, .. } => {
+                self.navigate(device, |nav, profile| nav.open(profile, page))
+            }
+            Action::Back => self.navigate(device, |nav, profile| nav.back(profile)),
+            Action::Home => self.navigate(device, |nav, profile| nav.home(profile)),
+            Action::PreviousPage => self.step_page(device, -1),
+            Action::NextPage => self.step_page(device, 1),
             Action::SwitchProfile { profile } => {
                 if let Err(err) = self.set_profile(profile) {
                     warn!("could not switch profile: {err}");
@@ -108,8 +129,8 @@ impl Engine {
     }
 
     /// In the order of the profile's pages, wrapping around, so one key can cycle through all.
-    fn step_page(&mut self, by: isize) {
-        self.navigate(|nav, profile| {
+    fn step_page(&mut self, device: Uuid, by: isize) {
+        self.navigate(device, |nav, profile| {
             let count = profile.pages.len() as isize;
             if count < 2 {
                 return false;
@@ -214,7 +235,7 @@ fn check(
             }
         }
         Action::SwitchProfile { profile: target } => {
-            if !config.profiles.iter().any(|p| p.id == *target) {
+            if !config.profiles_of(profile.device).any(|p| p.id == *target) {
                 return Err(CommandError::UnknownProfile(*target));
             }
         }
@@ -296,20 +317,24 @@ mod tests {
             .collect();
         let profile = Profile {
             id: Uuid::new_v4(),
+            device: crate::config::FIRST_DOCK,
             name: "Test".into(),
             home_page: pages[0].id,
             pages,
             apps: Vec::new(),
         };
         Config {
-            schema: 2,
+            schema: crate::config::SCHEMA_VERSION,
             revision: 0,
-            device: DeviceSettings {
+            devices: vec![crate::config::first_device(DeviceSettings {
                 brightness: 50,
                 sleep_minutes: 0,
-            },
+            })],
             preferences: Default::default(),
-            active_profile: profile.id,
+            active_profiles: std::collections::BTreeMap::from([(
+                crate::config::FIRST_DOCK,
+                profile.id,
+            )]),
             profiles: vec![profile],
             plugin_settings: Default::default(),
             integrations: Vec::new(),
@@ -535,8 +560,11 @@ mod tests {
             brightness: 100,
             sleep_minutes: 0,
         };
-        if let Err(err) = rules::check_device(&config.device, &device) {
-            problems.push(format!("device: {err}"));
+        for known in &config.devices {
+            let offered = crate::driver::model(&known.model).map_or(&[][..], |m| &m.sleep_minutes);
+            if let Err(err) = rules::check_device(&known.settings, &device, offered) {
+                problems.push(format!("dock {}: {err}", known.id));
+            }
         }
         for integration in &config.integrations {
             if let Err(err) = rules::check_integration(integration) {

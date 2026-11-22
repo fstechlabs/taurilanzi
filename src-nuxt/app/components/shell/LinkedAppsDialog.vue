@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { failure, reasonOf } from '~/lib/errors'
 import { open as choose } from '@tauri-apps/plugin-dialog'
 import { FolderOpen, Plus, RefreshCw, X } from '@lucide/vue'
 import { APP_FILES } from '~/lib/os'
@@ -48,7 +49,7 @@ async function attempt(work: () => Promise<unknown>) {
     await work()
   }
   catch (err) {
-    error.value = err instanceof Error && !(err instanceof EngineError) ? err.message : t('shell.linkedApps.saveFailed')
+    error.value = err instanceof EngineError ? failure(t('shell.linkedApps.saveFailed'), err) : reasonOf(err)
   }
   finally {
     busy.value = false

@@ -1,4 +1,6 @@
 import { commands, events } from '~/ipc/bindings'
+import { reasonOf } from '~/lib/errors'
+import { t } from '~/lib/i18n'
 import { os } from '~/lib/os'
 
 /** Editors with changes not saved yet; undo drops those first, as they are the latest. */
@@ -16,11 +18,21 @@ async function undo() {
       return
     }
   }
-  await call(commands.undo())
+  try {
+    await call(commands.undo())
+  }
+  catch (err) {
+    useToasts().show(t('editor.errors.undo'), reasonOf(err))
+  }
 }
 
 async function redo() {
-  await call(commands.redo())
+  try {
+    await call(commands.redo())
+  }
+  catch (err) {
+    useToasts().show(t('editor.errors.redo'), reasonOf(err))
+  }
 }
 
 function typingIn(element: Element | null) {
@@ -52,7 +64,7 @@ export function useHistory() {
           document.execCommand(payload.redo ? 'redo' : 'undo')
           return
         }
-        ;(payload.redo ? redo() : undo()).catch(() => {})
+        ;(payload.redo ? redo() : undo())
       })
     }
     else {
@@ -63,7 +75,7 @@ export function useHistory() {
           return
         }
         event.preventDefault()
-        ;(wanted === 'redo' ? redo() : undo()).catch(() => {})
+        ;(wanted === 'redo' ? redo() : undo())
       })
     }
   }

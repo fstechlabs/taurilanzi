@@ -16,8 +16,12 @@ const LINE_HEIGHT: f32 = 1.15;
 const ASCENT: f32 = 0.8;
 const CAP_HEIGHT: f32 = 0.72;
 
+/// Sizes in a design are pixels of a key this tall, so they look the same on any key.
+const DESIGN_HEIGHT: f32 = 196.0;
+
 pub fn build(design: &KeyDesign, (width, height): (u32, u32)) -> String {
     let (w, h) = (width as f32, height as f32);
+    let unit = h / DESIGN_HEIGHT;
     let mut svg = String::new();
     let _ = write!(
         svg,
@@ -63,11 +67,12 @@ pub fn build(design: &KeyDesign, (width, height): (u32, u32)) -> String {
                 position,
                 outline,
             } => {
+                let size = size * unit;
                 let lines: Vec<&str> = content.split('\n').collect();
-                let first_baseline = first_baseline(*position, lines.len(), *size, h);
+                let first_baseline = first_baseline(*position, lines.len(), size, h, unit);
                 let stroke = outline
                     .as_ref()
-                    .map(|o| format!(r#" stroke="{}" stroke-width="{}" stroke-linejoin="round" paint-order="stroke""#, o.color.hex(), o.width))
+                    .map(|o| format!(r#" stroke="{}" stroke-width="{}" stroke-linejoin="round" paint-order="stroke""#, o.color.hex(), o.width * unit))
                     .unwrap_or_default();
                 let _ = write!(
                     svg,
@@ -92,6 +97,7 @@ pub fn build(design: &KeyDesign, (width, height): (u32, u32)) -> String {
                 width,
                 radius,
             } => {
+                let (width, radius) = (width * unit, radius * unit);
                 let half = width / 2.0;
                 let _ = write!(
                     svg,
@@ -102,7 +108,8 @@ pub fn build(design: &KeyDesign, (width, height): (u32, u32)) -> String {
                 );
             }
             Layer::Widget { view } => widgets::write(&mut svg, view, w, h),
-            Layer::Status { ok } => write_status(&mut svg, *ok, w, h),
+            Layer::Status { ok } => write_status(&mut svg, *ok, w, h, unit),
+            Layer::Unsupported => write_unsupported(&mut svg, w, h, unit),
         }
     }
     svg.push_str("</svg>");
@@ -132,10 +139,34 @@ fn write_background(svg: &mut String, background: &Background, w: f32, h: f32) {
     }
 }
 
-/// A round badge in the top right corner, inside the part the bezel leaves visible.
-fn write_status(svg: &mut String, ok: bool, w: f32, h: f32) {
+/// An amber triangle with an exclamation mark in the top left corner, inside the part the bezel
+/// leaves visible.
+fn write_unsupported(svg: &mut String, w: f32, h: f32, unit: f32) {
     let r = w.min(h) * 0.17;
-    let (cx, cy) = (w - SAFE_MARGIN - r - 4.0, SAFE_MARGIN + r + 4.0);
+    let margin = (SAFE_MARGIN + 4.0) * unit;
+    let (cx, cy) = (margin + r, margin + r);
+    let _ = write!(
+        svg,
+        r##"<path d="M{cx} {}L{} {}L{} {}Z" fill="#f59e0b" stroke="#000" stroke-opacity="0.35" stroke-width="{}" stroke-linejoin="round"/><path d="M{cx} {}L{cx} {}M{cx} {}L{cx} {}" stroke="#000" stroke-width="{}" stroke-linecap="round"/>"##,
+        cy - r,
+        cx + r,
+        cy + 0.8 * r,
+        cx - r,
+        cy + 0.8 * r,
+        r * 0.12,
+        cy - 0.45 * r,
+        cy + 0.2 * r,
+        cy + 0.5 * r,
+        cy + 0.52 * r,
+        r * 0.2,
+    );
+}
+
+/// A round badge in the top right corner, inside the part the bezel leaves visible.
+fn write_status(svg: &mut String, ok: bool, w: f32, h: f32, unit: f32) {
+    let r = w.min(h) * 0.17;
+    let margin = (SAFE_MARGIN + 4.0) * unit;
+    let (cx, cy) = (w - margin - r, margin + r);
     let fill = if ok { "#16a34a" } else { "#dc2626" };
     let mark = if ok {
         format!(
@@ -168,12 +199,13 @@ fn write_status(svg: &mut String, ok: bool, w: f32, h: f32) {
     );
 }
 
-fn first_baseline(position: VerticalPosition, lines: usize, size: f32, h: f32) -> f32 {
+fn first_baseline(position: VerticalPosition, lines: usize, size: f32, h: f32, unit: f32) -> f32 {
     let block = (lines.saturating_sub(1)) as f32 * size * LINE_HEIGHT;
+    let margin = SAFE_MARGIN * unit;
     match position {
-        VerticalPosition::Top => SAFE_MARGIN + size * ASCENT,
+        VerticalPosition::Top => margin + size * ASCENT,
         VerticalPosition::Middle => (h - block + size * CAP_HEIGHT) / 2.0,
-        VerticalPosition::Bottom => h - SAFE_MARGIN - block - size * (1.0 - ASCENT),
+        VerticalPosition::Bottom => h - margin - block - size * (1.0 - ASCENT),
     }
 }
 

@@ -3,12 +3,13 @@ use uuid::Uuid;
 
 use super::gestures::Gesture;
 use super::snapshot::Snapshot;
+use super::transfer::TransferPlan;
 use crate::cloud::{SyncChanges, SyncExport};
 use crate::config::{
     Action, AppRef, Appearance, DeviceSettings, Integration, Key, KnownPlugin, Position,
     Preferences, rules::Problem,
 };
-use crate::driver::d200::Event as DockEvent;
+use crate::driver::DockEvent;
 use crate::hass::HassReport;
 use crate::obs::ObsReport;
 use crate::plugins::PluginInput;
@@ -19,6 +20,14 @@ pub enum CommandError {
     InvalidKey(u8),
     #[error("no active profile")]
     NoActiveProfile,
+    #[error("dock {0} does not exist")]
+    UnknownDevice(Uuid),
+    #[error("a key only moves to another place of the same dock")]
+    OtherDevice,
+    #[error("a dock that is connected cannot be forgotten")]
+    DeviceConnected,
+    #[error("the last dock cannot be forgotten")]
+    LastDevice,
     #[error("profile {0} does not exist")]
     UnknownProfile(Uuid),
     #[error("page {0} does not exist in this profile")]
@@ -37,6 +46,8 @@ pub enum CommandError {
     EngineStopped,
     #[error("the last profile cannot be deleted")]
     LastProfile,
+    #[error("the only profile of a connected dock cannot be moved away: copy it instead")]
+    OnlyProfile,
     #[error("{app} is already linked to {profile}")]
     AppAlreadyLinked { app: String, profile: String },
     #[error("that is not an app")]
@@ -103,10 +114,19 @@ pub enum Change {
     SetHomePage {
         page: Uuid,
     },
+    /// On `device`, or the focused dock.
     CreateProfile {
         id: Uuid,
         home: Uuid,
         name: Option<String>,
+        device: Option<Uuid>,
+    },
+    /// Takes a profile to another dock, or a copy of it with the id `copy`, leaving out what the
+    /// dock cannot have.
+    TransferProfile {
+        profile: Uuid,
+        device: Uuid,
+        copy: Option<Uuid>,
     },
     RenameProfile {
         profile: Uuid,
@@ -145,8 +165,30 @@ pub enum Command {
         reply: Done,
     },
     SetDevice {
+        device: Uuid,
         settings: DeviceSettings,
         reply: Done,
+    },
+    /// The dock the editor shows, which commands without a dock are about.
+    FocusDevice {
+        device: Uuid,
+        reply: Done,
+    },
+    RenameDevice {
+        device: Uuid,
+        name: String,
+        reply: Done,
+    },
+    /// Drops a dock that is not connected, with its profiles.
+    ForgetDevice {
+        device: Uuid,
+        reply: Done,
+    },
+    /// What taking a profile to another dock would leave out or keep without working.
+    TransferPlan {
+        profile: Uuid,
+        device: Uuid,
+        reply: Reply<Result<TransferPlan, CommandError>>,
     },
     SetPreferences {
         preferences: Preferences,
@@ -312,8 +354,12 @@ pub enum Command {
 pub enum Input {
     Dock(DockEvent),
     Command(Command),
-    /// A step of a key's actions that moves the dock, sent back by the thread running them.
-    Navigate(Action),
+    /// A step of the actions of a key of `page` that moves its dock, sent back by the thread
+    /// running them.
+    Navigate {
+        page: Uuid,
+        step: Action,
+    },
     /// The screen of the Mac locked or unlocked.
     Locked(bool),
     /// Another app came to the front.
@@ -352,6 +398,7 @@ impl Command {
                 | Self::Redo(_)
                 | Self::DeleteProfile { .. }
                 | Self::Apply { .. }
+                | Self::FocusDevice { .. }
         )
     }
 }

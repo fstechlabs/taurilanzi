@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { failure } from '~/lib/errors'
 import { RotateCcw, Search } from '@lucide/vue'
 import type { PickedIcon } from '~/composables/useIconCatalog'
 import type { HassLook } from '~/composables/useHassKey'
@@ -20,7 +21,7 @@ const draft = inject(KEY_DRAFT, null)
 const look = useHassKey(draft, () => props.server)
 const iconsLoaded = ref(0)
 const busy = ref(false)
-const failed = ref(false)
+const failed = ref<string | null>(null)
 const picking = ref(false)
 
 const entity = computed(() => {
@@ -80,12 +81,12 @@ const name = computed({
 
 async function run(task: () => Promise<void> | void) {
   busy.value = true
-  failed.value = false
+  failed.value = null
   try {
     await task()
   }
-  catch {
-    failed.value = true
+  catch (err) {
+    failed.value = failure(t('actions.hass.look.failed'), err)
   }
   finally {
     busy.value = false
@@ -212,7 +213,7 @@ const offColor = computed({
     </template>
 
     <p v-if="failed" class="text-[11px] text-destructive">
-      {{ t('actions.hass.look.failed') }}
+      {{ failed }}
     </p>
     <IconPicker v-model:open="picking" @pick="pick" />
   </div>

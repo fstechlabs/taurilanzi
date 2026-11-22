@@ -1,105 +1,25 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
-use std::thread;
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, Instant};
 
-use crate::driver::DeviceInfo;
-use hidapi::{HidApi, HidDevice};
-use log::{debug, info, warn};
+use hidapi::HidDevice;
+use log::{debug, warn};
 use serde::Deserialize;
 use serde_json::json;
 
 use super::page_archive::{self, Scope};
 use super::protocol::{self, Command, inbound};
-use super::{DATA_INTERFACE, PRODUCT_ID, VENDOR_ID};
+use super::{KEY_COUNT, WIDE_KEY};
+use crate::driver::device::DeviceInfo;
+use crate::driver::dock::{Event, Reporter, Request};
 
 const READ_TIMEOUT_MS: i32 = 20;
 const BUSY_READ_TIMEOUT_MS: i32 = 2;
 const BUSY_FOR: Duration = Duration::from_millis(500);
-const RECONNECT_INTERVAL: Duration = Duration::from_secs(1);
 /// Firmware 5.0.9 shows its own screensaver after about 10 s without hearing from the host.
 const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(5);
 /// Mode 2 makes the firmware show only our image on the wide key, without its clock or stats.
 const WIDE_KEY_BACKGROUND: &[u8] = b"2|0|0|00:00:00|0";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Event {
-    Connected(DeviceInfo),
-    Disconnected,
-    Key { index: u8, pressed: bool },
-}
-
-enum Request {
-    Brightness(u8),
-    SleepMinutes(u32),
-    SetKeys(BTreeMap<u8, Vec<u8>>),
-    ReplacePage(BTreeMap<u8, Vec<u8>>),
-    Screensaver(Vec<u8>),
-}
-
-/// Handle to the D200 worker thread. Dropping every copy stops the worker.
-#[derive(Clone)]
-pub struct D200 {
-    requests: Sender<Request>,
-}
-
-impl D200 {
-    pub fn start() -> (Self, Receiver<Event>) {
-        let (requests, request_rx) = mpsc::channel();
-        let (events_tx, events) = mpsc::channel();
-        thread::Builder::new()
-            .name("d200".into())
-            .spawn(move || Worker::new(request_rx, events_tx).run())
-            .expect("spawn d200 worker");
-        (Self { requests }, events)
-    }
-
-    /// A dock that never connects: requests are dropped. For tests, which must leave the real
-    /// dock alone.
-    pub fn detached() -> (Self, Receiver<Event>) {
-        let (requests, request_rx) = mpsc::channel::<Request>();
-        let (events_tx, events) = mpsc::channel();
-        thread::Builder::new()
-            .name("d200-detached".into())
-            .spawn(move || {
-                let _events = events_tx;
-                for _ in request_rx {}
-            })
-            .expect("spawn detached d200");
-        (Self { requests }, events)
-    }
-
-    pub fn set_brightness(&self, percent: u8) {
-        self.send(Request::Brightness(percent.min(100)));
-    }
-
-    /// `0` disables sleep.
-    pub fn set_sleep_minutes(&self, minutes: u32) {
-        self.send(Request::SleepMinutes(minutes));
-    }
-
-    /// Updates some keys with PNG images, leaving the others untouched.
-    pub fn set_keys(&self, images: BTreeMap<u8, Vec<u8>>) {
-        self.send(Request::SetKeys(images));
-    }
-
-    /// Replaces the whole page; keys without an image are cleared.
-    pub fn replace_page(&self, images: BTreeMap<u8, Vec<u8>>) {
-        self.send(Request::ReplacePage(images));
-    }
-
-    /// Stores the image the dock shows by itself while nobody talks to it: a PNG of the whole
-    /// panel. It is sent again on every connection.
-    pub fn set_screensaver(&self, png: Vec<u8>) {
-        self.send(Request::Screensaver(png));
-    }
-
-    fn send(&self, request: Request) {
-        if self.requests.send(request).is_err() {
-            warn!("d200 worker is not running");
-        }
-    }
-}
 
 #[derive(Default)]
 struct DesiredState {
@@ -118,71 +38,30 @@ struct Pending {
     keys: BTreeSet<u8>,
 }
 
-impl Pending {
-    fn everything(state: &DesiredState) -> Self {
-        Self {
-            brightness: true,
-            sleep: true,
-            screensaver: state.screensaver.is_some(),
-            full_page: !state.images.is_empty(),
-            keys: BTreeSet::new(),
-        }
+/// Talks to one connected D200 until it goes, or until the engine drops its handle.
+pub(in crate::driver) fn run(device: &HidDevice, requests: Receiver<Request>, reporter: &Reporter) {
+    Worker {
+        requests,
+        events: reporter,
+        state: DesiredState::default(),
+        pending: Pending::default(),
+        upload_id: 0,
+        announced: false,
     }
+    .session(device);
 }
 
-struct Worker {
+struct Worker<'a> {
     requests: Receiver<Request>,
-    events: Sender<Event>,
+    events: &'a Reporter,
     state: DesiredState,
     pending: Pending,
     upload_id: u64,
     announced: bool,
 }
 
-impl Worker {
-    fn new(requests: Receiver<Request>, events: Sender<Event>) -> Self {
-        Self {
-            requests,
-            events,
-            state: DesiredState::default(),
-            pending: Pending::default(),
-            upload_id: 0,
-            announced: false,
-        }
-    }
-
-    fn run(mut self) {
-        let mut api = match HidApi::new() {
-            Ok(api) => api,
-            Err(err) => {
-                warn!("hidapi unavailable: {err}");
-                return;
-            }
-        };
-        loop {
-            match open(&mut api) {
-                Some(device) => {
-                    info!("d200 connected");
-                    self.pending = Pending::everything(&self.state);
-                    self.announced = false;
-                    let keep_running = self.session(&device);
-                    let _ = self.events.send(Event::Disconnected);
-                    info!("d200 disconnected");
-                    if !keep_running {
-                        return;
-                    }
-                }
-                None => match self.requests.recv_timeout(RECONNECT_INTERVAL) {
-                    Ok(request) => self.apply(request),
-                    Err(RecvTimeoutError::Timeout) => {}
-                    Err(RecvTimeoutError::Disconnected) => return,
-                },
-            }
-        }
-    }
-
-    /// Talks to a connected device. Returns false when the handle was dropped.
-    fn session(&mut self, device: &HidDevice) -> bool {
+impl Worker<'_> {
+    fn session(&mut self, device: &HidDevice) {
         let mut buf = [0u8; protocol::REPORT_SIZE];
         let mut last_keep_alive = Instant::now();
         let mut last_request = Instant::now();
@@ -192,7 +71,7 @@ impl Worker {
             .and_then(|_| write(device, Command::DeviceInfo, &[]));
         if let Err(err) = opening {
             warn!("d200 handshake failed: {err}");
-            return true;
+            return;
         }
 
         loop {
@@ -207,7 +86,7 @@ impl Worker {
                 Ok(n) => self.handle_inbound(&buf[..n]),
                 Err(err) => {
                     warn!("d200 read failed: {err}");
-                    return true;
+                    return;
                 }
             }
 
@@ -218,21 +97,21 @@ impl Worker {
                         self.apply(request);
                     }
                     Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => return false,
+                    Err(TryRecvError::Disconnected) => return,
                 }
             }
 
             if last_keep_alive.elapsed() >= KEEP_ALIVE_INTERVAL {
                 if let Err(err) = self.keep_alive(device) {
                     warn!("d200 keep-alive failed: {err}");
-                    return true;
+                    return;
                 }
                 last_keep_alive = Instant::now();
             }
 
             if let Err(err) = self.flush(device) {
                 warn!("d200 write failed: {err}");
-                return true;
+                return;
             }
         }
     }
@@ -335,13 +214,19 @@ impl Worker {
             inbound::KEY if message.payload.len() >= 4 => {
                 let index = message.payload[1];
                 let pressed = message.payload[3] == 1;
-                let _ = self.events.send(Event::Key { index, pressed });
+                // Docks of the same id with more controls, as the D200X with its dials, report
+                // them here too: what is not a key of the D200 is not read as one.
+                if index < KEY_COUNT || index == WIDE_KEY {
+                    self.events.send(Event::Key { index, pressed });
+                } else {
+                    debug!("ignored d200 input {index}");
+                }
             }
             // The dock may answer the info request more than once per connection.
             inbound::DEVICE_INFO if !self.announced => match parse_device_info(&message.payload) {
                 Some(device_info) => {
                     self.announced = true;
-                    let _ = self.events.send(Event::Connected(device_info));
+                    self.events.send(Event::Connected(device_info));
                 }
                 None => warn!("unreadable d200 device info"),
             },
@@ -353,25 +238,6 @@ impl Worker {
     fn next_upload_id(&mut self) -> u64 {
         self.upload_id += 1;
         self.upload_id
-    }
-}
-
-fn open(api: &mut HidApi) -> Option<HidDevice> {
-    if let Err(err) = api.refresh_devices() {
-        warn!("hid enumeration failed: {err}");
-        return None;
-    }
-    let info = api.device_list().find(|d| {
-        d.vendor_id() == VENDOR_ID
-            && d.product_id() == PRODUCT_ID
-            && d.interface_number() == DATA_INTERFACE
-    })?;
-    match info.open_device(api) {
-        Ok(device) => Some(device),
-        Err(err) => {
-            debug!("d200 found but could not be opened: {err}");
-            None
-        }
     }
 }
 
@@ -416,7 +282,22 @@ fn parse_device_info(payload: &[u8]) -> Option<DeviceInfo> {
 
 #[cfg(test)]
 mod tests {
+    use hidapi::HidApi;
+
     use super::*;
+    use crate::driver::ulanzi::{DATA_INTERFACE, PRODUCT_ID, VENDOR_ID};
+
+    fn open(api: &mut HidApi) -> Option<HidDevice> {
+        api.refresh_devices().ok()?;
+        api.device_list()
+            .find(|d| {
+                d.vendor_id() == VENDOR_ID
+                    && d.product_id() == PRODUCT_ID
+                    && d.interface_number() == DATA_INTERFACE
+            })?
+            .open_device(api)
+            .ok()
+    }
 
     /// How fast the dock takes key images, to size animations. Needs the real dock, free of
     /// Ulanzi Studio and the app: `cargo test --release --lib frame_rate -- --ignored --nocapture`

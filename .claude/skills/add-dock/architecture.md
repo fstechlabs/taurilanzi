@@ -1,34 +1,30 @@
 # Architecture for many docks
 
-How Taurilanzi supports many dock models at once, and where every piece of a new model goes.
-The first part describes the multi-device base; the second, what each model and family adds.
+How Taurilanzi supports many dock models at once, and where every piece of a new model goes. The
+multi-device base is in place: this describes it as built, then what a new model or family adds.
 
-## Is the base in place?
+## The base, as built
 
-The base exists when `src-tauri/src/driver/model.rs` (the descriptor types) and
-`src-tauri/src/driver/catalog.rs` (the list of models) exist and the engine runs one session per
-connected device. If they do not, the app still assumes one D200: build the base first (below),
-as its own change, and check on the D200 that nothing changed for it. Only then add models.
+- `src-tauri/src/driver/model.rs` (the descriptor types), `catalog.rs` (every model), `dock.rs`
+  (the contract between the engine and a family's worker), `watcher.rs` (hot-plug over USB HID)
+  and `virtual_dock.rs` (docks that exist only in the app).
+- The engine (`src-tauri/src/engine/docks.rs`) runs one session per connected dock and binds each
+  connection to a known dock.
+- Configuration schema 3: known docks, a dock for every profile, the profile each dock shows.
+- The plugin host tells each Stream Deck plugin of every dock and gives each instance its dock and
+  key size; Ulanzi plugins get the model's name and the key's place in its grid.
+- The UI draws the dock the editor shows from its model, lists every known dock, and moves or
+  copies profiles between docks. MCP sees every dock with its layout.
+- Only one model exists yet: `ulanzi.d200`, in the `ulanzi` family.
 
-What the app assumed before the base (to find and replace):
+What is not there yet, and comes with the first model that needs it:
 
-- `driver/d200/hardware.rs` constants (`COLUMNS`, `KEY_COUNT`, `WIDE_KEY`, `KEY_SIZE`,
-  `WIDE_KEY_SIZE`) imported across the engine, the plugin protocols, the screensaver, MCP and
-  the config defaults; the same numbers (13, 5, 196, 452, 1220×708, 256, `"3_2"`) written as
-  literals in the UI (`DockGrid.vue`, `DockKey.vue`, `KeyInspector.vue`,
-  `ImageEditorDialog.vue`, `image-crop.ts`, `SceneCard.vue`), MCP (`tools/reading.rs`,
-  `tools/rendering.rs`, `guide.md`, `instructions.md`) and the tests.
-- `Page.keys: BTreeMap<u8, Key>` in D200 order; profiles with no device; one `DeviceSettings`
-  shared by every computer through the cloud.
-- `engine/runtime.rs`: one `D200` handle, one screen, one navigation, one pause; state keyed by
-  `(page, u8)`; `check_index` accepting 0–13.
-- `driver/d200/connection.rs`: `Event::Key {index, pressed}` only; the first matching device
-  only. A D200X dial turn (input 17–19, state 2 or 3) is read as a key release.
-- Plugin host: the Elgato side announces one device `TAURILANZI-D200`, type 0, 5×3, and drops
-  dial events and `setFeedback`; the Ulanzi side sends `device: "D200"`, `controller: "Keypad"`;
-  actions are filtered with `supports_device("D200")`.
-- Renderer: `render(design, size)` already works at any size, but text sizes and the safe margin
-  are pixels of a 196 px key, and the output is PNG only.
+- Controls other than keys with a screen (dials, touch strips, buttons, information screens), and
+  their events in the engine and the plugin SDKs (`dialRotate`, `setFeedback`…).
+- Image formats other than PNG, and rotation or mirroring of images (`encoding.rs`).
+- Transports other than HID (a shared `serial.rs`).
+- Margins of widgets relative to the key's size: texts, borders and the status badges already
+  scale with the key's height, widgets keep the D200's margins (`render/widgets.rs`).
 
 ## Rust layout
 
@@ -39,137 +35,122 @@ declares and re-exports, constants and logic live in files named for what they h
 src-tauri/src/driver/
   mod.rs              declarations and re-exports only
   device.rs           DeviceInfo: identity read back from a connected device
-  model.rs            descriptor types (DeviceModel, Control, ControlKind, Surface, …)
+  model.rs            the descriptor types
   catalog.rs          every model of every family; matching a USB device to a model
-  driver.rs           what every family implements, the requests and the events
-  watcher.rs          hot-plug: enumerates, matches the catalog, opens one session per device
-  encoding.rs         RGBA to PNG / JPEG / BMP / RGB565, with rotation and mirroring
-  virtual_dock.rs     virtual devices of any model, for development and e2e builds
-  hid.rs              shared hidapi access (one HidApi for all families)
-  serial.rs           shared serial-port access, only once a family needs it
+  dock.rs             requests to a worker, events from it, the Dock handle
+  watcher.rs          finds docks, starts a worker for each one by its family
+  virtual_dock.rs     docks of any model with no device, for development and e2e builds
   <family>/
     mod.rs            declarations and re-exports only
     protocol.rs       pure encoding of commands and decoding of input; no I/O
-    connection.rs     the worker: open, identify, keep-alive, flush, read
-    emulator.rs       the device's side, for tests and virtual docks
+    connection.rs     the worker: identify, keep-alive, flush, read, until the device goes
+    emulator.rs       the device's side, for tests (see testing.md)
     models/
-      mod.rs          declares the family's model files and lists them
+      mod.rs          declares the family's model files
       <model>.rs      one hardware model: its DeviceModel and its variants
 ```
 
-Families today: `ulanzi` (the current `driver/d200/` moves here when the base is built; its
-`dock_check.rs` stays with it), `elgato`, `mirabox`, `loupedeck`, `logitech`. Name new ones after
-the protocol's owner, not a reseller.
+The `ulanzi` family holds the D200 (`connection.rs`, `protocol.rs`, `page_archive.rs`,
+`hardware.rs`, `dock_check.rs`, `models/d200.rs`). It has no emulator: the D200 is checked on the
+real device. Name new families after the protocol's owner, not a reseller. A new family is a new
+variant of `Family` and a new arm in `watcher.rs`, which starts its worker.
 
 A **model file** holds data only: the descriptor and its variants (rebrands with their own USB id
-and name). Behaviour that differs between models of a family is expressed as fields of the
-descriptor (report size, protocol version, keep-alive, input code table) read by the family's
-code, never as `if model == …` scattered through it.
+and name). Behaviour that differs between models of a family is a field of the descriptor read by
+the family's code, never `if model == …` scattered through it. Add a field to `DeviceModel` when
+a family needs one.
 
-## The descriptor
+## The descriptor (`driver/model.rs`)
 
-One static `DeviceModel` per hardware model, never changed at runtime. The UI (through the
-generated bindings), the MCP schema, the config rules, the plugin host and the driver all read it.
+One `DeviceModel` per hardware model, built once in the catalog and never changed. The UI gets
+them through `dock_models`, the engine and the plugin host read them, MCP describes them.
 
-- `id`: stable string, persisted forever in configurations: `<family>.<model>`
-  (`ulanzi.d200`, `ulanzi.d200x`, `elgato.mk2`, `elgato.plus`, `mirabox.n3`…). Never renamed.
-- `name`, `family`.
-- `variants`: each `{ vendor, name, usb: { vid, pid, interface or usage page, product string? } }`.
-- `surfaces`: framebuffers `{ id, pixel size, format (png | jpeg | bmp | rgb565…), rotation,
-  mirror, how it is updated (per control | whole page archive | whole frame) }`.
-- `controls`: each with
-  - a stable id within the model: `key/<n>`, `dial/<n>`, `strip/<n>`, `touch/<n>`, `info/<n>`,
-    `button/<n>`;
-  - a grid cell `{ row, column, row_span, column_span }` (the D200 wide key spans two columns)
-    and its bounds on the face;
-  - a kind: key (with or without a display, with or without an LED), encoder (press, LED ring,
-    its part of a strip), touch strip (tap, long press, swipe), touch point, information screen
-    (display only), plain button;
-  - the region of a surface it draws into, if it has a display.
-- `face`: an SVG of the device for the editor, drawn by us.
-- Identities for each plugin SDK: Elgato device type and keypad size, Ulanzi model name
-  (`D200`, `D200H`, `D200X`, `Dial`), Mirabox type; and each control's controller name in each
-  SDK (Elgato `Keypad` / `Encoder` / `Neo`; Ulanzi `Keypad` / `Encoder`; Mirabox `Keypad` /
-  `Knob` / `SecondaryScreen` / `Information`).
-- Behaviour the engine must know: the firmware draws its own press effect, brightness range,
-  sleep values, frame budget, keep-alive period, whether the serial number is stable.
-- `confirmed_on_hardware: bool`.
+- `id`: `<family>.<model>` (`ulanzi.d200`), kept in configurations: never renamed.
+- `name`, `family`, `variants` (each `{ vendor, name, usb: { vendor_id, product_id, interface } }`).
+- `panel`: the face in pixels; `columns`, `rows`: the grid.
+- `controls`: each `{ index, kind, cell: { row, column, row_span, column_span }, bounds }`.
+  `index` is where its key is kept in a page (`Page.keys` is a map from it), unique within the
+  model. `kind` is `Key { image: Size }` today. The D200 numbers its keys 0–13 as its firmware
+  does, the wide key 13 spanning two columns.
+- `sleep_minutes`: what the firmware offers; `firmware_press_effect`; `screensaver` (the device
+  keeps a picture of the panel of its own).
+- `plugins`: `elgato_type` (the Stream Deck with the same keypad, or 0) and `ulanzi_model` (the
+  name Ulanzi manifests filter actions by).
+- `stable_serial`, `confirmed_on_hardware`.
 
-## The driver contract
+## The driver contract (`driver/dock.rs`)
 
-Each family implements one contract, so the engine never knows a protocol:
+- The watcher matches a USB device to a model by an exact variant, opens it, and starts the
+  family's worker with the device, a `Receiver<Request>` and a `Reporter`.
+- Events, each tagged with its connection: `Attached { model, dock }` as the worker starts,
+  `Connected(DeviceInfo)` once the device told who it is (identity first, see safety.md),
+  `Key { index, pressed }`, `Disconnected` when the worker ends. The watcher finds the device again
+  when it comes back, as a new connection.
+- Requests: brightness, sleep, set some keys, replace the page, store the screensaver. Images
+  arrive rendered at the control's size. A newer image for a key replaces a queued one.
+- Unknown input is ignored and logged, never an error. Inputs that are not a control of the model
+  are dropped in the worker.
 
-- **Start** with the model and the matched USB device. The worker opens it, **reads its identity
-  first** and refuses to go on if it does not match the model ([safety.md](safety.md)).
-- **Requests** from the engine: set the image of a control (already rendered at that control's
-  size), set LED colours, brightness, sleep, clear, close. A newer image for a control replaces a
-  queued one, as the D200 driver already does; families that upload whole pages batch them.
-- **Events** to the engine, tagged with the device: connected (with `DeviceInfo`), disconnected,
-  and input by control id: key down/up, dial press/release/turn (signed ticks), strip tap / long
-  press / swipe with coordinates, touch.
-- Unknown input is ignored and logged, never an error.
-- One worker per connected device; the watcher opens every matching device, not just the first.
+## Docks, profiles and pages (`config/devices.rs`, `engine/docks.rs`, `engine/transfer.rs`)
 
-## Devices, profiles and pages
+Decided by the owner, and built so:
 
-Decided by the owner:
-
-- **A profile belongs to one physical device.** Two D200s connected at once each have their own
-  profiles. Profiles are never shared or mixed between devices.
-- **Devices that are not connected stay visible**, with their profiles, so they can be edited
-  and their profiles moved, for example to a new dock that replaces a broken one.
-- **Moving or copying a profile to another device is one button**, as simple as possible:
-  - if the target is fully compatible (same layout and every action supported), it moves as is;
-  - otherwise each key is checked against the target: a key on a control the target does not
-    have is removed; a key the target has but whose action or widget it cannot run stays, with
-    an alert on that key;
-  - what will be removed and what will carry an alert is shown before confirming;
-  - it is a `Change` in `engine/batch.rs`: all or nothing, one step of undo.
-  - Example: a D200 profile moved to a D200X, edited there, and moved back; its dial keys are
-    removed on the way back.
-
-How that lands in the data:
-
-- Config gains **known devices**: `{ id, model, name, serial, brightness, sleep, active profile }`
-  for every device ever seen. Brightness and sleep move out of the shared `DeviceSettings` into
-  each device.
-- A device's id is model + serial when the model's serial is stable. When it is not (some
-  Mirabox units report a fixed serial, some Ajazz a new one on every connection), fall back to
-  the USB port path; moving profiles covers the rare case where that changes.
-- Each profile has a `device` (a known device id). Pages map a control id to a key, so dials,
-  strips and buttons get slots.
-- Migration (a schema bump in `config/model.rs`, read in `config/store.rs`): today's profiles go
-  to one known D200 entry, which the first D200 to connect claims (taking its serial).
-- Runtime state (active profile, page, navigation, pause, screensaver, live widgets, gestures,
-  second states, counters) is kept per connected device.
-- Cloud (`src/cloud`): profiles sync with their device id and known devices sync too, so another
-  computer shows them as not connected. The API is a contract with installed versions: only
-  additive changes.
-- Rules (in Rust, `config/rules` and the engine's `check_key`) check control ids against the
-  profile's device model and say whether an action can run on a control. The compatibility check
-  used when moving profiles reuses them.
+- **A profile belongs to one physical dock** (`Profile.device`). Several docks run at once and
+  never share or mix profiles.
+- **Known docks** (`Config.devices`, synced): `{ id, model, name, serial, settings }`. A dock that
+  connects is the known one of its model with its serial, else the first of its model nobody
+  claimed yet (no serial), else a new known dock with a starter profile (`starter_profile`, which
+  fits any model).
+- **One physical dock is one known dock on every computer.** A new dock's id follows from its
+  model and serial (`dock_id`), and its starter profile's ids from the dock's (`derived_id`), so two
+  computers that meet it before they sync make the same dock and the same profile. Models whose
+  serial cannot be trusted (`stable_serial: false`) get random ids instead.
+- When the account's list arrives (`engine/shared_docks.rs`): two known docks of the same model
+  and serial are joined into one (the first dock if one of them is it, else the smaller id), with
+  every profile of both. One known dock that two different units took on two computers (the first
+  dock, claimed by a D200 on each) is told apart: the smaller serial keeps it, the same choice on
+  every computer, and the other unit becomes a dock of its own with a copy of every synced profile
+  (ids derived, so every computer makes the same copies) and the profiles only that computer had.
+  Nothing a dock had is lost on the way.
+- A dock keeps its last profile when the cloud deletes it, unless another computer forgot the dock
+  and it is not connected here; a connected dock left without profiles gets a starter one.
+- `FIRST_DOCK` is the D200 of configurations from before: the same id on every computer, claimed
+  by the first D200 that connects. Schema 2 migrates to it (`devices::migrate`).
+- `Config.active_profiles` (this computer only) says which profile each dock shows; without one it
+  shows its first.
+- **Docks that are not connected stay visible** with their profiles, and can be edited, renamed
+  and forgotten (forgetting drops their profiles, past undo).
+- **Moving or copying a profile to another dock** is `Change::TransferProfile`, one step of undo.
+  Keys go to the control in the same cell of the other model's grid; those it has no place for are
+  left out. `transfer_plan` tells before what will be left out and what will not work.
+- **Keys whose action the dock cannot run stay, with an alert**: worked out on the fly
+  (`key_runs_on`, today the plugin manifest's `Controllers` and `Devices`), never stored. The dock
+  draws `Layer::Unsupported` on them and the snapshot lists them (`unsupported`), so moving the
+  profile back clears the alert by itself.
+- A key only switches to a profile of its own dock; an app is linked to one profile per dock.
+- The engine keeps a session per connected dock (screen, gestures, the handle) and a focused dock,
+  the one the editor shows: commands without a dock (creating a page or a profile from the UI) are
+  about it. Navigation, second states, widgets and results are keyed by page, which belongs to one
+  dock.
+- Cloud: `SharedSettings.devices` is the list of known docks; `device` stays the first dock's
+  settings for versions that knew one. Docks connected here or with profiles here survive a list
+  that lacks them.
 
 ## Plugin SDKs
 
-- **Elgato and Stream Dock** (`plugins/elgato`, `plugins/mirabox`): every connected device in the
-  registration info's `devices[]` with its real type and keypad size (columns × rows of keys
-  only); `deviceDidConnect` / `deviceDidDisconnect` on hot-plug; the device in every context;
-  coordinates from the control's cell. A clone takes the type of the Elgato model with exactly
-  its keypad shape, otherwise 0. Encoder events (`dialRotate`, `dialDown`, `dialUp`, `touchTap`)
-  and `setFeedback` / `setFeedbackLayout` implemented, layouts drawn on Elgato's canvas (200×100
-  per dial; 232×50 for the Neo bar) and scaled to the device.
-- **Ulanzi** (`plugins/ulanzi`): keys as `col_row` from the cell; the manifest's `Devices` filter
-  (with `~` exclusions) against the model's Ulanzi name; dial events and the D200X dial canvas
-  (126×140 per dial).
-- An action is offered only on controls whose controller is in its manifest's `Controllers`.
+- **Stream Deck and Stream Dock** (`plugins/elgato`): `info.devices` lists every known dock
+  (`PluginDock`); `deviceDidConnect` / `deviceDidDisconnect` follow connections
+  (`PluginHost::set_docks`); each event has the instance's dock and the key's size, carried inside
+  the host as `_device` and `_size` (stripped for Ulanzi plugins by `for_plugin`).
+- **Ulanzi** (`plugins/ulanzi`): keys as `column_row` from the control's cell (`model.key_name`);
+  `device` is the model's Ulanzi name; the manifest's `Devices` filter goes through `runs_on`.
+- Actions list the models they fit (`PluginActionInfo.models`).
 
-## UI, MCP, renderer
+## UI and MCP
 
-- UI (`src-nuxt/app`): the dock is drawn from the descriptor (face, cells, spans, control kinds);
-  a device switcher lists connected and known devices; the move/copy dialog; the alert badge on
-  incompatible keys; the "not confirmed on hardware" warning.
-- MCP (`src/mcp`): tools take the device; layout text, `render_page` geometry, `guide.md` and
-  `instructions.md` are generic and read the descriptor; `get_schema` comes from the bindings.
-- Renderer: text sizes and margins relative to the control's size; output encoded per surface
-  (`driver/encoding.rs`). Images are always drawn whole on the computer.
-- Virtual docks replace `TAURILANZI_NO_DOCK` ([testing.md](testing.md)).
+- UI: `lib/dock.ts` (key sizes, shapes, placement, names), `DockGrid` / `DockKey` drawn from the
+  focused model's face, `DeviceList` in the sidebar (focus, rename, forget, the warning of untested
+  models), `TransferProfileDialog`, the alert badge on unsupported keys.
+- MCP: `get_overview` lists docks with their `layout` text and profiles; `set_device_settings`
+  and `rename_dock` take a dock; `apply_changes` has `transfer_profile` and `create_profile` with a
+  dock; `render_page` draws any model's face.

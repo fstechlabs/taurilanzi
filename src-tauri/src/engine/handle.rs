@@ -9,6 +9,7 @@ use uuid::Uuid;
 use super::commands::{Change, Command, CommandError, Input, KeySlot, PageChanges, Reply};
 use super::gestures::Gesture;
 use super::snapshot::{EngineEvent, Snapshot};
+use super::transfer::TransferPlan;
 use crate::clients::Clients;
 use crate::cloud::{SyncChanges, SyncExport};
 use crate::config::Integration;
@@ -103,9 +104,50 @@ impl EngineHandle {
         .await?
     }
 
-    pub async fn set_device(&self, settings: DeviceSettings) -> Result<(), CommandError> {
-        self.ask(|reply| Command::SetDevice { settings, reply })
+    pub async fn set_device(
+        &self,
+        device: Uuid,
+        settings: DeviceSettings,
+    ) -> Result<(), CommandError> {
+        self.ask(|reply| Command::SetDevice {
+            device,
+            settings,
+            reply,
+        })
+        .await?
+    }
+
+    /// The dock the editor shows, which commands without one are about.
+    pub async fn focus_device(&self, device: Uuid) -> Result<(), CommandError> {
+        self.ask(|reply| Command::FocusDevice { device, reply })
             .await?
+    }
+
+    pub async fn rename_device(&self, device: Uuid, name: String) -> Result<(), CommandError> {
+        self.ask(|reply| Command::RenameDevice {
+            device,
+            name,
+            reply,
+        })
+        .await?
+    }
+
+    pub async fn forget_device(&self, device: Uuid) -> Result<(), CommandError> {
+        self.ask(|reply| Command::ForgetDevice { device, reply })
+            .await?
+    }
+
+    pub async fn transfer_plan(
+        &self,
+        profile: Uuid,
+        device: Uuid,
+    ) -> Result<TransferPlan, CommandError> {
+        self.ask(|reply| Command::TransferPlan {
+            profile,
+            device,
+            reply,
+        })
+        .await?
     }
 
     pub async fn set_preferences(&self, preferences: Preferences) -> Result<(), CommandError> {

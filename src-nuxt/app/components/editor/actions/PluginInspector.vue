@@ -2,12 +2,14 @@
 import { ExternalLink, TriangleAlert } from '@lucide/vue'
 import { KEY_TARGET } from '~/lib/actions/key-draft'
 import { findAction, inspectorUrl } from '~/lib/actions/plugins'
+import { keyName } from '~/lib/dock'
 import { openExternal } from '~/lib/external'
 
 const props = defineProps<{ action: string, id: string, settings?: unknown }>()
 
 const { t } = useI18n()
 const { catalog } = usePlugins()
+const { model, snapshot } = useEngine()
 const target = inject(KEY_TARGET, null)
 
 const found = computed(() => findAction(catalog.value, props.action))
@@ -17,7 +19,12 @@ watchEffect(() => {
   const value = catalog.value
   const action = found.value
   if (!url.value && value && action) {
-    url.value = inspectorUrl(value, action.plugin, action.action, target?.value?.index ?? 0, props.id, props.settings)
+    const at = {
+      key: keyName(model.value, target?.value?.index ?? 0),
+      model: model.value?.plugins.ulanzi_model ?? model.value?.name ?? 'D200',
+      device: snapshot.value?.device_id ?? '',
+    }
+    url.value = inspectorUrl(value, action.plugin, action.action, at, props.id, props.settings)
   }
 })
 const running = computed(() => found.value?.plugin.connected ?? false)

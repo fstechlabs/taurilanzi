@@ -1,7 +1,7 @@
 //! The hub's side of the plugins that speak the Stream Deck protocol: how they register, the
 //! commands only this protocol has, and what they hear of the dock, the computer and links.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::PoisonError;
@@ -9,7 +9,7 @@ use std::sync::PoisonError;
 use log::{info, warn};
 use serde_json::Value;
 
-use super::protocol as streamdeck;
+use super::protocol::{self as streamdeck, PluginDock};
 use super::qt_svg;
 use crate::plugins::hub::{ConnId, Hub, Peer, PluginHost, PluginInput, VisualChange};
 use crate::plugins::images;
@@ -29,25 +29,36 @@ impl PluginHost {
         }
     }
 
-    /// The dock came or went: Stream Deck plugins hear of it.
-    pub fn set_dock(&self, connected: bool) {
+    /// The docks known and those connected now: Stream Deck plugins hear of each one that came
+    /// or went.
+    pub fn set_docks(&self, known: Vec<PluginDock>, connected: BTreeSet<String>) {
         let mut hub = self.hub();
-        if hub.dock == connected {
-            return;
-        }
-        hub.dock = connected;
-        let event = if connected {
-            streamdeck::device_connected()
-        } else {
-            streamdeck::device_disconnected()
-        };
-        for (&id, connection) in &hub.connections {
-            if connection.protocol == Protocol::StreamDeck
-                && matches!(connection.peer, Peer::Main { .. })
-            {
-                hub.send(id, event.clone());
+        let came: Vec<Value> = known
+            .iter()
+            .filter(|d| connected.contains(&d.id) && !hub.connected_docks.contains(&d.id))
+            .map(streamdeck::device_connected)
+            .collect();
+        let went: Vec<Value> = hub
+            .connected_docks
+            .difference(&connected)
+            .map(|id| streamdeck::device_disconnected(id))
+            .collect();
+        hub.docks = known;
+        hub.connected_docks = connected;
+        for event in came.iter().chain(&went) {
+            for (&id, connection) in &hub.connections {
+                if connection.protocol == Protocol::StreamDeck
+                    && matches!(connection.peer, Peer::Main { .. })
+                {
+                    hub.send(id, event.clone());
+                }
             }
         }
+    }
+
+    /// Every known dock, as Stream Deck plugins are told of them.
+    pub fn docks(&self) -> Vec<PluginDock> {
+        self.hub().docks.clone()
     }
 
     /// The apps running now: Stream Deck plugins that watch one hear it started or quit.
@@ -309,12 +320,16 @@ impl Hub {
                 .filter(|k| !k.is_empty())
                 .or_else(|| shown.map(|s| s.key))
                 .unwrap_or_default();
+            let device = Some(text(&hint, "device"))
+                .filter(|d| !d.is_empty())
+                .unwrap_or_default();
             Peer::Inspector {
                 plugin: self.plugin_id(&action),
                 instance: Instance {
                     action,
                     key,
                     actionid: uuid,
+                    device,
                 },
             }
         };
@@ -325,8 +340,14 @@ impl Hub {
         connection.protocol = Protocol::StreamDeck;
         match peer {
             Peer::Main { plugin } => {
-                if self.dock {
-                    self.send(conn, streamdeck::device_connected());
+                let connected: Vec<Value> = self
+                    .docks
+                    .iter()
+                    .filter(|d| self.connected_docks.contains(&d.id))
+                    .map(streamdeck::device_connected)
+                    .collect();
+                for event in connected {
+                    self.send(conn, event);
                 }
                 for app in self.apps.clone() {
                     self.tell_app(Some(conn), &app, "applicationDidLaunch");

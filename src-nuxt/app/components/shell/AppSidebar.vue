@@ -1,11 +1,35 @@
 <script setup lang="ts">
-import { ChevronDown, CircleUserRound, Cloud, MonitorSmartphone, RefreshCw, Settings, Sparkles } from '@lucide/vue'
+import { CircleUserRound, Cloud, RefreshCw, Settings, Sparkles } from '@lucide/vue'
+import { useLocalStorage } from '@vueuse/core'
+
+const DEFAULT_WIDTH = 256
+const MIN_WIDTH = 200
+const MAX_WIDTH = 480
 
 const { snapshot } = useEngine()
 const { t } = useI18n()
 const cloud = useCloud()
 const mcp = useMcp()
 const mcpOpen = ref(false)
+
+/** Dragging the right edge resizes the sidebar; the width is kept for next time. */
+const width = useLocalStorage('sidebar-width', DEFAULT_WIDTH)
+let resizing: { x: number, width: number } | null = null
+
+function startResize(event: PointerEvent) {
+  resizing = { x: event.clientX, width: width.value }
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+}
+
+function resize(event: PointerEvent) {
+  if (resizing) {
+    width.value = Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, resizing.width + event.clientX - resizing.x)))
+  }
+}
+
+function stopResize() {
+  resizing = null
+}
 
 const mcpMark = computed(() => ({
   off: { color: 'bg-neutral-500', text: t('shell.sidebar.mcpOff') },
@@ -43,21 +67,25 @@ const mark = computed(() => {
 </script>
 
 <template>
-  <aside class="flex w-64 shrink-0 flex-col border-r bg-neutral-900/40">
+  <aside class="relative flex shrink-0 flex-col border-r bg-neutral-900/40" :style="{ width: `${width}px` }">
+    <div
+      class="absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize transition-colors hover:bg-sky-500/40"
+      role="separator"
+      aria-orientation="vertical"
+      :aria-label="t('shell.sidebar.resize')"
+      data-sidebar-resize
+      @pointerdown.prevent="startResize"
+      @pointermove="resize"
+      @pointerup="stopResize"
+      @pointercancel="stopResize"
+      @dblclick="width = DEFAULT_WIDTH"
+    />
     <ScrollArea class="min-h-0 flex-1">
       <div class="p-2 text-sm">
         <p class="px-2 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
           {{ t('shell.sidebar.devices') }}
         </p>
-        <div v-if="snapshot" class="mb-1">
-          <div class="flex items-center gap-1.5 rounded px-2 py-1">
-            <ChevronDown class="size-3.5" />
-            <MonitorSmartphone class="size-4" />
-            <span class="flex-1">{{ snapshot.device?.model ?? 'D200' }}</span>
-            <span class="size-1.5 rounded-full" :class="snapshot.connected ? 'bg-emerald-500' : 'bg-neutral-500'" :title="snapshot.connected ? t('shell.sidebar.connected') : t('shell.sidebar.disconnected')" />
-          </div>
-          <ProfileList class="ml-4 border-l border-neutral-800 pl-2" />
-        </div>
+        <DeviceList v-if="snapshot" />
 
         <PluginList />
       </div>

@@ -99,6 +99,7 @@ mod tests {
     fn profiles(name: &str) -> Vec<Profile> {
         vec![Profile {
             id: Uuid::nil(),
+            device: crate::config::FIRST_DOCK,
             name: name.into(),
             home_page: Uuid::nil(),
             pages: Vec::new(),

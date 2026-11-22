@@ -10,20 +10,16 @@ use rmcp::{tool, tool_router};
 use super::context::{Answer, engine_error, refused};
 use super::ids::parse_id;
 use super::reading::{KeyParams, PageParams};
-use crate::driver::d200::{KEY_COUNT, WIDE_KEY};
+use crate::driver::DeviceModel;
 use crate::mcp::handler::Assistant;
 
-const SCREEN: (u32, u32) = (1220, 708);
-/// A key and the gap after it.
-const PITCH: i32 = 256;
-const COLUMNS: u8 = 5;
 /// Half the screen is enough to judge a page, at a quarter of the size.
 const PAGE_SCALE: f32 = 0.5;
 
 #[tool_router(router = rendering, vis = "pub(in crate::mcp)")]
 impl Assistant {
     #[tool(
-        description = "Draws one key exactly as the dock shows it, as a PNG (196x196, or 452x196 for the wide key 13).",
+        description = "Draws one key exactly as its dock shows it, as a PNG at the size of its control (see the layout of the dock in get_overview).",
         annotations(read_only_hint = true)
     )]
     async fn render_key(&self, Parameters(params): Parameters<KeyParams>) -> Answer {
@@ -38,7 +34,7 @@ impl Assistant {
     }
 
     #[tool(
-        description = "Draws a whole page as the dock's screen shows it, every key in its place, as a PNG at half size (610x354). Use it to check a page after changing it.",
+        description = "Draws a whole page as its dock's screen shows it, every key in its place, as a PNG at half size. Use it to check a page after changing it.",
         annotations(read_only_hint = true)
     )]
     async fn render_page(&self, Parameters(params): Parameters<PageParams>) -> Answer {
@@ -46,17 +42,30 @@ impl Assistant {
             Ok(page) => page,
             Err(err) => return refused(err),
         };
-        let mut screen = Pixmap::new(SCREEN.0, SCREEN.1).expect("a screen");
+        let config = match self.tools.engine.config().await {
+            Ok(config) => config,
+            Err(err) => return engine_error(err),
+        };
+        let Some(model) = config
+            .device_of_page(page)
+            .and_then(|d| config.device(d))
+            .and_then(|d| crate::driver::model(&d.model))
+        else {
+            return refused(format!(
+                "page {page} does not exist, or its dock is unknown"
+            ));
+        };
+        let mut screen = Pixmap::new(model.panel.width, model.panel.height).expect("a screen");
         screen.fill(Color::BLACK);
-        for index in (0..KEY_COUNT).chain([WIDE_KEY]) {
-            let png = match self.tools.engine.key_image(page, index).await {
+        for control in &model.controls {
+            let png = match self.tools.engine.key_image(page, control.index).await {
                 Ok(png) => png,
                 Err(err) => return engine_error(err),
             };
             let Ok(key) = Pixmap::decode_png(&png) else {
                 continue;
             };
-            let (x, y) = slot(index);
+            let (x, y) = slot(model, control.index);
             screen.draw_pixmap(
                 x,
                 y,
@@ -67,8 +76,8 @@ impl Assistant {
             );
         }
         let (width, height) = (
-            (SCREEN.0 as f32 * PAGE_SCALE) as u32,
-            (SCREEN.1 as f32 * PAGE_SCALE) as u32,
+            (model.panel.width as f32 * PAGE_SCALE) as u32,
+            (model.panel.height as f32 * PAGE_SCALE) as u32,
         );
         let mut small = Pixmap::new(width, height).expect("a smaller screen");
         let paint = PixmapPaint {
@@ -90,13 +99,11 @@ impl Assistant {
     }
 }
 
-/// Where a key sits on the screen: rows of five, the wide key over the last two slots.
-fn slot(index: u8) -> (i32, i32) {
-    let at = if index == WIDE_KEY { 13 } else { index };
-    (
-        i32::from(at % COLUMNS) * PITCH,
-        i32::from(at / COLUMNS) * PITCH,
-    )
+/// Where a key sits on its dock's screen.
+fn slot(model: &DeviceModel, index: u8) -> (i32, i32) {
+    model
+        .control(index)
+        .map_or((0, 0), |c| (c.bounds.x as i32, c.bounds.y as i32))
 }
 
 fn image(png: &[u8]) -> Answer {
@@ -112,10 +119,11 @@ mod tests {
 
     #[test]
     fn keys_sit_where_the_dock_has_them() {
-        assert_eq!(slot(0), (0, 0));
-        assert_eq!(slot(4), (1024, 0));
-        assert_eq!(slot(5), (0, 256));
-        assert_eq!(slot(12), (512, 512));
-        assert_eq!(slot(WIDE_KEY), (768, 512));
+        let d200 = crate::driver::model("ulanzi.d200").unwrap();
+        assert_eq!(slot(d200, 0), (0, 0));
+        assert_eq!(slot(d200, 4), (1024, 0));
+        assert_eq!(slot(d200, 5), (0, 256));
+        assert_eq!(slot(d200, 12), (512, 512));
+        assert_eq!(slot(d200, 13), (768, 512));
     }
 }

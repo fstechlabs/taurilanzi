@@ -25,9 +25,19 @@ const runs = chosen
   ? [wdioArgs]
   : [...new Glob('specs/*.e2e.ts').scanSync(import.meta.dir)].sort().map(spec => ['--spec', spec, ...wdioArgs])
 
+/** Specs that need docks connected, as model ids for `TAURILANZI_VIRTUAL_DOCKS`. */
+const VIRTUAL_DOCKS: Record<string, string> = {
+  'devices.e2e.ts': 'ulanzi.d200',
+}
+
 const failed: string[] = []
 for (const runArgs of runs) {
   const { TAURILANZI_E2E_DATA: _, ...env } = process.env
+  const spec = runArgs.find(a => a.endsWith('.e2e.ts'))?.split('/').pop()
+  const docks = spec ? VIRTUAL_DOCKS[spec] : undefined
+  if (docks) {
+    env.TAURILANZI_E2E_VIRTUAL_DOCKS = docks
+  }
   // The README shows the port assistants reach the released app on.
   if (releaseName) {
     env.TAURILANZI_E2E_MCP_PORT = '3917'

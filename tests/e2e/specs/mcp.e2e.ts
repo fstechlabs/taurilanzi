@@ -185,8 +185,10 @@ describe('the MCP server for AI assistants', () => {
 
     const snapshot = await state()
     const overview = await tool(token, 'get_overview')
-    expect(overview.active_profile).toBe(snapshot.active_profile)
-    const active = overview.profiles.find((p: { active: boolean }) => p.active)
+    const shown = overview.docks.find((d: { shown_in_the_app: boolean }) => d.shown_in_the_app)
+    expect(shown.id).toBe(snapshot.device_id)
+    const active = shown.profiles.find((p: { active: boolean }) => p.active)
+    expect(active.id).toBe(snapshot.active_profile)
     expect(active.home_page).toBe(snapshot.home_page)
     const home = homePage(snapshot)
     const free = Array.from({ length: KEY_COUNT }, (_, i) => i).find(i => !home.keys[i])!
@@ -194,7 +196,7 @@ describe('the MCP server for AI assistants', () => {
 
     const applied = await tool(token, 'apply_changes', {
       changes: [
-        { op: 'create_page', profile: overview.active_profile, page_name: 'Escenas', name: '$s' },
+        { op: 'create_page', profile: active.id, page_name: 'Escenas', name: '$s' },
         { op: 'set_key', page: home.id, index: free, key: { kind: 'action', actions: [{ type: 'open_page', page: '$s' }] } },
       ],
     })

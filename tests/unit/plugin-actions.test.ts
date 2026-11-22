@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test'
 import { Puzzle } from '@lucide/vue'
-import type { PluginActionInfo, PluginCatalog, PluginInfo } from '../../src-nuxt/app/ipc/bindings'
-import { catalogOf, findAction, inspectorUrl, keyName, newPluginAction, pluginImage } from '../../src-nuxt/app/lib/actions/plugins'
+import type { DeviceModel, PluginActionInfo, PluginCatalog, PluginInfo } from '../../src-nuxt/app/ipc/bindings'
+import { catalogOf, findAction, inspectorUrl, newPluginAction, pluginImage } from '../../src-nuxt/app/lib/actions/plugins'
+import { keyName } from '../../src-nuxt/app/lib/dock'
 
 function action(changes: Partial<PluginActionInfo> = {}): PluginActionInfo {
   return {
@@ -10,7 +11,7 @@ function action(changes: Partial<PluginActionInfo> = {}): PluginActionInfo {
     tooltip: 'Suma uno',
     icon: 'images/icon.svg',
     inspector: 'inspector/inspector.html',
-    supported: true,
+    models: ['ulanzi.d200'],
     settings: {},
     visible: true,
     ...changes,
@@ -41,15 +42,17 @@ function catalog(plugins: PluginInfo[] = [plugin()]): PluginCatalog {
   return { port: 3906, node: 'v20.0.0', python: null, language: 'es', plugins }
 }
 
-test('keys are named by column and row like the engine', () => {
-  expect(keyName(0)).toBe('0_0')
-  expect(keyName(4)).toBe('4_0')
-  expect(keyName(7)).toBe('2_1')
-  expect(keyName(13)).toBe('3_2')
+test('keys are named by their column and row on their dock', () => {
+  const wide = { index: 13, cell: { row: 2, column: 3, row_span: 1, column_span: 2 } }
+  const model = { controls: [wide] } as unknown as DeviceModel
+  expect(keyName(model, 13)).toBe('3_2')
+  expect(keyName(null, 7)).toBe('2_1')
 })
 
+const at = { key: '2_1', model: 'D200', device: 'dock-1' }
+
 test('the inspector opens from the host with the query of Ulanzi Studio', () => {
-  const url = new URL(inspectorUrl(catalog(), plugin(), action(), 7, 'abc')!)
+  const url = new URL(inspectorUrl(catalog(), plugin(), action(), at, 'abc')!)
   expect(url.origin).toBe('http://127.0.0.1:3906')
   expect(url.pathname).toBe('/plugins/com.taurilanzi.e2e.ulanziPlugin/inspector/inspector.html')
   expect(Object.fromEntries(url.searchParams)).toEqual({
@@ -63,10 +66,11 @@ test('the inspector opens from the host with the query of Ulanzi Studio', () => 
     language: 'es',
     controller: 'Keypad',
     device: 'D200',
+    deviceId: 'dock-1',
   })
-  const spaced = inspectorUrl(catalog(), plugin({ folder: 'my plugin.ulanziPlugin' }), action({ inspector: './pi/my page.html' }), 0, 'x')!
+  const spaced = inspectorUrl(catalog(), plugin({ folder: 'my plugin.ulanziPlugin' }), action({ inspector: './pi/my page.html' }), at, 'x')!
   expect(spaced).toStartWith('http://127.0.0.1:3906/plugins/my%20plugin.ulanziPlugin/pi/my%20page.html?')
-  expect(inspectorUrl(catalog(), plugin(), action({ inspector: null }), 0, 'x')).toBeNull()
+  expect(inspectorUrl(catalog(), plugin(), action({ inspector: null }), at, 'x')).toBeNull()
 })
 
 test('finds an action and its plugin in the catalog', () => {
@@ -126,7 +130,7 @@ test('actions a plugin hides are known on keys but never offered', () => {
 })
 
 test('actions that cannot run here are shown but not offered', () => {
-  const dial = action({ uuid: 'com.taurilanzi.e2e.counter.dial', supported: false })
+  const dial = action({ uuid: 'com.taurilanzi.e2e.counter.dial', models: [] })
   const reason = 'Hace falta Node 20 o posterior'
   const { entries } = catalogOf(catalog([
     plugin({ actions: [action(), dial] }),

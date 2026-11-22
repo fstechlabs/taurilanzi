@@ -19,7 +19,7 @@ use serde::Serialize;
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, Signal, System, UpdateKind};
 
 use super::desktop::Desktop;
-use super::elgato::protocol as streamdeck;
+use super::elgato::protocol::{self as streamdeck, PluginDock};
 use super::hub::urlencode;
 use super::manifest::{Protocol, Runtime};
 use super::node::Node;
@@ -146,12 +146,13 @@ impl Launcher {
         self.python.as_ref()
     }
 
-    pub fn start(&self, plugin: &Plugin) {
+    /// Stream Deck plugins are told of `docks` as they start.
+    pub fn start(&self, plugin: &Plugin, docks: &[PluginDock]) {
         let id = plugin.manifest.uuid.clone();
         self.stop(&id);
         let args = match plugin.protocol {
             Protocol::Ulanzi => self.host_arguments().to_vec(),
-            Protocol::StreamDeck => streamdeck::arguments(self.port, plugin, &self.language),
+            Protocol::StreamDeck => streamdeck::arguments(self.port, plugin, &self.language, docks),
         };
         match &plugin.runtime {
             Runtime::Node(code) => match self.node_program(&plugin.dir, code, args) {
@@ -753,7 +754,7 @@ mod tests {
             "es".into(),
             dir.path(),
         );
-        launcher.start(&plugin);
+        launcher.start(&plugin, &[]);
         let ran: serde_json::Value =
             serde_json::from_str(&written(&plugin.dir.join("plugin/ran.json"))).unwrap();
         assert_eq!(
@@ -801,7 +802,7 @@ mod tests {
             "es".into(),
             dir.path(),
         );
-        launcher.start(&plugin);
+        launcher.start(&plugin, &[]);
         assert_eq!(
             written(&plugin.dir.join("setup/ran.json")),
             r#"["--silent"]"#
@@ -814,14 +815,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let launcher = launcher(dir.path());
         let images_only = plugin(dir.path(), "");
-        launcher.start(&images_only);
+        launcher.start(&images_only, &[]);
         assert_eq!(launcher.state(&images_only), RunState::Passive);
         assert!(matches!(
             launcher.state(&plugin(dir.path(), "main.py")),
             RunState::Unavailable { .. }
         ));
         let node = plugin(dir.path(), "app.js");
-        launcher.start(&node);
+        launcher.start(&node, &[]);
         assert!(matches!(
             launcher.state(&node),
             RunState::Unavailable { .. }
@@ -834,10 +835,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let launcher = launcher(dir.path());
         let page = plugin(dir.path(), "index.html");
-        launcher.start(&page);
+        launcher.start(&page, &[]);
         assert_eq!(launcher.state(&page), RunState::Stopped, "no such page");
         fs::write(dir.path().join("index.html"), "<p>x</p>").unwrap();
-        launcher.start(&page);
+        launcher.start(&page, &[]);
         assert_eq!(launcher.state(&page), RunState::Running);
         launcher.stop_all();
         assert_eq!(launcher.state(&page), RunState::Stopped);
@@ -893,7 +894,7 @@ mod tests {
             "es".into(),
             dir.path(),
         );
-        launcher.start(&plugin);
+        launcher.start(&plugin, &[]);
         let ran: serde_json::Value =
             serde_json::from_str(&written(&plugin.dir.join("ran.json"))).unwrap();
         let argv = ran["argv"].as_array().unwrap();

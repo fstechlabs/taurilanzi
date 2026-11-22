@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import { failure } from '~/lib/errors'
 import { Crop as CropIcon, ImageUp, Play, Square } from '@lucide/vue'
 import { commands } from '~/ipc/bindings'
 import type { ImageDraft } from '~/composables/useKeyEditor'
 import type { LanguageChoice, LockAction, Settings } from '~/types/engine'
 import { SCENES } from '~/lib/scenes'
 
-const { snapshot, screensaverUrl, assetUrl, upload } = useEngine()
+const { snapshot, screensaverUrl, assetUrl, upload, device: engineDevice, model } = useEngine()
 const { preferences, device, failed } = useSettings()
+/** The sleep times the firmware of the dock offers. */
+const sleepOptions = computed(() => model.value?.sleep_minutes ?? [0])
 const route = useRoute()
 const router = useRouter()
 
@@ -119,7 +122,7 @@ async function uploadImage(event: Event) {
         <h1 class="text-lg font-semibold">
           {{ t('settings.title') }}
         </h1>
-        <span v-if="failed" class="text-xs text-destructive">{{ t('settings.saveFailed') }}</span>
+        <span v-if="failed" class="text-xs text-destructive">{{ failure(t('settings.saveFailed'), failed) }}</span>
       </div>
 
       <Tabs v-model="tab" class="gap-6">
@@ -147,12 +150,12 @@ async function uploadImage(event: Event) {
         </TabsContent>
 
         <TabsContent value="dock">
-          <SettingsSection>
+          <SettingsSection :description="t('settings.dock.of', { name: engineDevice?.name ?? '' })">
             <SettingRow :label="t('settings.dock.brightness')">
               <SliderField v-model="device.brightness" :label="t('settings.dock.brightnessLabel')" :min="0" :max="100" unit=" %" />
             </SettingRow>
             <SettingRow :label="t('settings.dock.sleep')" :hint="t('settings.dock.sleepHint')">
-              <MinutesSelect v-model="device.sleep_minutes" :label="t('settings.dock.sleepLabel')" :options="[0, 1, 5, 10, 15, 30, 60]" />
+              <MinutesSelect v-model="device.sleep_minutes" :label="t('settings.dock.sleepLabel')" :options="sleepOptions" />
             </SettingRow>
           </SettingsSection>
         </TabsContent>
@@ -278,7 +281,7 @@ async function uploadImage(event: Event) {
       v-if="editing"
       v-model:open="editorOpen"
       :image="editing"
-      shape="screensaver"
+      screensaver
       background="#000000"
       @update:image="applyEdit"
     />

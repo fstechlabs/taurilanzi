@@ -1,6 +1,7 @@
 mod actions;
 mod assets;
 mod defaults;
+mod devices;
 mod hass;
 mod http;
 mod integrations;
@@ -16,7 +17,9 @@ mod widgets;
 
 pub use actions::{Action, KeyCombo, MediaKey, SoundMode};
 pub use assets::{AssetStore, SoundFormat};
-pub use defaults::{back_key, first_run};
+pub use defaults::{back_key, first_run, starter_profile};
+#[cfg_attr(not(test), allow(unused_imports))]
+pub use devices::{FIRST_DOCK, KnownDevice, derived_id, dock_id, first_device};
 pub use hass::{
     HassAlarm, HassChange, HassChoice, HassCommand, HassLevel, HassMedia, HassOption, HassPress,
     HassSwitch, HassTarget,

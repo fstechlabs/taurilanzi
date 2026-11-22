@@ -6,7 +6,6 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use log::warn;
 use uuid::Uuid;
 
 use super::runtime::Engine;
@@ -100,24 +99,28 @@ impl Engine {
         self.monitor.keep_sampling(graphs);
     }
 
-    /// Keys of the page on the dock with live content, and how often each changes.
-    fn live_keys(&self) -> Vec<(u8, u64)> {
-        if self.paused || !self.screen.showing_keys() {
+    /// Keys with live content on the page each dock shows, and how often each changes.
+    fn live_keys(&self) -> Vec<(Uuid, u8, u64)> {
+        if self.paused {
             return Vec::new();
         }
-        let Some(page) = self.current_page() else {
-            return Vec::new();
-        };
-        page.keys
-            .iter()
-            .filter_map(|(&index, key)| {
+        let mut live = Vec::new();
+        for (&device, session) in &self.docks.sessions {
+            if !session.screen.showing_keys() {
+                continue;
+            }
+            let Some(page) = self.current_page(device) else {
+                continue;
+            };
+            live.extend(page.keys.iter().filter_map(|(&index, key)| {
                 live_period(
                     self.appearance_now(page.id, index, key),
                     self.key_widgets.turn((page.id, index)),
                 )
-                .map(|p| (index, p))
-            })
-            .collect()
+                .map(|p| (device, index, p))
+            }));
+        }
+        live
     }
 
     pub(super) fn appearance_now<'a>(&self, page: Uuid, index: u8, key: &'a Key) -> &'a Appearance {
@@ -131,7 +134,7 @@ impl Engine {
         let now = SystemTime::now();
         self.live_keys()
             .into_iter()
-            .map(|(_, period)| until_next(now, period))
+            .map(|(_, _, period)| until_next(now, period))
             .min()
             .map(|wait| Instant::now() + wait + LATE)
     }
@@ -146,23 +149,14 @@ impl Engine {
         let Some(last) = self.live.last.replace(now) else {
             return;
         };
-        let mut images = BTreeMap::new();
-        for (index, period) in keys {
-            if slot(last, period) == slot(now, period) {
-                continue;
-            }
-            let Some(design) = self.design_for(index) else {
-                continue;
-            };
-            match self.draw(index, &design) {
-                Ok(png) => {
-                    images.insert(index, png);
-                }
-                Err(err) => warn!("key {index} could not be drawn: {err}"),
+        let mut due: BTreeMap<Uuid, Vec<u8>> = BTreeMap::new();
+        for (device, index, period) in keys {
+            if slot(last, period) != slot(now, period) {
+                due.entry(device).or_default().push(index);
             }
         }
-        if !images.is_empty() {
-            self.dock.set_keys(images);
+        for (device, indexes) in due {
+            self.redraw_indexes(device, indexes);
         }
     }
 }

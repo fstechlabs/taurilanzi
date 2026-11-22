@@ -6,7 +6,7 @@ import type { PluginInfo } from '~/types/engine'
 
 type Plugin = DeepReadonly<PluginInfo>
 
-const { catalog } = usePlugins()
+const { catalog, catalogError } = usePlugins()
 const store = useStorePlugins()
 const { t } = useI18n()
 const { recommendation } = useMcp()
@@ -65,8 +65,8 @@ function status(plugin: Plugin): { color: string, label: string } {
     <p class="px-2 pt-4 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
       {{ t('plugins.list.title') }}
     </p>
-    <p v-if="!catalog" class="px-2 py-1 text-xs text-muted-foreground">
-      {{ t('plugins.list.failed') }}
+    <p v-if="catalogError" class="px-2 py-1 text-xs text-destructive">
+      {{ catalogError }}
     </p>
     <button
       v-for="plugin in plugins"

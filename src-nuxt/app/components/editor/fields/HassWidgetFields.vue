@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { failure } from '~/lib/errors'
 import { HASS_SERVER } from '~/composables/useHass'
 import { Plus, RotateCcw, Search, X } from '@lucide/vue'
 import { hassStatusText, suggestedExtra } from '~/lib/actions/hass'
@@ -71,7 +72,7 @@ const attribute = computed({
 
 const keyIcons = useHassKey(null, server)
 const picking = ref(false)
-const iconFailed = ref(false)
+const iconFailed = ref<string | null>(null)
 
 /** Home Assistant's icons for the entity, so the card follows its state; refreshed with it. */
 async function refreshIcons(id: string) {
@@ -81,10 +82,10 @@ async function refreshIcons(id: string) {
   }
   try {
     widget.icons = await keyIcons.icons(id)
-    iconFailed.value = false
+    iconFailed.value = null
   }
-  catch {
-    iconFailed.value = true
+  catch (err) {
+    iconFailed.value = failure(t('widgets.hass.iconFailed'), err)
   }
 }
 
@@ -189,7 +190,7 @@ const entityLabel = computed(() => {
         </div>
         <div class="flex min-w-0 flex-1 flex-col gap-0.5">
           <span class="text-xs text-muted-foreground">{{ t('actions.hass.look.icon') }}</span>
-          <span class="truncate text-sm">{{ iconFailed ? t('widgets.hass.iconFailed') : iconPreview.own ? t('actions.hass.look.ownIcon') : t('actions.hass.look.haIconLive') }}</span>
+          <span class="truncate text-sm">{{ iconFailed ?? (iconPreview.own ? t('actions.hass.look.ownIcon') : t('actions.hass.look.haIconLive')) }}</span>
         </div>
         <Button variant="outline" size="sm" :disabled="!iconic.entity" @click="picking = true">
           <Search /> {{ t('actions.hass.look.changeIcon') }}

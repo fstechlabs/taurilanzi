@@ -1,24 +1,31 @@
 //! Profiles as the sidebar edits them, the apps linked to them, and switching to the profile of
 //! the app in front.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use log::warn;
 use uuid::Uuid;
 
+use super::app_profiles::AppProfiles;
 use super::commands::CommandError;
 use super::runtime::Engine;
-use crate::config::{Action, AppRef, Key, Page, Position, Profile};
+use super::transfer::keep_switches_to;
+use crate::config::{AppRef, Page, Position, Profile};
 
 const MAX_NAME: usize = 60;
 
 impl Engine {
-    /// A new profile has one empty page, its home.
+    /// A new profile has one empty page, its home. It goes on the focused dock unless told
+    /// another.
     pub(super) fn create_profile(
         &mut self,
         ids: NewProfile,
         name: Option<String>,
     ) -> Result<Uuid, CommandError> {
+        let device = ids.device.unwrap_or(self.focused());
+        if self.config.device(device).is_none() {
+            return Err(CommandError::UnknownDevice(device));
+        }
         for taken in [ids.id, ids.home].into_iter().flatten() {
             if self.config.id_taken(taken) {
                 return Err(CommandError::IdTaken(taken));
@@ -38,9 +45,10 @@ impl Engine {
         let name = name
             .map(|n| clean_name(&n))
             .filter(|n| !n.is_empty())
-            .unwrap_or_else(|| self.free_profile_name());
+            .unwrap_or_else(|| self.free_profile_name(device));
         let profile = Profile {
             id: ids.id.unwrap_or_else(Uuid::new_v4),
+            device,
             name,
             home_page: page.id,
             pages: vec![page],
@@ -73,32 +81,12 @@ impl Engine {
             return Err(CommandError::IdTaken(taken));
         }
         let at = self.profile_index(id)?;
-        let mut copy = self.config.profiles[at].clone();
-        copy.id = copy_id.unwrap_or_else(Uuid::new_v4);
+        let mut copy = Self::fresh_copy(
+            &self.config.profiles[at],
+            copy_id.unwrap_or_else(Uuid::new_v4),
+        );
         copy.name = clean_name(&trf!("profiles.copy", name = copy.name));
         copy.apps.clear();
-        Self::renew_plugin_ids(copy.pages.iter_mut().flat_map(|p| p.keys.values_mut()));
-        let new_ids: HashMap<Uuid, Uuid> = copy
-            .pages
-            .iter()
-            .map(|page| (page.id, Uuid::new_v4()))
-            .collect();
-        for page in &mut copy.pages {
-            page.id = new_ids[&page.id];
-            for key in page.keys.values_mut() {
-                for action in actions_mut(key) {
-                    if let Action::OpenPage { page, .. } = action
-                        && let Some(new) = new_ids.get(page)
-                    {
-                        *page = *new;
-                    }
-                }
-            }
-        }
-        copy.home_page = new_ids
-            .get(&copy.home_page)
-            .copied()
-            .unwrap_or(copy.home_page);
         let copy_id = copy.id;
         self.config.profiles.insert(at + 1, copy);
         if self.config.local_profiles.contains(&id) {
@@ -108,13 +96,16 @@ impl Engine {
         Ok(copy_id)
     }
 
-    /// Keys that switched to the profile stop doing so. If the dock showed it, it goes back to
-    /// the profile the user picked last, or to a neighbour.
+    /// Keys that switched to the profile stop doing so. If its dock showed it, it goes back to
+    /// the profile the user picked last there, or to a neighbour.
     pub(super) fn delete_profile(&mut self, id: Uuid) -> Result<(), CommandError> {
         let at = self.profile_index(id)?;
-        if self.config.profiles.len() == 1 {
+        let device = self.config.profiles[at].device;
+        let siblings: Vec<Uuid> = self.config.profiles_of(device).map(|p| p.id).collect();
+        if siblings.len() == 1 {
             return Err(CommandError::LastProfile);
         }
+        let on_dock = self.config.is_active(id);
         self.config.profiles.remove(at);
         for key in self
             .config
@@ -123,36 +114,55 @@ impl Engine {
             .flat_map(|p| &mut p.pages)
             .flat_map(|page| page.keys.values_mut())
         {
-            drop_switch_to(key, id);
+            keep_switches_to(key, |target| target != id);
         }
         let exists = profile_ids(&self.config.profiles);
-        self.app_profiles.retain(|p| exists.contains(&p));
-        let on_dock = self.config.active_profile == id;
+        for app_profiles in self.app_profiles.values_mut() {
+            app_profiles.retain(|p| exists.contains(&p));
+        }
         if on_dock {
+            let place = siblings.iter().position(|p| *p == id).unwrap_or(0);
+            let neighbour = siblings
+                .iter()
+                .filter(|p| **p != id)
+                .nth(place.min(siblings.len() - 2))
+                .copied();
             let next = self
                 .app_profiles
-                .manual()
-                .unwrap_or(self.config.profiles[at.min(self.config.profiles.len() - 1)].id);
-            self.config.active_profile = next;
-            self.app_profiles.chosen(next);
+                .get(&device)
+                .and_then(AppProfiles::manual)
+                .or(neighbour);
+            if let Some(next) = next {
+                self.config.active_profiles.insert(device, next);
+                self.app_profiles_of(device).chosen(next);
+            }
         }
         self.save()?;
         if on_dock {
-            self.show_current_page();
+            self.show_current_page(device);
         }
         Ok(())
     }
 
-    /// Moves a profile to another place in the list.
+    /// Moves a profile to another place among those of its dock.
     pub(super) fn move_profile(&mut self, id: Uuid, index: usize) -> Result<(), CommandError> {
         let at = self.profile_index(id)?;
         let profile = self.config.profiles.remove(at);
-        let to = index.min(self.config.profiles.len());
+        let device = profile.device;
+        let to = self
+            .config
+            .profiles
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| p.device == device)
+            .nth(index)
+            .map_or(self.config.profiles.len(), |(at, _)| at);
         self.config.profiles.insert(to, profile);
         self.save()
     }
 
-    /// An app belongs to one profile at most, so the app in front always has a clear one.
+    /// An app belongs to one profile at most on each dock, so the app in front always has a
+    /// clear one there.
     pub(super) fn link_app(&mut self, id: Uuid, app: AppRef) -> Result<(), CommandError> {
         let app = AppRef {
             id: app.id.trim().to_owned(),
@@ -161,10 +171,14 @@ impl Engine {
         if app.id.is_empty() {
             return Err(CommandError::UnknownApp);
         }
+        let device = self
+            .config
+            .profile(id)
+            .ok_or(CommandError::UnknownProfile(id))?
+            .device;
         if let Some(other) = self
             .config
-            .profiles
-            .iter()
+            .profiles_of(device)
             .find(|p| p.id != id && p.apps.iter().any(|a| a.id == app.id))
         {
             return Err(CommandError::AppAlreadyLinked {
@@ -190,71 +204,109 @@ impl Engine {
         self.save()
     }
 
-    /// Another app came to the front. Switching for it is not an edit, so undo leaves it alone;
-    /// the profile on the dock is saved, as with any other switch, so it comes back after a
-    /// restart.
+    /// Another app came to the front: each dock shows the profile it has for it. Switching for
+    /// it is not an edit, so undo leaves it alone; the profile on each dock is saved, as with any
+    /// other switch, so it comes back after a restart.
     pub(super) fn on_front_app(&mut self, app: AppRef) {
         if self.front_app.as_ref() != Some(&app) {
             self.front_app = Some(app.clone());
             self.changed = true;
         }
-        let active = self.config.active_profile;
-        if !self.config.preferences.profiles.follow_apps {
-            self.app_profiles.chosen(active);
-            return;
-        }
-        let linked = self
-            .config
-            .profiles
-            .iter()
-            .find(|p| p.apps.iter().any(|a| a.id == app.id))
-            .map(|p| p.id);
-        let was_automatic = self.app_profiles.is_automatic(active);
-        match self.app_profiles.front_changed(linked, active) {
-            Some(next) if self.config.profiles.iter().any(|p| p.id == next) => {
-                log::info!("{} came to the front, switching profile", app.name);
-                self.config.active_profile = next;
-                if let Err(err) = self.save() {
-                    warn!("could not save the profile on the dock: {err}");
-                }
-                self.show_current_page();
+        let devices: Vec<Uuid> = self.config.devices.iter().map(|d| d.id).collect();
+        for device in devices {
+            let Some(active) = self.config.active_profile_of(device).map(|p| p.id) else {
+                continue;
+            };
+            if !self.config.preferences.profiles.follow_apps {
+                self.app_profiles_of(device).chosen(active);
+                continue;
             }
-            _ => {
-                if was_automatic != self.app_profiles.is_automatic(active) {
-                    self.changed = true;
+            let linked = self
+                .config
+                .profiles_of(device)
+                .find(|p| p.apps.iter().any(|a| a.id == app.id))
+                .map(|p| p.id);
+            let was_automatic = self.app_profiles_of(device).is_automatic(active);
+            match self.app_profiles_of(device).front_changed(linked, active) {
+                Some(next) if self.config.profiles_of(device).any(|p| p.id == next) => {
+                    log::info!("{} came to the front, switching profile", app.name);
+                    self.config.active_profiles.insert(device, next);
+                    if let Err(err) = self.save() {
+                        warn!("could not save the profile on the dock: {err}");
+                    }
+                    self.show_current_page(device);
+                }
+                _ => {
+                    if was_automatic != self.app_profiles_of(device).is_automatic(active) {
+                        self.changed = true;
+                    }
                 }
             }
         }
     }
 
-    /// The user picked a profile, which also stops following the app in front until another
-    /// one with a profile comes up.
-    pub(super) fn chose_profile(&mut self, id: Uuid) {
-        if self.app_profiles.is_automatic(self.config.active_profile) {
+    /// The user picked a profile for a dock, which also stops following the app in front there
+    /// until another one with a profile comes up.
+    pub(super) fn chose_profile(&mut self, device: Uuid, id: Uuid) {
+        let active = self.config.active_profile_of(device).map(|p| p.id);
+        if active.is_some_and(|active| self.app_profiles_of(device).is_automatic(active)) {
             self.changed = true;
         }
-        self.app_profiles.chosen(id);
+        self.app_profiles_of(device).chosen(id);
     }
 
     /// Undo and redo can bring back or take away whole profiles.
-    pub(super) fn profiles_restored(&mut self, before: Uuid) {
+    pub(super) fn profiles_restored(&mut self, before: &BTreeMap<Uuid, Uuid>) {
         let exists = profile_ids(&self.config.profiles);
-        self.app_profiles.retain(|p| exists.contains(&p));
-        if self.config.active_profile != before {
-            self.app_profiles.chosen(self.config.active_profile);
+        for app_profiles in self.app_profiles.values_mut() {
+            app_profiles.retain(|p| exists.contains(&p));
+        }
+        let devices: Vec<Uuid> = self.config.devices.iter().map(|d| d.id).collect();
+        for device in devices {
+            let Some(active) = self.config.active_profile_of(device).map(|p| p.id) else {
+                continue;
+            };
+            if before.get(&device) != Some(&active) {
+                self.config.active_profiles.insert(device, active);
+                self.app_profiles_of(device).chosen(active);
+            }
         }
     }
 
-    /// Whether the profile on the dock is there because of the app in front.
-    pub(super) fn automatic_profile(&self) -> bool {
-        let active = self.config.active_profile;
+    /// The profile each dock shows now, to tell afterwards which ones changed.
+    pub(super) fn active_profiles(&self) -> BTreeMap<Uuid, Uuid> {
+        self.config
+            .devices
+            .iter()
+            .filter_map(|d| Some((d.id, self.config.active_profile_of(d.id)?.id)))
+            .collect()
+    }
+
+    /// Whether the profile on a dock is there because of the app in front.
+    pub(super) fn automatic_profile(&self, device: Uuid) -> bool {
+        let Some(active) = self.config.active_profile_of(device) else {
+            return false;
+        };
         self.config.preferences.profiles.follow_apps
-            && self.app_profiles.is_automatic(active)
-            && self.front_app.as_ref().is_some_and(|app| {
-                self.config
-                    .active_profile()
-                    .is_some_and(|p| p.apps.iter().any(|a| a.id == app.id))
-            })
+            && self
+                .app_profiles
+                .get(&device)
+                .is_some_and(|a| a.is_automatic(active.id))
+            && self
+                .front_app
+                .as_ref()
+                .is_some_and(|app| active.apps.iter().any(|a| a.id == app.id))
+    }
+
+    fn app_profiles_of(&mut self, device: Uuid) -> &mut AppProfiles {
+        let active = self
+            .config
+            .active_profile_of(device)
+            .map(|p| p.id)
+            .unwrap_or_default();
+        self.app_profiles
+            .entry(device)
+            .or_insert_with(|| AppProfiles::new(active))
     }
 
     fn profile_index(&self, id: Uuid) -> Result<usize, CommandError> {
@@ -273,50 +325,28 @@ impl Engine {
             .ok_or(CommandError::UnknownProfile(id))
     }
 
-    fn free_profile_name(&self) -> String {
-        (self.config.profiles.len() + 1..)
+    fn free_profile_name(&self, device: Uuid) -> String {
+        (self.config.profiles_of(device).count() + 1..)
             .map(|n| trf!("profiles.numbered", number = n))
-            .find(|name| !self.config.profiles.iter().any(|p| &p.name == name))
+            .find(|name| !self.config.profiles_of(device).any(|p| &p.name == name))
             .expect("some number is free")
     }
 }
 
-/// The ids a new profile and its home page get; new ones by default.
+/// The ids a new profile and its home page get, new ones by default, and its dock, the focused
+/// one by default.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NewProfile {
     pub id: Option<Uuid>,
     pub home: Option<Uuid>,
-}
-
-/// Every list of actions of a key, on press, on its gestures and in its second state.
-fn actions_mut(key: &mut Key) -> impl Iterator<Item = &mut Action> {
-    key.actions
-        .iter_mut()
-        .chain(&mut key.double_press)
-        .chain(&mut key.long_press)
-        .chain(
-            key.second_state
-                .iter_mut()
-                .flat_map(|state| &mut state.actions),
-        )
-}
-
-fn drop_switch_to(key: &mut Key, profile: Uuid) {
-    let leads_there =
-        |action: &Action| matches!(action, Action::SwitchProfile { profile: p } if *p == profile);
-    key.actions.retain(|a| !leads_there(a));
-    key.double_press.retain(|a| !leads_there(a));
-    key.long_press.retain(|a| !leads_there(a));
-    if let Some(state) = &mut key.second_state {
-        state.actions.retain(|a| !leads_there(a));
-    }
+    pub device: Option<Uuid>,
 }
 
 fn profile_ids(profiles: &[Profile]) -> Vec<Uuid> {
     profiles.iter().map(|p| p.id).collect()
 }
 
-fn clean_name(name: &str) -> String {
+pub(super) fn clean_name(name: &str) -> String {
     name.trim().chars().take(MAX_NAME).collect()
 }
 
@@ -329,8 +359,8 @@ mod tests {
 
     use super::*;
     use crate::actions::{Context, SoundPlayer};
+    use crate::config::{Action, Key};
     use crate::config::{Appearance, Config, DeviceSettings, KeyState, Store};
-    use crate::driver::d200::D200;
     use crate::engine::handle::Activity;
     use crate::engine::history::Target;
     use crate::engine::runtime::Links;
@@ -355,6 +385,7 @@ mod tests {
         let home = page("Inicio");
         Profile {
             id: Uuid::new_v4(),
+            device: crate::config::FIRST_DOCK,
             name: name.into(),
             home_page: home.id,
             pages: vec![home],
@@ -389,14 +420,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path().to_path_buf()).unwrap();
         let config = Config {
-            schema: 2,
+            schema: crate::config::SCHEMA_VERSION,
             revision: 0,
-            device: DeviceSettings {
+            devices: vec![crate::config::first_device(DeviceSettings {
                 brightness: 50,
                 sleep_minutes: 0,
-            },
+            })],
             preferences: Default::default(),
-            active_profile: profiles[0].id,
+            active_profiles: std::collections::BTreeMap::from([(
+                crate::config::FIRST_DOCK,
+                profiles[0].id,
+            )]),
             profiles,
             plugin_settings: Default::default(),
             integrations: Vec::new(),
@@ -404,7 +438,6 @@ mod tests {
             plugins: Default::default(),
             declined_plugins: Default::default(),
         };
-        let (dock, _) = D200::detached();
         let (events, _) = broadcast::channel(16);
         let context = Context {
             assets: store.assets.clone(),
@@ -419,7 +452,7 @@ mod tests {
             inputs: mpsc::channel().0,
             plugins: super::super::plugins::PluginKeys::new(None, Default::default()),
         };
-        let engine = Engine::new(store, config, Renderer::new(), dock, links, context);
+        let engine = Engine::new(store, config, Renderer::new(), links, context);
         Setup { engine, _dir: dir }
     }
 
@@ -540,9 +573,23 @@ mod tests {
         let engine = &mut setup.engine;
         engine.set_profile(b).unwrap();
         engine.delete_profile(b).unwrap();
-        assert_eq!(engine.config.active_profile, c);
+        assert_eq!(
+            engine
+                .config
+                .active_profile_of(crate::config::FIRST_DOCK)
+                .unwrap()
+                .id,
+            c
+        );
         engine.delete_profile(c).unwrap();
-        assert_eq!(engine.config.active_profile, a);
+        assert_eq!(
+            engine
+                .config
+                .active_profile_of(crate::config::FIRST_DOCK)
+                .unwrap()
+                .id,
+            a
+        );
     }
 
     #[test]
@@ -554,9 +601,23 @@ mod tests {
         let engine = &mut setup.engine;
         engine.set_profile(b).unwrap();
         engine.on_front_app(app("com.figma.Desktop"));
-        assert_eq!(engine.config.active_profile, c);
+        assert_eq!(
+            engine
+                .config
+                .active_profile_of(crate::config::FIRST_DOCK)
+                .unwrap()
+                .id,
+            c
+        );
         engine.delete_profile(c).unwrap();
-        assert_eq!(engine.config.active_profile, b);
+        assert_eq!(
+            engine
+                .config
+                .active_profile_of(crate::config::FIRST_DOCK)
+                .unwrap()
+                .id,
+            b
+        );
     }
 
     #[test]
@@ -574,7 +635,14 @@ mod tests {
         engine.undo().unwrap();
         assert_eq!(engine.config.profiles, before);
         engine.set_profile(b).unwrap();
-        assert_eq!(engine.config.active_profile, b);
+        assert_eq!(
+            engine
+                .config
+                .active_profile_of(crate::config::FIRST_DOCK)
+                .unwrap()
+                .id,
+            b
+        );
     }
 
     #[test]
@@ -621,13 +689,30 @@ mod tests {
         let engine = &mut setup.engine;
 
         engine.on_front_app(app("com.figma.Desktop"));
-        assert_eq!(engine.config.active_profile, b);
-        assert!(engine.automatic_profile());
-        assert_eq!(engine.store.load().unwrap().unwrap().active_profile, b);
+        assert_eq!(
+            engine
+                .config
+                .active_profile_of(crate::config::FIRST_DOCK)
+                .unwrap()
+                .id,
+            b
+        );
+        assert!(engine.automatic_profile(crate::config::FIRST_DOCK));
+        assert_eq!(
+            engine.store.load().unwrap().unwrap().active_profiles[&crate::config::FIRST_DOCK],
+            b
+        );
 
         engine.on_front_app(app("com.apple.Safari"));
-        assert_eq!(engine.config.active_profile, a);
-        assert!(!engine.automatic_profile());
+        assert_eq!(
+            engine
+                .config
+                .active_profile_of(crate::config::FIRST_DOCK)
+                .unwrap()
+                .id,
+            a
+        );
+        assert!(!engine.automatic_profile(crate::config::FIRST_DOCK));
     }
 
     #[test]
@@ -639,9 +724,16 @@ mod tests {
         let engine = &mut setup.engine;
         engine.on_front_app(app("com.figma.Desktop"));
         engine.set_profile(b).unwrap();
-        assert!(!engine.automatic_profile());
+        assert!(!engine.automatic_profile(crate::config::FIRST_DOCK));
         engine.on_front_app(app("com.apple.Safari"));
-        assert_eq!(engine.config.active_profile, b);
+        assert_eq!(
+            engine
+                .config
+                .active_profile_of(crate::config::FIRST_DOCK)
+                .unwrap()
+                .id,
+            b
+        );
     }
 
     #[test]
@@ -653,8 +745,15 @@ mod tests {
         let engine = &mut setup.engine;
         engine.config.preferences.profiles.follow_apps = false;
         engine.on_front_app(app("com.figma.Desktop"));
-        assert_eq!(engine.config.active_profile, a);
-        assert!(!engine.automatic_profile());
+        assert_eq!(
+            engine
+                .config
+                .active_profile_of(crate::config::FIRST_DOCK)
+                .unwrap()
+                .id,
+            a
+        );
+        assert!(!engine.automatic_profile(crate::config::FIRST_DOCK));
         assert_eq!(engine.front_app, Some(app("com.figma.Desktop")));
     }
 }

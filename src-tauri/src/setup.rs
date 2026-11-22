@@ -19,6 +19,8 @@ use crate::{ipc, tray, updates, window};
 pub const DATA_DIR_ENV: &str = "TAURILANZI_DATA_DIR";
 /// Leaves the dock alone, so tests can run next to the app that owns it.
 const NO_DOCK_ENV: &str = "TAURILANZI_NO_DOCK";
+/// Docks that exist only in the app: model ids separated by commas.
+const VIRTUAL_DOCKS_ENV: &str = "TAURILANZI_VIRTUAL_DOCKS";
 /// Another cloud than the one of this build.
 const CLOUD_ENV: &str = "TAURILANZI_CLOUD";
 const RELEASED_IDENTIFIER: &str = "com.taurilanzi.desktop";
@@ -44,6 +46,9 @@ pub fn setup(
         data_dir: data_dir.clone(),
         identifier: app.config().identifier.clone(),
         dock: std::env::var_os(NO_DOCK_ENV).is_none(),
+        virtual_docks: std::env::var(VIRTUAL_DOCKS_ENV)
+            .map(|list| crate::driver::virtual_models(&list))
+            .unwrap_or_default(),
         watch_apps: std::env::var_os(DATA_DIR_ENV).is_none(),
         plugins: Some(PluginsLaunch {
             resources: app.path().resource_dir().ok(),

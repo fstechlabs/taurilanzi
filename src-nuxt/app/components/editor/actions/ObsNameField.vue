@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { failure } from '~/lib/errors'
 import { ChevronDown } from '@lucide/vue'
 import { commands } from '~/ipc/bindings'
 import type { ObsList } from '~/types/engine'
@@ -12,20 +13,20 @@ const { snapshot } = useEngine()
 const connected = computed(() => snapshot.value?.obs[props.server]?.status.state === 'connected')
 const names = ref<string[]>([])
 const loading = ref(false)
-const failed = ref(false)
+const failed = ref<string | null>(null)
 
 async function load(open: boolean) {
   if (!open) {
     return
   }
   loading.value = true
-  failed.value = false
+  failed.value = null
   try {
     names.value = await call(commands.obsNames(props.server, props.list))
   }
-  catch {
+  catch (err) {
     names.value = []
-    failed.value = true
+    failed.value = failure(t('actions.obs.names.readFailed'), err)
   }
   finally {
     loading.value = false
@@ -59,7 +60,7 @@ async function load(open: boolean) {
           {{ t('actions.obs.names.reading') }}
         </DropdownMenuItem>
         <DropdownMenuItem v-else-if="!names.length" disabled>
-          {{ t(failed ? 'actions.obs.names.readFailed' : 'actions.obs.names.none') }}
+          {{ failed ?? t('actions.obs.names.none') }}
         </DropdownMenuItem>
         <template v-else>
           <DropdownMenuItem v-for="item in names" :key="item" @select="name = item">

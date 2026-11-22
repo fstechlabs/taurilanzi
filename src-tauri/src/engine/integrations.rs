@@ -160,16 +160,20 @@ mod tests {
             position: Position::default(),
         };
         let config = Config {
-            schema: 2,
+            schema: crate::config::SCHEMA_VERSION,
             revision: 0,
-            device: DeviceSettings {
+            devices: vec![crate::config::first_device(DeviceSettings {
                 brightness: 50,
                 sleep_minutes: 0,
-            },
+            })],
             preferences: Default::default(),
-            active_profile: Uuid::nil(),
+            active_profiles: std::collections::BTreeMap::from([(
+                crate::config::FIRST_DOCK,
+                Uuid::nil(),
+            )]),
             profiles: vec![Profile {
                 id: Uuid::nil(),
+                device: crate::config::FIRST_DOCK,
                 name: "P".into(),
                 home_page: page.id,
                 pages: vec![page],
