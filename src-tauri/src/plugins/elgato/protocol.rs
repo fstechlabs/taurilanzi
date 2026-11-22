@@ -9,27 +9,17 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use crate::driver::d200::COLUMNS;
 use crate::plugins::manifest::{Manifest, this_platform};
 use crate::plugins::registry::Plugin;
-use crate::plugins::ulanzi::protocol::text;
-
-/// The dock as plugins see it. One fixed id: the app drives one D200.
-pub const DEVICE_ID: &str = "TAURILANZI-D200";
-const DEVICE_NAME: &str = "Ulanzi D200";
-const ROWS: u8 = 3;
-/// The type of a Stream Deck of five columns and three rows, which the D200 is laid out as.
-const DEVICE_TYPE: u8 = 0;
+use crate::plugins::ulanzi::protocol::{device_of, size_of, text};
 /// What plugins made for Stream Dock are told the host is: a Stream Dock recent enough for every
 /// plugin of its store, whose SDKs take a version 5 or later for another app of Mirabox's.
 pub const STREAM_DOCK_VERSION: &str = "3.10.191.0421";
 /// What plugins made for the Stream Deck are told, unless they ask for a later one: the first
 /// whose behaviour Elgato's current SDK requires, with resources.
 const STREAM_DECK_VERSION: (u32, u32) = (7, 1);
-/// Keys are drawn at this size; the wide key is as wide as two and their gap.
-const KEY_SIZE: u32 = 196;
-const WIDE_KEY_WIDTH: u32 = 452;
-const WIDE_KEY: &str = "3_2";
+/// The size of a key whose event does not say, as the D200 draws its keys.
+const KEY_SIZE: (u32, u32) = (196, 196);
 /// A run this soon after a key went down on the dock is that same press, already told.
 const SAME_PRESS: Duration = Duration::from_secs(2);
 pub const REGISTER_PLUGIN: &str = "registerPlugin";
@@ -42,11 +32,24 @@ pub enum Side {
     Inspector,
 }
 
+/// A dock as these plugins are told of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginDock {
+    pub id: String,
+    pub name: String,
+    pub columns: u8,
+    pub rows: u8,
+    /// The Stream Deck with the same keypad, by Elgato's device types.
+    pub kind: u8,
+}
+
 /// What the host keeps of each instance a main service was shown.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Shown {
     pub action: String,
     pub key: String,
+    pub device: String,
+    pub size: (u32, u32),
 }
 
 /// The instances of one plugin on the dock and the state of each, which these plugins are told
@@ -81,8 +84,8 @@ impl Contexts {
     }
 }
 
-/// `-info`, and the fourth argument of the pages: the host, the dock and the plugin.
-pub fn info(plugin: &Plugin, language: &str) -> Value {
+/// `-info`, and the fourth argument of the pages: the host, the docks and the plugin.
+pub fn info(plugin: &Plugin, language: &str, docks: &[PluginDock]) -> Value {
     let stream_dock = plugin.manifest.made_for_stream_dock();
     json!({
         "application": {
@@ -101,19 +104,19 @@ pub fn info(plugin: &Plugin, language: &str) -> Value {
         },
         // Keys are drawn at 196 pixels: Stream Deck plugins pick their sharper images by this.
         "devicePixelRatio": if stream_dock { 1 } else { 2 },
-        "devices": [{
-            "id": DEVICE_ID,
-            "name": DEVICE_NAME,
-            "size": { "columns": COLUMNS, "rows": ROWS },
-            "type": DEVICE_TYPE,
-        }],
+        "devices": docks.iter().map(|dock| json!({
+            "id": dock.id,
+            "name": dock.name,
+            "size": { "columns": dock.columns, "rows": dock.rows },
+            "type": dock.kind,
+        })).collect::<Vec<_>>(),
         "plugin": { "uuid": plugin.manifest.uuid, "version": plugin.manifest.version },
     })
 }
 
 /// The command line of a main service, after its program and script, in the order every SDK
 /// reads it.
-pub fn arguments(port: u16, plugin: &Plugin, language: &str) -> Vec<String> {
+pub fn arguments(port: u16, plugin: &Plugin, language: &str, docks: &[PluginDock]) -> Vec<String> {
     vec![
         "-port".into(),
         port.to_string(),
@@ -122,7 +125,7 @@ pub fn arguments(port: u16, plugin: &Plugin, language: &str) -> Vec<String> {
         "-registerEvent".into(),
         REGISTER_PLUGIN.into(),
         "-info".into(),
-        info(plugin, language).to_string(),
+        info(plugin, language, docks).to_string(),
     ]
 }
 
@@ -149,21 +152,21 @@ fn plugin_language(dir: &Path, language: &str) -> String {
         .unwrap_or_else(|| "en".into())
 }
 
-/// Told to a main service as it registers.
-pub fn device_connected() -> Value {
+/// Told to a main service as it registers, for each dock connected, and as one connects.
+pub fn device_connected(dock: &PluginDock) -> Value {
     json!({
         "event": "deviceDidConnect",
-        "device": DEVICE_ID,
+        "device": dock.id,
         "deviceInfo": {
-            "name": DEVICE_NAME,
-            "type": DEVICE_TYPE,
-            "size": { "columns": COLUMNS, "rows": ROWS },
+            "name": dock.name,
+            "type": dock.kind,
+            "size": { "columns": dock.columns, "rows": dock.rows },
         },
     })
 }
 
-pub fn device_disconnected() -> Value {
-    json!({ "event": "deviceDidDisconnect", "device": DEVICE_ID })
+pub fn device_disconnected(id: &str) -> Value {
+    json!({ "event": "deviceDidDisconnect", "device": id })
 }
 
 fn coordinates(key: &str) -> Value {
@@ -174,12 +177,12 @@ fn coordinates(key: &str) -> Value {
     })
 }
 
-fn about(event: &str, action: &str, context: &str, payload: Value) -> Value {
+fn about(event: &str, action: &str, context: &str, device: &str, payload: Value) -> Value {
     let mut message = json!({
         "event": event,
         "action": action,
         "context": context,
-        "device": DEVICE_ID,
+        "device": device,
     });
     if !payload.is_null() {
         message["payload"] = payload;
@@ -188,12 +191,13 @@ fn about(event: &str, action: &str, context: &str, payload: Value) -> Value {
 }
 
 /// What every event of a key carries, with the size it is drawn at.
-fn key_payload(settings: Value, resources: Value, key: &str, state: u32) -> Value {
-    let width = if key == WIDE_KEY {
-        WIDE_KEY_WIDTH
-    } else {
-        KEY_SIZE
-    };
+fn key_payload(
+    settings: Value,
+    resources: Value,
+    key: &str,
+    (width, height): (u32, u32),
+    state: u32,
+) -> Value {
     json!({
         "settings": settings,
         "coordinates": coordinates(key),
@@ -202,7 +206,7 @@ fn key_payload(settings: Value, resources: Value, key: &str, state: u32) -> Valu
         "isInMultiAction": false,
         "resources": resources,
         "width": width,
-        "height": KEY_SIZE,
+        "height": height,
     })
 }
 
@@ -219,6 +223,14 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
     let action = text(message, "uuid");
     let key = text(message, "key");
     let context = text(message, "actionid");
+    let shown = contexts.shown.get(&context);
+    let device = device_of(message)
+        .or_else(|| shown.map(|s| s.device.clone()))
+        .unwrap_or_default();
+    let size = size_of(message)
+        .or_else(|| shown.map(|s| s.size))
+        .unwrap_or(KEY_SIZE);
+    let device = device.as_str();
     let settings = || {
         message
             .get("settings")
@@ -248,6 +260,8 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
                 Shown {
                     action: action.clone(),
                     key: key.clone(),
+                    device: device.to_owned(),
+                    size,
                 },
             );
             let state = contexts.state(&context);
@@ -255,7 +269,8 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
                 "willAppear",
                 &action,
                 &context,
-                key_payload(settings(), resources(), &key, state),
+                device,
+                key_payload(settings(), resources(), &key, size, state),
             )]
         }
         ("setactive", Side::Main) if message.get("active") == Some(&Value::Bool(false)) => {
@@ -280,7 +295,8 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
                 event,
                 &action,
                 &context,
-                key_payload(settings(), resources(), &key, state),
+                device,
+                key_payload(settings(), resources(), &key, size, state),
             )]
         }
         // These plugins only hear keys go down and up: a press that did not come from the dock,
@@ -301,7 +317,8 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
                         event,
                         &action,
                         &context,
-                        key_payload(settings(), resources(), &key, state),
+                        device,
+                        key_payload(settings(), resources(), &key, size, state),
                     )
                 })
                 .collect()
@@ -310,6 +327,7 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
             "propertyInspectorDidAppear",
             &action,
             &context,
+            device,
             Value::Null,
         )],
         // Stream Dock's inspectors wait for their settings and never ask for them.
@@ -319,7 +337,8 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
                 "didReceiveSettings",
                 &action,
                 &context,
-                key_payload(settings(), resources(), &key, state),
+                device,
+                key_payload(settings(), resources(), &key, size, state),
             ))]
         }
         ("didReceiveResources", _) => {
@@ -328,7 +347,8 @@ pub fn outgoing(message: &Value, side: Side, contexts: &mut Contexts) -> Vec<Val
                 "didReceiveResources",
                 &action,
                 &context,
-                key_payload(settings(), resources(), &key, state),
+                device,
+                key_payload(settings(), resources(), &key, size, state),
             ))]
         }
         ("didReceiveGlobalSettings", _) => vec![answer(json!({
@@ -348,16 +368,18 @@ fn disappear(contexts: &mut Contexts, context: &str, settings: Value) -> Vec<Val
         "willDisappear",
         &gone.action,
         context,
-        key_payload(settings, json!({}), &gone.key, state),
+        &gone.device,
+        key_payload(settings, json!({}), &gone.key, gone.size, state),
     )]
 }
 
 /// Told to the main service when an inspector of one of its instances closes.
-pub fn inspector_closed(action: &str, context: &str) -> Value {
+pub fn inspector_closed(action: &str, context: &str, device: &str) -> Value {
     about(
         "propertyInspectorDidDisappear",
         action,
         context,
+        device,
         Value::Null,
     )
 }
@@ -395,16 +417,38 @@ mod tests {
 
     use super::*;
     use crate::plugins::manifest::{Protocol, Runtime};
-    use crate::plugins::ulanzi::protocol::{Instance, event, key_fields, with_settings};
+    use crate::plugins::ulanzi::protocol::{Instance, KeyDock, event, key_fields, with_settings};
 
     const ACTION: &str = "com.a.b.act";
+    const DEVICE_ID: &str = "dock-1";
 
     fn instance(key: &str) -> Instance {
         Instance {
             action: ACTION.into(),
             key: key.into(),
             actionid: "ctx".into(),
+            device: DEVICE_ID.into(),
         }
+    }
+
+    /// The fields of a key of a D200, the wide one if `wide`.
+    fn fields(settings: &Value, wide: bool) -> Value {
+        let dock = KeyDock {
+            model: "D200".into(),
+            width: if wide { 452 } else { 196 },
+            height: 196,
+        };
+        key_fields(settings, &dock)
+    }
+
+    fn docks() -> Vec<PluginDock> {
+        vec![PluginDock {
+            id: DEVICE_ID.into(),
+            name: "Ulanzi D200".into(),
+            columns: 5,
+            rows: 3,
+            kind: 0,
+        }]
     }
 
     fn plugin(dir: &Path) -> Plugin {
@@ -423,7 +467,7 @@ mod tests {
     fn tells_the_plugin_the_host_the_dock_and_a_language_it_has() {
         let dir = tempfile::tempdir().unwrap();
         let plugin = plugin(dir.path());
-        let info = info(&plugin, "es-ES");
+        let info = info(&plugin, "es-ES", &docks());
         assert_eq!(info["application"]["language"], "en", "none shipped");
         assert_eq!(info["application"]["version"], STREAM_DOCK_VERSION);
         assert_eq!(
@@ -440,7 +484,7 @@ mod tests {
         fs::write(dir.path().join("zh_CN.json"), "{}").unwrap();
         assert_eq!(info_language(&plugin, "zh-CN"), "zh_CN");
 
-        let args = arguments(3906, &plugin, "en");
+        let args = arguments(3906, &plugin, "en", &docks());
         assert_eq!(
             args[..7],
             [
@@ -458,7 +502,7 @@ mod tests {
     }
 
     fn info_language(plugin: &Plugin, language: &str) -> String {
-        info(plugin, language)["application"]["language"]
+        info(plugin, language, &docks())["application"]["language"]
             .as_str()
             .unwrap()
             .to_owned()
@@ -468,7 +512,7 @@ mod tests {
     fn keys_appear_are_pressed_and_disappear() {
         let mut contexts = Contexts::default();
         let settings = json!({ "n": 1 });
-        let add = event("add", &instance("2_1"), key_fields(&settings));
+        let add = event("add", &instance("2_1"), fields(&settings, false));
         let appear = outgoing(&add, Side::Main, &mut contexts);
         assert_eq!(
             appear,
@@ -495,7 +539,7 @@ mod tests {
 
         contexts.set_state("ctx", 1);
         let down = outgoing(
-            &event("keydown", &instance("2_1"), key_fields(&settings)),
+            &event("keydown", &instance("2_1"), fields(&settings, false)),
             Side::Main,
             &mut contexts,
         );
@@ -503,14 +547,14 @@ mod tests {
         assert_eq!(down[0]["payload"]["state"], 1);
         assert_eq!(down[0]["payload"]["settings"], settings);
         let up = outgoing(
-            &event("keyup", &instance("2_1"), key_fields(&settings)),
+            &event("keyup", &instance("2_1"), fields(&settings, false)),
             Side::Main,
             &mut contexts,
         );
         assert_eq!(up[0]["event"], "keyUp");
         assert!(
             outgoing(
-                &event("run", &instance("2_1"), key_fields(&settings)),
+                &event("run", &instance("2_1"), fields(&settings, false)),
                 Side::Main,
                 &mut contexts
             )
@@ -531,7 +575,7 @@ mod tests {
         );
 
         outgoing(
-            &event("add", &instance("3_2"), key_fields(&settings)),
+            &event("add", &instance("3_2"), fields(&settings, true)),
             Side::Main,
             &mut contexts,
         );
@@ -549,7 +593,7 @@ mod tests {
     #[test]
     fn a_press_that_did_not_come_from_the_dock_goes_down_and_up() {
         let mut contexts = Contexts::default();
-        let run = event("run", &instance("0_0"), key_fields(&json!({})));
+        let run = event("run", &instance("0_0"), fields(&json!({}), false));
         let events: Vec<Value> = outgoing(&run, Side::Main, &mut contexts)
             .into_iter()
             .map(|e| e["event"].clone())
@@ -564,7 +608,7 @@ mod tests {
         let opened = event(
             "paramfromapp",
             &instance("0_0"),
-            key_fields(&json!({ "a": 1 })),
+            fields(&json!({ "a": 1 }), false),
         );
         let to_inspector = outgoing(&opened, Side::Inspector, &mut contexts);
         assert_eq!(to_inspector[0]["event"], "didReceiveSettings");
@@ -664,7 +708,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut elgato = plugin(dir.path());
         elgato.manifest.sdk_version = json!(2);
-        assert_eq!(info(&elgato, "en")["devicePixelRatio"], 2);
-        assert_eq!(info(&plugin(dir.path()), "en")["devicePixelRatio"], 1);
+        assert_eq!(info(&elgato, "en", &docks())["devicePixelRatio"], 2);
+        assert_eq!(
+            info(&plugin(dir.path()), "en", &docks())["devicePixelRatio"],
+            1
+        );
     }
 }

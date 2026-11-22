@@ -2,6 +2,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { commands } from '~/ipc/bindings'
 import { pluginEntries, pluginSections } from '~/lib/actions/catalog'
 import { catalogOf } from '~/lib/actions/plugins'
+import { failure } from '~/lib/errors'
 import { t } from '~/lib/i18n'
 import type { PluginCatalog } from '~/types/engine'
 
@@ -12,18 +13,22 @@ const PACKAGE_FILES = ['zip', 'sdPlugin', 'streamDockPlugin', 'streamDeckPlugin'
 const POLL_MS = 5000
 
 const catalog = ref<PluginCatalog | null>(null)
+/** Why the plugins could not be read, if they could not. */
+const catalogError = ref<string | null>(null)
 let started = false
 
 async function refresh() {
   try {
     const fresh = await call(commands.pluginCatalog())
     catalog.value = fresh
-    const { sections, entries } = catalogOf(fresh)
+    const { sections, entries } = catalogOf(fresh, () => useEngine().model.value?.id ?? null)
     pluginSections.value = sections
     pluginEntries.value = entries
+    catalogError.value = null
   }
-  catch {
+  catch (err) {
     catalog.value = null
+    catalogError.value = failure(t('plugins.list.failed'), err)
   }
 }
 
@@ -72,5 +77,5 @@ export function usePlugins() {
     await call(commands.showPluginsFolder())
   }
 
-  return { catalog: readonly(catalog), refresh, install, uninstall, restart, reload, showFolder }
+  return { catalog: readonly(catalog), catalogError: readonly(catalogError), refresh, install, uninstall, restart, reload, showFolder }
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { failure } from '~/lib/errors'
 import { FlipHorizontal2, FlipVertical2, Loader2, Maximize, Minimize, Minus, Plus, RotateCcw, RotateCw, Undo2 } from '@lucide/vue'
 import { useElementSize } from '@vueuse/core'
 import type { ImageDraft } from '~/composables/useKeyEditor'
@@ -12,12 +13,13 @@ import {
 const open = defineModel<boolean>('open', { required: true })
 const image = defineModel<ImageDraft>('image', { required: true })
 const props = defineProps<{
-  /** A key, the wide key, or the whole panel for the screensaver. */
-  shape: 'key' | 'wide' | 'screensaver'
+  /** Width over height of the key; the whole panel of the dock for the screensaver. */
+  aspect?: number
+  screensaver?: boolean
   background: string
 }>()
 
-const { assetBlob, upload } = useEngine()
+const { assetBlob, upload, model } = useEngine()
 const { t } = useI18n()
 
 const PADDING = 48
@@ -32,30 +34,16 @@ const source = shallowRef<SourceImage | null>(null)
 const shownUrl = ref<string | null>(null)
 const crop = ref<Crop>(identityCrop())
 const status = ref<'loading' | 'ready' | 'saving' | 'error'>('loading')
-const failed = ref(false)
+/** What went wrong loading or saving the image, and why. */
+const failed = ref<string | null>(null)
 const moving = ref(false)
 const snapped = ref({ x: false, y: false })
 
-const PANEL = { width: 1220, height: 708 }
-/** The gaps between keys, in panel pixels: two rows across and the columns between keys. */
-const PANEL_GAPS = [
-  { x: 0, y: 196, width: 1220, height: 60 },
-  { x: 0, y: 452, width: 1220, height: 60 },
-  ...[196, 452, 708, 964].flatMap(x => [
-    { x, y: 0, width: 60, height: 196 },
-    { x, y: 256, width: 60, height: 196 },
-  ]),
-  ...[196, 452].map(x => ({ x, y: 512, width: 60, height: 196 })),
-]
-const screensaver = computed(() => props.shape === 'screensaver')
+/** The panel of the dock the editor shows, which the screensaver covers. */
+const panel = computed(() => model.value?.panel ?? { width: 1220, height: 708 })
+const screensaver = computed(() => Boolean(props.screensaver))
 
-const aspect = computed(() => {
-  switch (props.shape) {
-    case 'wide': return 452 / 196
-    case 'screensaver': return PANEL.width / PANEL.height
-    default: return 1
-  }
-})
+const aspect = computed(() => screensaver.value ? panel.value.width / panel.value.height : (props.aspect ?? 1))
 /** The key's image area in stage pixels. The image keeps its position relative to it. */
 const frame = computed(() => {
   const width = Math.max(0, Math.min(stageWidth.value - PADDING * 2, (stageHeight.value - PADDING * 2) * aspect.value))
@@ -63,15 +51,18 @@ const frame = computed(() => {
 })
 const unit = computed(() => ({ width: aspect.value, height: 1 }))
 const natural = computed(() => source.value?.natural ?? { width: 1, height: 1 })
-const output = computed(() => screensaver.value ? PANEL : outputSize(aspect.value))
-const gapStyles = computed(() => screensaver.value
-  ? PANEL_GAPS.map(gap => ({
-      left: `${gap.x / PANEL.width * 100}%`,
-      top: `${gap.y / PANEL.height * 100}%`,
-      width: `${gap.width / PANEL.width * 100}%`,
-      height: `${gap.height / PANEL.height * 100}%`,
-    }))
-  : [])
+const output = computed(() => screensaver.value ? panel.value : outputSize(aspect.value))
+/** What the dock hides of the screensaver: the panel but its keys, in panel pixels. */
+const gapsPath = computed(() => {
+  if (!screensaver.value || !model.value) {
+    return null
+  }
+  const { width, height } = panel.value
+  const keys = model.value.controls
+    .map(({ bounds: b }) => `M${b.x} ${b.y}h${b.width}v${b.height}h${-b.width}Z`)
+    .join('')
+  return `M0 0H${width}V${height}H0Z${keys}`
+})
 
 const frameStyle = computed(() => ({
   left: `${(stageWidth.value - frame.value.width) / 2}px`,
@@ -108,7 +99,7 @@ watch(open, async (visible) => {
     return
   }
   status.value = 'loading'
-  failed.value = false
+  failed.value = null
   try {
     const loaded = await loadSource(await assetBlob(image.value.source))
     source.value = loaded
@@ -118,8 +109,9 @@ watch(open, async (visible) => {
     await nextTick()
     stage.value?.focus()
   }
-  catch {
+  catch (err) {
     status.value = 'error'
+    failed.value = failure(t('editor.imageEditor.loadError'), err)
   }
 }, { immediate: true })
 
@@ -281,9 +273,9 @@ async function apply() {
     image.value = { ...image.value, asset, crop: { ...crop.value }, fit: 'contain' }
     open.value = false
   }
-  catch {
+  catch (err) {
     status.value = 'ready'
-    failed.value = true
+    failed.value = failure(t('editor.imageEditor.saveError'), err)
   }
 }
 
@@ -335,7 +327,14 @@ function round(value: number, precision: number) {
           class="pointer-events-none absolute shadow-[0_0_0_9999px_rgb(0_0_0/0.62)] ring-1 ring-white/70"
           :style="frameStyle"
         >
-          <div v-for="(gap, i) in gapStyles" :key="i" class="absolute bg-black/45" :style="gap" />
+          <svg
+            v-if="gapsPath"
+            class="absolute inset-0 size-full"
+            :viewBox="`0 0 ${panel.width} ${panel.height}`"
+            preserveAspectRatio="none"
+          >
+            <path :d="gapsPath" fill="rgb(0 0 0 / 0.45)" fill-rule="evenodd" />
+          </svg>
           <template v-if="moving">
             <div class="absolute inset-y-0 left-1/3 w-px bg-white/25" />
             <div class="absolute inset-y-0 left-2/3 w-px bg-white/25" />
@@ -403,8 +402,7 @@ function round(value: number, precision: number) {
 
       <DialogFooter class="items-center sm:justify-between">
         <p class="text-xs text-muted-foreground">
-          <span v-if="status === 'error'" class="text-destructive">{{ t('editor.imageEditor.loadError') }}</span>
-          <span v-else-if="failed" class="text-destructive">{{ t('editor.imageEditor.saveError') }}</span>
+          <span v-if="failed" class="text-destructive">{{ failed }}</span>
           <template v-else>
             {{ t(screensaver ? 'editor.imageEditor.copyScreen' : 'editor.imageEditor.copyKey', { width: output.width, height: output.height }) }}
           </template>

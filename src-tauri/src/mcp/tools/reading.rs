@@ -10,16 +10,52 @@ use serde_json::{Value, json};
 use super::context::{Answer, engine_error, json, refused, text};
 use super::ids::parse_id;
 use crate::config::{Action, Config, Key, LayerConfig, Page};
+use crate::driver::{ControlKind, DeviceModel};
 use crate::mcp::handler::Assistant;
 use crate::mcp::redaction::hide_in_actions;
 use crate::mcp::schema;
 
 const GUIDE: &str = include_str!("../guide.md");
 
-/// How the keys sit on the D200, for the assistant to place them.
-const LAYOUT: &str = "15 slots in 5 columns and 3 rows. Keys 0-4 are the top row, 5-9 the \
-middle row and 10-12 the first three of the bottom row, left to right. Key 13 is the wide key \
-(452x196 px): the last two slots of the bottom row. The other keys are 196x196 px.";
+/// How the keys sit on a dock of this model, for the assistant to place them: row by row, each
+/// key with its index, the columns it covers and the size it is drawn at.
+pub(super) fn layout_of(model: &DeviceModel) -> String {
+    let mut rows = Vec::new();
+    for row in 0..model.rows {
+        let mut keys: Vec<_> = model
+            .controls
+            .iter()
+            .filter(|c| c.cell.row == row)
+            .collect();
+        keys.sort_by_key(|c| c.cell.column);
+        let keys: Vec<String> = keys
+            .iter()
+            .map(|c| {
+                let ControlKind::Key { image } = c.kind;
+                let columns = if c.cell.column_span > 1 {
+                    format!(
+                        "columns {}-{}",
+                        c.cell.column,
+                        c.cell.column + c.cell.column_span - 1
+                    )
+                } else {
+                    format!("column {}", c.cell.column)
+                };
+                format!(
+                    "key {} at {columns}, {}x{} px",
+                    c.index, image.width, image.height
+                )
+            })
+            .collect();
+        rows.push(format!("row {row}: {}", keys.join("; ")));
+    }
+    format!(
+        "{} columns and {} rows, top to bottom, left to right. {}.",
+        model.columns,
+        model.rows,
+        rows.join(". ")
+    )
+}
 
 #[derive(Deserialize, JsonSchema)]
 pub struct PageParams {
@@ -31,7 +67,7 @@ pub struct PageParams {
 pub struct KeyParams {
     /// Id of the page, in any profile.
     pub page: String,
-    /// 0 to 12, or 13 for the wide key.
+    /// A control of the page's dock: see the layout of its dock in get_overview.
     pub index: u8,
 }
 
@@ -53,7 +89,7 @@ pub struct PathParams {
 #[tool_router(router = reading, vis = "pub(in crate::mcp)")]
 impl Assistant {
     #[tool(
-        description = "Start here. Every profile with its pages, which keys each page has (with a short summary), the links between pages, the integrations (OBS, Home Assistant) and their status, the device and how its keys are laid out, and what the dock shows now.",
+        description = "Start here. Every dock the app knows, connected or not, with how its keys are laid out and its profiles: each profile with its pages, which keys each page has (with a short summary) and the links between pages. Also the integrations (OBS, Home Assistant) and their status, and what each dock shows now. A profile belongs to one dock.",
         annotations(read_only_hint = true)
     )]
     async fn get_overview(&self) -> Answer {
@@ -64,18 +100,34 @@ impl Assistant {
             (Ok(config), Ok(snapshot)) => (config, snapshot),
             (Err(err), _) | (_, Err(err)) => return engine_error(err),
         };
-        let profiles: Vec<Value> = config
-            .profiles
+        let docks: Vec<Value> = snapshot
+            .devices
             .iter()
-            .map(|profile| {
+            .map(|dock| {
+                let model = crate::driver::model(&dock.model);
+                let profiles: Vec<Value> = config
+                    .profiles_of(dock.id)
+                    .map(|profile| {
+                        json!({
+                            "id": profile.id,
+                            "name": profile.name,
+                            "active": profile.id == dock.active_profile,
+                            "kept_on_this_computer_only": config.local_profiles.contains(&profile.id),
+                            "home_page": profile.home_page,
+                            "linked_apps": profile.apps,
+                            "pages": profile.pages.iter().map(page_summary).collect::<Vec<_>>(),
+                        })
+                    })
+                    .collect();
                 json!({
-                    "id": profile.id,
-                    "name": profile.name,
-                    "active": profile.id == config.active_profile,
-                    "kept_on_this_computer_only": config.local_profiles.contains(&profile.id),
-                    "home_page": profile.home_page,
-                    "linked_apps": profile.apps,
-                    "pages": profile.pages.iter().map(page_summary).collect::<Vec<_>>(),
+                    "id": dock.id,
+                    "name": dock.name,
+                    "model": model.map_or(dock.model.as_str(), |m| m.name),
+                    "connected": dock.connected,
+                    "shown_in_the_app": dock.id == snapshot.device_id,
+                    "layout": model.map(layout_of),
+                    "page_on_the_dock": dock.page,
+                    "profiles": profiles,
                 })
             })
             .collect();
@@ -100,15 +152,8 @@ impl Assistant {
             })
             .collect();
         json(json!({
-            "device": {
-                "model": snapshot.device.as_ref().map(|d| d.model.clone()),
-                "connected": snapshot.connected,
-                "layout": LAYOUT,
-            },
+            "docks": docks,
             "language": snapshot.language,
-            "active_profile": config.active_profile,
-            "page_on_the_dock": snapshot.path.last(),
-            "profiles": profiles,
             "integrations": integrations,
             "can_undo": snapshot.can_undo,
             "can_redo": snapshot.can_redo,
@@ -163,13 +208,21 @@ impl Assistant {
     }
 
     #[tool(
-        description = "The device settings (brightness, sleep) and the preferences: language, gesture timing, the look of new keys, the screensaver, and whether profiles follow the app in front.",
+        description = "The settings of each dock (brightness, sleep) and the preferences: language, gesture timing, the look of new keys, the screensaver, and whether profiles follow the app in front.",
         annotations(read_only_hint = true)
     )]
     async fn get_settings(&self) -> Answer {
         match self.tools.engine.config().await {
             Ok(config) => json(json!({
-                "device": config.device,
+                "docks": config
+                    .devices
+                    .iter()
+                    .map(|d| json!({
+                        "id": d.id,
+                        "settings": d.settings,
+                        "sleep_minutes_offered": crate::driver::model(&d.model).map(|m| m.sleep_minutes.clone()),
+                    }))
+                    .collect::<Vec<_>>(),
                 "preferences": config.preferences,
             })),
             Err(err) => engine_error(err),

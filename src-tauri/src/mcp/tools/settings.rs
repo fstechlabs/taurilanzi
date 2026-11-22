@@ -1,4 +1,4 @@
-//! The settings of the dock and the app's preferences.
+//! The settings of each dock and the app's preferences.
 
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::{tool, tool_router};
@@ -7,15 +7,27 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::context::{Answer, engine_error, json, refused, text};
+use super::ids::parse_id;
 use crate::config::{DeviceSettings, Preferences};
 use crate::mcp::handler::Assistant;
 
 #[derive(Deserialize, JsonSchema)]
 pub struct DeviceParams {
+    /// The dock, by an id from get_overview; the one the app shows if left out.
+    pub dock: Option<String>,
     /// 0 to 100.
     pub brightness: Option<u8>,
-    /// Minutes without use before the dock sleeps: 0 (never), 1, 5, 10, 15, 30 or 60.
+    /// Minutes without use before the dock sleeps: one of the times its firmware offers (see
+    /// get_settings), 0 never.
     pub sleep_minutes: Option<u32>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct RenameDockParams {
+    /// The dock, by an id from get_overview.
+    pub dock: String,
+    /// Empty goes back to the name of its model.
+    pub name: String,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -32,20 +44,48 @@ pub struct OnParams {
 
 #[tool_router(router = settings, vis = "pub(in crate::mcp)")]
 impl Assistant {
-    #[tool(description = "Changes the dock's brightness and how long it waits before sleeping.")]
+    #[tool(description = "Changes a dock's brightness and how long it waits before sleeping.")]
     async fn set_device_settings(&self, Parameters(params): Parameters<DeviceParams>) -> Answer {
-        let current = match self.tools.engine.config().await {
-            Ok(config) => config.device,
-            Err(err) => return engine_error(err),
+        let dock = match params.dock.map(|d| parse_id(&d, "dock")).transpose() {
+            Ok(dock) => dock,
+            Err(err) => return refused(err),
+        };
+        let (config, snapshot) = match (
+            self.tools.engine.config().await,
+            self.tools.engine.snapshot().await,
+        ) {
+            (Ok(config), Ok(snapshot)) => (config, snapshot),
+            (Err(err), _) | (_, Err(err)) => return engine_error(err),
+        };
+        let dock = dock.unwrap_or(snapshot.device_id);
+        let Some(current) = config.device(dock).map(|d| d.settings.clone()) else {
+            return refused(format!("dock {dock} does not exist"));
         };
         let settings = DeviceSettings {
             brightness: params.brightness.unwrap_or(current.brightness),
             sleep_minutes: params.sleep_minutes.unwrap_or(current.sleep_minutes),
         };
-        match self.tools.engine.set_device(settings).await {
+        match self.tools.engine.set_device(dock, settings).await {
             Ok(()) => {
                 self.tools.edited(false);
                 text("saved")
+            }
+            Err(err) => engine_error(err),
+        }
+    }
+
+    #[tool(
+        description = "Renames a dock, as the app and its plugins show it; an empty name goes back to the model's."
+    )]
+    async fn rename_dock(&self, Parameters(params): Parameters<RenameDockParams>) -> Answer {
+        let dock = match parse_id(&params.dock, "dock") {
+            Ok(dock) => dock,
+            Err(err) => return refused(err),
+        };
+        match self.tools.engine.rename_device(dock, params.name).await {
+            Ok(()) => {
+                self.tools.edited(false);
+                text("renamed")
             }
             Err(err) => engine_error(err),
         }

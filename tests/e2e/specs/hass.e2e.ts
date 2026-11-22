@@ -2,19 +2,7 @@ import { $, browser, expect } from '@wdio/globals'
 import { Key } from 'webdriverio'
 import type { Action, Widget } from '../../../src-nuxt/app/ipc/bindings'
 import { FakeHass } from '../fake-hass'
-import {
-  KEY_COUNT,
-  addAction,
-  button,
-  clickOn,
-  dialog,
-  homePage,
-  newKey,
-  saved,
-  shot,
-  state,
-  text,
-} from '../helpers'
+import { addAction, button, clickOn, dialog, homePage, KEY_COUNT, newKey, saved, shot, state, text, textStarting } from '../helpers'
 
 const HASS_PORT = 39074
 const TOKEN = 'token-e2e'
@@ -170,7 +158,7 @@ describe('Home Assistant', () => {
     await button('Probar tecla').click()
     await browser.pause(1000)
     expect(hass.calls.length).toBe(before)
-    await expect(text('No se pudo probar la tecla.')).not.toBeExisting()
+    await expect(textStarting('No se pudo probar la tecla')).not.toBeExisting()
   })
 
   it('switches a plug as one more action, without changing how the key looks', async () => {

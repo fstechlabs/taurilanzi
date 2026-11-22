@@ -1,5 +1,6 @@
 import { commands } from '~/ipc/bindings'
 import type { DeviceSettings, Settings } from '~/types/engine'
+import { reasonOf } from '~/lib/errors'
 
 const SAVE_MS = 400
 
@@ -11,7 +12,8 @@ function copy<T>(value: T): T {
  * stay out of undo, like the brightness. */
 function editable<T extends object>(stored: () => T | undefined, save: (value: T) => Promise<unknown>) {
   const value = ref(null) as Ref<T | null>
-  const failed = ref(false)
+  /** Why the last save failed, if it did. */
+  const failed = ref<string | null>(null)
   let timer: ReturnType<typeof setTimeout> | undefined
   let pending = false
 
@@ -29,10 +31,10 @@ function editable<T extends object>(stored: () => T | undefined, save: (value: T
     pending = false
     try {
       await save(copy(value.value))
-      failed.value = false
+      failed.value = null
     }
-    catch {
-      failed.value = true
+    catch (err) {
+      failed.value = reasonOf(err)
     }
   }
 
@@ -51,7 +53,7 @@ function editable<T extends object>(stored: () => T | undefined, save: (value: T
   return { value, failed }
 }
 
-/** The preferences and the dock's own settings, for the settings page. */
+/** The preferences and the settings of the dock the editor shows, for the settings page. */
 export function useSettings() {
   const { snapshot } = useEngine()
   const preferences = editable<Settings>(
@@ -60,8 +62,8 @@ export function useSettings() {
   )
   const device = editable<DeviceSettings>(
     () => snapshot.value?.settings,
-    value => call(commands.setDevice(value)),
+    value => call(commands.setDevice(snapshot.value!.device_id, value)),
   )
-  const failed = computed(() => preferences.failed.value || device.failed.value)
+  const failed = computed(() => preferences.failed.value ?? device.failed.value)
   return { preferences: preferences.value, device: device.value, failed }
 }

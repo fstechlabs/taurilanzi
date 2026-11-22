@@ -202,7 +202,7 @@ describe('the cloud', () => {
   it('keeps a profile here only, with or without the copy of the others', async () => {
     const id = await idOf('Desde otro equipo')
     await openMenu('Desde otro equipo')
-    await menuItem('Solo en este equipo…').click()
+    await menuItem('Desactivar sincronización cloud…').click()
     const ask = dialog('¿Dejar «Desde otro equipo» solo en este equipo?')
     await expect(ask).toBeDisplayed()
     await button('Que se queden su copia', ask).click()
@@ -213,7 +213,7 @@ describe('the cloud', () => {
     expect((await status()).elsewhere).toEqual([])
 
     await openMenu('Desde otro equipo')
-    await menuItem('Sincronizar con el cloud').click()
+    await menuItem('Activar sincronización cloud').click()
     await until(async () => !(await state()).profiles.find(p => p.id === id)!.local, 'the profile is still local')
     await engine('rename_profile', { profile: id, name: 'Vuelve al cloud' })
     await syncNow()
@@ -221,7 +221,7 @@ describe('the cloud', () => {
     await expect(mark('Vuelve al cloud', 'synced')).toBeExisting()
 
     await openMenu('Vuelve al cloud')
-    await menuItem('Solo en este equipo…').click()
+    await menuItem('Desactivar sincronización cloud…').click()
     await button('Quitarlo de los demás', dialog('¿Dejar «Vuelve al cloud» solo en este equipo?')).click()
     await expect(mark('Vuelve al cloud', 'local')).toBeExisting()
     await syncNow()
@@ -242,7 +242,7 @@ describe('the cloud', () => {
 
   it('says so when the account is full', async () => {
     cloud.full = true
-    await engine('set_device', { settings: { brightness: 33, sleep_minutes: 0 } })
+    await engine('set_device', { device: (await state()).device_id, settings: { brightness: 33, sleep_minutes: 0 } })
     await cloudTab()
     await clickOn(button('Sincronizar ahora'))
     await until(async () => (await status()).problem?.includes('lleno') ?? false, 'the full account was not shown')
@@ -297,7 +297,7 @@ describe('the cloud', () => {
     cloud.push(there, 'profile', { parent: null, editedAt: new Date().toISOString(), deleted: false, content: profileFromElsewhere(there, 'Solo en el cloud') })
 
     await clickOn(button('Conectar'))
-    const join = dialog('Tu cuenta ya tiene perfiles')
+    const join = dialog('El cloud ya tiene perfiles')
     await join.waitForDisplayed({ timeout: SYNC_WAIT })
     await shot('cloud-join')
     await button('Juntar los dos', join).click()

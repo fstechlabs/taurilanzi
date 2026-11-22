@@ -2,8 +2,8 @@ use tauri::Wry;
 use tauri::ipc::Invoke;
 
 use super::{
-    assets, cloud, commands, events, hass, http, integrations, mcp, obs, plugins, profiles, system,
-    updates,
+    assets, cloud, commands, devices, events, hass, http, integrations, mcp, obs, plugins,
+    profiles, system, updates,
 };
 
 /// Typed commands and events, shared by the app and the TypeScript export.
@@ -22,7 +22,13 @@ pub fn builder() -> tauri_specta::Builder<Wry> {
             commands::set_home_page,
             commands::show_page,
             commands::edit_page,
-            commands::set_device,
+            devices::dock_models,
+            devices::set_device,
+            devices::focus_device,
+            devices::rename_device,
+            devices::forget_device,
+            devices::transfer_plan,
+            devices::transfer_profile,
             commands::set_preferences,
             commands::try_screensaver,
             commands::set_paused,

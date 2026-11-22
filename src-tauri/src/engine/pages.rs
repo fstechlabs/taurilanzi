@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use uuid::Uuid;
 
 use super::commands::{CommandError, KeySlot, PageChanges};
-use super::runtime::{Engine, check_index};
+use super::runtime::Engine;
 use crate::config::{Action, Key, Page, Position, back_key};
 
 /// Where a new page's back key goes.
@@ -32,7 +32,7 @@ impl Engine {
                 .iter_mut()
                 .find(|p| p.id == id)
                 .ok_or(CommandError::UnknownProfile(id))?,
-            None => self.profile_mut()?,
+            None => self.focused_profile_mut()?,
         };
         let page = Page {
             id: new.id.unwrap_or_else(Uuid::new_v4),
@@ -101,8 +101,8 @@ impl Engine {
     /// Lines into the page go with it: keys that led there stop navigating.
     pub(super) fn delete_page(&mut self, id: Uuid) -> Result<(), CommandError> {
         let owner = self.owner(id)?;
-        let on_screen =
-            owner.id == self.config.active_profile && self.navigation.current(owner) == id;
+        let device = owner.device;
+        let on_screen = self.config.is_active(owner.id) && self.navigation.current(owner) == id;
         let profile = self.owner_mut(id)?;
         if profile.home_page == id {
             return Err(CommandError::DeleteHome);
@@ -120,7 +120,7 @@ impl Engine {
         self.navigation.forget(id);
         self.save_navigation();
         if on_screen {
-            self.show_current_page();
+            self.show_current_page(device);
         }
         Ok(())
     }
@@ -132,17 +132,24 @@ impl Engine {
 
     /// Swaps with whatever is at the destination, so dropping a key on another never loses one.
     pub(super) fn move_key(&mut self, from: KeySlot, to: KeySlot) -> Result<(), CommandError> {
-        check_index(from.index)?;
-        check_index(to.index)?;
+        let device = self
+            .config
+            .device_of_page(from.page)
+            .ok_or(CommandError::UnknownPage(from.page))?;
+        if self.config.device_of_page(to.page) != Some(device) {
+            return Err(CommandError::OtherDevice);
+        }
+        self.check_index(device, from.index)?;
+        self.check_index(device, to.index)?;
         if from == to {
             return Ok(());
         }
-        let active = self.config.active_profile;
+        let owner = self.owner(from.page)?.id;
+        let on_dock = self.config.is_active(owner);
         let profile = self.owner_mut(from.page)?;
         if profile.page(to.page).is_none() {
             return Err(CommandError::UnknownPage(to.page));
         }
-        let on_dock = profile.id == active;
         let Some(mut moving) = profile
             .page_mut(from.page)
             .and_then(|p| p.keys.remove(&from.index))
@@ -163,23 +170,26 @@ impl Engine {
             }
         }
         self.save()?;
-        let on_screen = self.navigation.current(self.profile()?);
+        let on_screen = self.current_page_id(device);
         if on_dock && (on_screen == from.page || on_screen == to.page) {
-            self.show_current_page();
+            self.show_current_page(device);
         }
         Ok(())
     }
 
+    /// Shows a page on its dock, with its profile if the dock showed another.
     pub(super) fn show_page(&mut self, id: Uuid) -> Result<(), CommandError> {
-        if self.profile()?.page(id).is_none() {
-            return Err(CommandError::UnknownPage(id));
+        let owner = self.owner(id)?;
+        let (profile, device) = (owner.id, owner.device);
+        if !self.config.is_active(profile) {
+            self.set_profile(profile)?;
         }
-        self.navigate(|nav, profile| nav.open(profile, id));
+        self.navigate(device, |nav, profile| nav.open(profile, id));
         Ok(())
     }
 }
 
-/// Where a new page goes and the id it gets; by default, the active profile and a new id.
+/// Where a new page goes and the id it gets; by default, the focused dock's profile and a new id.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NewPage {
     pub profile: Option<Uuid>,

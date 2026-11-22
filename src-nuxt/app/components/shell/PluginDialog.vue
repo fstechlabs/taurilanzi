@@ -92,8 +92,8 @@ async function remove() {
               <p class="truncate">
                 {{ action.name }}
               </p>
-              <p v-if="action.tooltip || !action.supported" class="truncate text-[11px] text-muted-foreground">
-                {{ action.supported ? action.tooltip : t('plugins.dialog.otherModels') }}
+              <p v-if="action.tooltip || !action.models.length" class="truncate text-[11px] text-muted-foreground">
+                {{ action.models.length ? action.tooltip : t('plugins.dialog.otherModels') }}
               </p>
             </div>
           </div>

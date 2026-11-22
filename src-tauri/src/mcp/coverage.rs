@@ -30,6 +30,18 @@ const COVERAGE: &[(&str, Cover)] = &[
         Left("which page the editor shows, so its plugin keys draw previews"),
     ),
     ("set_device", Tools(&["set_device_settings"])),
+    ("dock_models", Tools(&["get_overview"])),
+    (
+        "focus_device",
+        Left("which dock the editor shows; every tool names the dock or page it is about"),
+    ),
+    ("rename_device", Tools(&["rename_dock"])),
+    (
+        "forget_device",
+        Left("drops a dock and its profiles for good, past undo: only the user does it"),
+    ),
+    ("transfer_plan", Tools(&["apply_changes"])),
+    ("transfer_profile", Tools(&["apply_changes"])),
     ("set_preferences", Tools(&["set_preferences"])),
     ("try_screensaver", Tools(&["preview_screensaver"])),
     ("set_paused", Tools(&["pause_dock"])),

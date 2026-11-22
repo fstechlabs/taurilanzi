@@ -1,23 +1,6 @@
 import { $, $$, browser, expect } from '@wdio/globals'
 import { Key } from 'webdriverio'
-import {
-  KEY_COUNT,
-  actionSummaries,
-  addAction,
-  button,
-  chooseOption,
-  done,
-  engine,
-  homePage,
-  newKey,
-  pickFile,
-  saved,
-  settingsDialog,
-  shot,
-  silentWav,
-  state,
-  text,
-} from '../helpers'
+import { actionSummaries, addAction, button, chooseOption, done, engine, homePage, KEY_COUNT, newKey, pickFile, saved, settingsDialog, shot, silentWav, state, text, textStarting } from '../helpers'
 
 const PICKER = '[aria-label="Buscar acción"]'
 
@@ -154,6 +137,6 @@ describe('the action catalog', () => {
     await engine('set_key', { page: home, index, key: { ...key, actions: [sound] } })
     await button('Probar tecla').waitForEnabled()
     await button('Probar tecla').click()
-    await expect(text('No se pudo probar la tecla.')).not.toBeExisting()
+    await expect(textStarting('No se pudo probar la tecla')).not.toBeExisting()
   })
 })

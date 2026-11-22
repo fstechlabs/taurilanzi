@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { failure } from '~/lib/errors'
 import { Music, Upload } from '@lucide/vue'
 import { commands } from '~/ipc/bindings'
 import type { Action, SoundMode } from '~/types/engine'
@@ -11,7 +12,7 @@ const { t } = useI18n()
 const { upload } = useEngine()
 const input = ref<HTMLInputElement | null>(null)
 const outputs = ref<string[]>([])
-const failed = ref(false)
+const failed = ref<string | null>(null)
 const uploading = ref(false)
 
 const DEFAULT_OUTPUT = '__default'
@@ -34,15 +35,15 @@ async function choose(event: Event) {
   if (!file) {
     return
   }
-  failed.value = false
+  failed.value = null
   uploading.value = true
   try {
     const type = file.type || TYPES[file.name.split('.').pop()?.toLowerCase() ?? ''] || ''
     const sound = await upload(file, type)
     action.value = { ...action.value, sound, name: file.name }
   }
-  catch {
-    failed.value = true
+  catch (err) {
+    failed.value = failure(t('actions.sound.uploadFailed'), err)
   }
   finally {
     uploading.value = false
@@ -85,7 +86,7 @@ function setOutput(value: unknown) {
       >
     </div>
     <p v-if="failed" class="text-xs text-destructive">
-      {{ t('actions.sound.uploadFailed') }}
+      {{ failed }}
     </p>
 
     <div class="flex items-center gap-3">

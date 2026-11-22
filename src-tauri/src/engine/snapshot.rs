@@ -14,8 +14,14 @@ use crate::obs::ObsInfo;
 /// Everything the UI and the menu bar show, sent whole after every change.
 #[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
 pub struct Snapshot {
+    /// The focused dock is connected.
     pub connected: bool,
+    /// What the focused dock said it is, while connected.
     pub device: Option<DeviceInfo>,
+    /// The dock the editor shows: the settings, profiles and pages below are its.
+    pub device_id: Uuid,
+    /// Every known dock, connected or not.
+    pub devices: Vec<DeviceSummary>,
     /// Increases with every saved change, so key images can be fetched again.
     #[specta(type = specta_typescript::Number)]
     pub revision: u64,
@@ -34,6 +40,8 @@ pub struct Snapshot {
     pub path: Vec<Uuid>,
     /// Keys of two states now showing and doing their second one.
     pub second_states: Vec<KeySlot>,
+    /// Keys whose action this dock cannot run, which show an alert.
+    pub unsupported: Vec<KeySlot>,
     /// Whether there are edits to undo or redo.
     pub can_undo: bool,
     pub can_redo: bool,
@@ -52,6 +60,27 @@ pub struct Snapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
+pub struct DeviceSummary {
+    pub id: Uuid,
+    /// Its model's id.
+    pub model: String,
+    /// As the app shows it.
+    pub name: String,
+    /// The name the user gave it, if any.
+    pub custom_name: String,
+    /// Its serial number, once a unit connected.
+    pub serial: Option<String>,
+    pub connected: bool,
+    pub info: Option<DeviceInfo>,
+    pub settings: DeviceSettings,
+    pub active_profile: Uuid,
+    /// The page it shows, or would show once connected.
+    pub page: Uuid,
+    pub profiles: u32,
+    pub screen: ScreenMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, specta::Type)]
 pub struct ProfileSummary {
     pub id: Uuid,
     pub name: String,
@@ -64,6 +93,7 @@ pub struct ProfileSummary {
 pub enum EngineEvent {
     State(Arc<Snapshot>),
     Key {
+        device: Uuid,
         index: u8,
         pressed: bool,
     },

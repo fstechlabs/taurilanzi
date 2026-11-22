@@ -15,7 +15,7 @@ onMounted(() => {
   events.assistantEdited.listen(({ payload }) => {
     show(t('mcp.notice.title'), t('mcp.notice.edited'), {
       key: 'assistant-edited',
-      action: payload.undoable ? { label: t('mcp.notice.undo'), run: () => undo().catch(() => {}) } : undefined,
+      action: payload.undoable ? { label: t('mcp.notice.undo'), run: () => undo() } : undefined,
     })
   })
 })

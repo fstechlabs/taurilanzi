@@ -64,14 +64,13 @@ fn placeholders(server: &Server, files: &std::path::Path) -> BTreeMap<&'static s
     )["id"]
         .clone();
     let overview = server.ok("get_overview", json!({}));
-    let profile = overview["active_profile"].clone();
-    let home = overview["profiles"]
+    let active = overview["docks"][0]["profiles"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|p| p["id"] == profile)
-        .unwrap()["home_page"]
-        .clone();
+        .find(|p| p["active"] == true)
+        .unwrap();
+    let (profile, home) = (active["id"].clone(), active["home_page"].clone());
     let target = server.ok(
         "apply_changes",
         json!({ "changes": [{ "op": "create_page", "profile": profile, "page_name": "Destino", "name": "$target" }] }),

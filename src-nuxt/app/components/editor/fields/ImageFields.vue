@@ -4,7 +4,8 @@ import type { PickedIcon } from '~/composables/useIconCatalog'
 import type { ImageDraft, StateDraft } from '~/composables/useKeyEditor'
 
 const draft = defineModel<StateDraft>({ required: true })
-const props = defineProps<{ wide: boolean }>()
+/** Width over height of the key. */
+const props = defineProps<{ aspect: number }>()
 const emit = defineEmits<{ upload: [file: File], pickIcon: [picked: PickedIcon] }>()
 const { t } = useI18n()
 
@@ -150,7 +151,7 @@ function useOriginal() {
         <Slider v-model="inset" :max="45" class="flex-1" :aria-label="t('editor.image.inset')" />
         <span class="w-10 text-right text-xs tabular-nums">{{ inset[0] }} %</span>
       </div>
-      <ImageEditorDialog v-model:open="editorOpen" v-model:image="image" :shape="props.wide ? 'wide' : 'key'" :background="background" />
+      <ImageEditorDialog v-model:open="editorOpen" v-model:image="image" :aspect="props.aspect" :background="background" />
     </template>
 
     <IconPicker v-model:open="pickerOpen" @pick="emit('pickIcon', $event)" />

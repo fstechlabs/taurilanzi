@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::actions::Action;
+use super::devices::{KnownDevice, first_dock};
 use super::integrations::Integration;
 use super::known_plugins::KnownPlugin;
 use super::linked_apps::AppRef;
@@ -11,17 +12,20 @@ use super::preferences::Preferences;
 use super::widgets::Widget;
 use crate::render::{Background, Color, Fit, Outline, VerticalPosition};
 
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub schema: u32,
     /// Increases on every save, so sync can tell which copy is newer.
     pub revision: u64,
-    pub device: DeviceSettings,
+    /// Every dock seen on a computer of the account, connected or not.
+    pub devices: Vec<KnownDevice>,
     #[serde(default)]
     pub preferences: Preferences,
-    pub active_profile: Uuid,
+    /// The profile each dock shows, by dock; on this computer only.
+    #[serde(default)]
+    pub active_profiles: BTreeMap<Uuid, Uuid>,
     pub profiles: Vec<Profile>,
     /// What each plugin shares between its keys, by plugin id: tokens and addresses included,
     /// so they travel with the configuration like the rest.
@@ -52,6 +56,9 @@ pub struct DeviceSettings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Profile {
     pub id: Uuid,
+    /// The known dock it belongs to. Profiles from before there were several are the first one's.
+    #[serde(default = "first_dock")]
+    pub device: Uuid,
     pub name: String,
     /// Where the dock starts, and where "Ir al inicio" leads. Schema 1 called it `active_page`.
     #[serde(alias = "active_page")]
@@ -321,15 +328,6 @@ impl Profile {
 }
 
 impl Config {
-    pub fn active_profile(&self) -> Option<&Profile> {
-        self.profiles.iter().find(|p| p.id == self.active_profile)
-    }
-
-    pub fn active_profile_mut(&mut self) -> Option<&mut Profile> {
-        let id = self.active_profile;
-        self.profiles.iter_mut().find(|p| p.id == id)
-    }
-
     /// The profile a page belongs to: page ids are unique across profiles.
     pub fn page_owner(&self, page: Uuid) -> Option<&Profile> {
         self.profiles.iter().find(|p| p.page(page).is_some())
@@ -410,6 +408,7 @@ mod tests {
         };
         let profile = Profile {
             id: Uuid::nil(),
+            device: first_dock(),
             name: String::new(),
             home_page: Uuid::nil(),
             pages: vec![Page {
@@ -464,6 +463,7 @@ mod tests {
         };
         let profile = Profile {
             id: Uuid::new_v4(),
+            device: first_dock(),
             name: "Default".into(),
             home_page: page.id,
             pages: vec![page],
@@ -472,12 +472,12 @@ mod tests {
         let config = Config {
             schema: SCHEMA_VERSION,
             revision: 3,
-            device: DeviceSettings {
+            devices: vec![super::super::devices::first_device(DeviceSettings {
                 brightness: 70,
                 sleep_minutes: 0,
-            },
+            })],
             preferences: Preferences::default(),
-            active_profile: profile.id,
+            active_profiles: BTreeMap::from([(first_dock(), profile.id)]),
             profiles: vec![profile],
             plugin_settings: Default::default(),
             integrations: Vec::new(),
@@ -487,7 +487,7 @@ mod tests {
         };
         let json = serde_json::to_string(&config).unwrap();
         assert_eq!(serde_json::from_str::<Config>(&json).unwrap(), config);
-        let profile = config.active_profile().unwrap();
+        let profile = config.active_profile_of(first_dock()).unwrap();
         assert_eq!(profile.page(profile.home_page).unwrap().name, "Main");
     }
 

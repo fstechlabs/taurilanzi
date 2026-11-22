@@ -6,7 +6,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use super::error::IpcError;
-use crate::config::{DeviceSettings, Key, Position, Preferences};
+use crate::config::{Key, Position, Preferences};
 use crate::engine::{EngineHandle, Gesture, KeySlot, PageChanges, Snapshot};
 use crate::plugins::Plugins;
 
@@ -92,12 +92,6 @@ pub async fn show_page(engine: State<'_, EngineHandle>, page: Uuid) -> Result<()
 #[specta::specta]
 pub async fn edit_page(engine: State<'_, EngineHandle>, page: Option<Uuid>) -> Result<()> {
     Ok(engine.edit_page(page).await?)
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn set_device(engine: State<'_, EngineHandle>, settings: DeviceSettings) -> Result<()> {
-    Ok(engine.set_device(settings).await?)
 }
 
 #[tauri::command]

@@ -1,23 +1,6 @@
 import { $, browser, expect } from '@wdio/globals'
 import { Key } from 'webdriverio'
-import {
-  KEY_COUNT,
-  addAction,
-  button,
-  chooseOption,
-  clickOn,
-  done,
-  editAction,
-  engine,
-  homePage,
-  newKey,
-  node,
-  saved,
-  settingsDialog,
-  shot,
-  state,
-  text,
-} from '../helpers'
+import { addAction, button, chooseOption, clickOn, done, editAction, engine, homePage, KEY_COUNT, newKey, node, saved, settingsDialog, shot, state, text, textStarting } from '../helpers'
 
 async function freeKeys(count: number) {
   const page = homePage(await state())
@@ -123,7 +106,7 @@ describe('states, gestures and page variables', () => {
 
     await button('Probar tecla').click()
     await $('//*[@role="menuitem"][normalize-space()="Pulsación larga"]').click()
-    await expect(text('No se pudo probar la tecla.')).not.toBeExisting()
+    await expect(textStarting('No se pudo probar la tecla')).not.toBeExisting()
   })
 
   it('shows the page in the text of a key', async () => {

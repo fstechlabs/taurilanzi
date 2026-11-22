@@ -8,6 +8,7 @@ use log::{error, info};
 use tokio::sync::broadcast;
 
 use super::commands::Input;
+use super::docks::plugin_docks;
 use super::handle::{Activity, EngineHandle};
 use super::integrations::secret_accounts;
 use super::plugins::PluginKeys;
@@ -15,7 +16,7 @@ use super::runtime::{Engine, Links};
 use crate::actions;
 use crate::clients::Clients;
 use crate::config::{self, AssetStore, Store};
-use crate::driver::d200::D200;
+use crate::driver::{self, DeviceModel};
 use crate::i18n;
 use crate::plugins::{Desktop, Plugins, PluginsSetup};
 use crate::render::Renderer;
@@ -29,8 +30,10 @@ pub struct Launch {
     pub data_dir: PathBuf,
     /// The app's, under which earlier versions kept their secrets in the keychain.
     pub identifier: String,
-    /// Off in tests, so they never take the dock from the app the user is running.
+    /// Off in tests, so they never take the docks from the app the user is running.
     pub dock: bool,
+    /// Docks that exist only in the app, one of each model listed.
+    pub virtual_docks: Vec<&'static DeviceModel>,
     /// Follows the app in front to switch profiles. Off in tests, so whatever app the user is
     /// in does not change the profile under them.
     pub watch_apps: bool,
@@ -98,6 +101,7 @@ pub fn start(launch: Launch) -> Result<Running, LaunchError> {
                 let _ = plugin_inputs.send(Input::Plugin(input));
             }),
             desktop: setup.desktop,
+            docks: plugin_docks(&config),
         });
         match started {
             Ok(plugins) => Some(Arc::new(plugins)),
@@ -121,18 +125,20 @@ pub fn start(launch: Launch) -> Result<Running, LaunchError> {
         }
     }
 
-    let (dock, dock_events) = if launch.dock {
+    let (found, dock_events) = mpsc::channel();
+    if launch.dock {
         let lock_inputs = inputs.clone();
         if let Err(err) =
             session::watch(move |locked| lock_inputs.send(Input::Locked(locked)).is_ok())
         {
             log::warn!("could not watch the screen lock: {err}");
         }
-        D200::start()
+        driver::watch(found.clone())?;
     } else {
-        info!("running without the dock");
-        D200::detached()
-    };
+        info!("running without the docks");
+    }
+    driver::start_virtual(&launch.virtual_docks, &found);
+    drop(found);
     thread::Builder::new()
         .name("dock-events".into())
         .spawn(move || {
@@ -161,7 +167,6 @@ pub fn start(launch: Launch) -> Result<Running, LaunchError> {
                 store,
                 config,
                 Renderer::new(),
-                dock,
                 Links {
                     events,
                     activity,

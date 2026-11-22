@@ -32,7 +32,7 @@ impl Engine {
                 let changed = self.config.profiles != config.profiles;
                 let saved = self.save();
                 self.save_navigation();
-                self.show_current_page();
+                self.show_all_pages();
                 saved.map(|()| changed)
             }
             Err(err) => {
@@ -66,13 +66,24 @@ impl Engine {
             Change::DuplicatePage { page, id } => self.duplicate_page(page, Some(id)).map(|_| ()),
             Change::DeletePage { page } => self.delete_page(page),
             Change::SetHomePage { page } => self.set_home_page(page),
-            Change::CreateProfile { id, home, name } => {
+            Change::CreateProfile {
+                id,
+                home,
+                name,
+                device,
+            } => {
                 let ids = NewProfile {
                     id: Some(id),
                     home: Some(home),
+                    device,
                 };
                 self.create_profile(ids, name).map(|_| ())
             }
+            Change::TransferProfile {
+                profile,
+                device,
+                copy,
+            } => self.transfer_profile(profile, device, copy).map(|_| ()),
             Change::RenameProfile { profile, name } => self.rename_profile(profile, name),
             Change::DuplicateProfile { profile, id } => {
                 self.duplicate_profile(profile, Some(id)).map(|_| ())
@@ -99,7 +110,6 @@ mod tests {
     use crate::config::{
         Action, Appearance, Config, DeviceSettings, Key, Page, Position, Profile, Store,
     };
-    use crate::driver::d200::D200;
     use crate::engine::commands::KeySlot;
     use crate::engine::handle::Activity;
     use crate::engine::runtime::Links;
@@ -120,6 +130,7 @@ mod tests {
         };
         Profile {
             id: Uuid::new_v4(),
+            device: crate::config::FIRST_DOCK,
             name: name.into(),
             home_page: home.id,
             pages: vec![home],
@@ -147,14 +158,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path().to_path_buf()).unwrap();
         let config = Config {
-            schema: 2,
+            schema: crate::config::SCHEMA_VERSION,
             revision: 0,
-            device: DeviceSettings {
+            devices: vec![crate::config::first_device(DeviceSettings {
                 brightness: 50,
                 sleep_minutes: 0,
-            },
+            })],
             preferences: Default::default(),
-            active_profile: profiles[0].id,
+            active_profiles: std::collections::BTreeMap::from([(
+                crate::config::FIRST_DOCK,
+                profiles[0].id,
+            )]),
             profiles,
             plugin_settings: Default::default(),
             integrations: Vec::new(),
@@ -162,7 +176,6 @@ mod tests {
             plugins: Default::default(),
             declined_plugins: Default::default(),
         };
-        let (dock, _) = D200::detached();
         let (events, _) = broadcast::channel(16);
         let context = Context {
             assets: store.assets.clone(),
@@ -177,7 +190,7 @@ mod tests {
             inputs: mpsc::channel().0,
             plugins: super::super::plugins::PluginKeys::new(None, Default::default()),
         };
-        let engine = Engine::new(store, config, Renderer::new(), dock, links, context);
+        let engine = Engine::new(store, config, Renderer::new(), links, context);
         Setup { engine, dir }
     }
 
@@ -198,6 +211,7 @@ mod tests {
                     id: profile,
                     home: Uuid::new_v4(),
                     name: Some("Streaming".into()),
+                    device: None,
                 },
                 Change::CreatePage {
                     profile,
@@ -240,7 +254,14 @@ mod tests {
             .unwrap();
 
         let config = &setup.engine.config;
-        assert_eq!(config.active_profile, active, "the dock stays where it was");
+        assert_eq!(
+            config
+                .active_profile_of(crate::config::FIRST_DOCK)
+                .unwrap()
+                .id,
+            active,
+            "the dock stays where it was"
+        );
         let streaming = config.profiles.iter().find(|p| p.id == profile).unwrap();
         assert_eq!(streaming.pages.len(), 2);
         assert!(streaming.page(home).unwrap().keys.contains_key(&13));

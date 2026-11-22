@@ -65,6 +65,11 @@ export function text(value: string, within?: Element) {
   return within ? (within as WebdriverIO.Element).$(xpath) : $(xpath)
 }
 
+/** The innermost element whose text starts with `value`, as errors do before their reason. */
+export function textStarting(value: string) {
+  return $(`//*[starts-with(normalize-space(), "${value}") and not(*[starts-with(normalize-space(), "${value}")])]`)
+}
+
 export function menuItem(name: string) {
   return $(`//*[@role="menuitem"][normalize-space()="${name}" or @aria-label="${name}"]`)
 }

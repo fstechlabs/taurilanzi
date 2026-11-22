@@ -1,6 +1,9 @@
 <script setup lang="ts">
 defineProps<{ src: string | null, name: string, selected: boolean }>()
 const emit = defineEmits<{ select: [] }>()
+const { model } = useEngine()
+/** The shape of the panel of the dock the editor shows. */
+const panel = computed(() => model.value ? `${model.value.panel.width} / ${model.value.panel.height}` : '1220 / 708')
 </script>
 
 <template>
@@ -12,8 +15,8 @@ const emit = defineEmits<{ select: [] }>()
     :aria-label="name"
     @click="emit('select')"
   >
-    <img v-if="src" :src="src" alt="" draggable="false" class="aspect-[1220/708] w-full rounded bg-black object-cover">
-    <div v-else class="flex aspect-[1220/708] w-full items-center justify-center rounded bg-neutral-900 text-xs text-muted-foreground">
+    <img v-if="src" :src="src" alt="" draggable="false" class="w-full rounded bg-black object-cover" :style="{ aspectRatio: panel }">
+    <div v-else class="flex w-full items-center justify-center rounded bg-neutral-900 text-xs text-muted-foreground" :style="{ aspectRatio: panel }">
       <slot />
     </div>
     <span class="px-1 text-xs">{{ name }}</span>

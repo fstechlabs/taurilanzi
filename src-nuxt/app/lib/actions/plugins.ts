@@ -25,13 +25,18 @@ export function storeImage(url: string | null | undefined) {
   return url ? `${IMAGES}/store?url=${encodeURIComponent(url)}` : undefined
 }
 
-/** Key 7 of the D200 is `2_1` for plugins: column and row. */
-export function keyName(index: number) {
-  return `${index % 5}_${Math.floor(index / 5)}`
+/** The key an inspector is for, as plugins know it. */
+export interface InspectedKey {
+  /** Its column and row, `2_1`. */
+  key: string
+  /** The dock's model, by the name Ulanzi's plugins filter actions with. */
+  model: string
+  /** The known dock, which Stream Deck plugins are told. */
+  device: string
 }
 
 /** The property inspector page of an action, with the query Ulanzi Studio gives it. */
-export function inspectorUrl(catalog: Catalog, plugin: Plugin, action: PluginAction, index: number, actionid: string, settings: unknown = {}) {
+export function inspectorUrl(catalog: Catalog, plugin: Plugin, action: PluginAction, at: InspectedKey, actionid: string, settings: unknown = {}) {
   if (!action.inspector) {
     return null
   }
@@ -41,13 +46,14 @@ export function inspectorUrl(catalog: Catalog, plugin: Plugin, action: PluginAct
     // Some inspectors read the port by this name, or assume Ulanzi Studio's.
     wsport: String(catalog.port),
     uuid: action.uuid,
-    key: keyName(index),
+    key: at.key,
     actionid,
     // Some SDKs copied from Ulanzi's read it with a capital I.
     actionId: actionid,
     language: catalog.language,
     controller: 'Keypad',
-    device: 'D200',
+    device: at.model,
+    deviceId: at.device,
   })
   // Stream Deck inspectors are handed the settings of their key as they connect.
   if (plugin.protocol === 'stream_deck') {
@@ -71,8 +77,9 @@ export function newPluginAction(uuid: string, settings: unknown = {}): Action {
   return { type: 'plugin', action: uuid, id: crypto.randomUUID(), settings: structuredClone(settings) }
 }
 
-/** One section per plugin, with its actions; those it cannot run here show why. */
-export function catalogOf(catalog: Catalog): { sections: Section[], entries: CatalogEntry[] } {
+/** One section per plugin, with its actions; those it cannot run here show why. `model` is the
+ * dock the actions would go on, by model id. */
+export function catalogOf(catalog: Catalog, model: () => string | null = () => null): { sections: Section[], entries: CatalogEntry[] } {
   const sections = catalog.plugins
     .filter(plugin => plugin.actions.some(action => action.visible))
     .map((plugin): Section => ({
@@ -94,7 +101,7 @@ export function catalogOf(catalog: Catalog): { sections: Section[], entries: Cat
     hidden: !action.visible,
     modal: true,
     get soon() {
-      return unavailable(plugin, action)
+      return unavailable(plugin, action, model())
     },
     create: () => newPluginAction(action.uuid, action.settings),
     matches: candidate => candidate.type === 'plugin' && candidate.action === action.uuid,
@@ -102,9 +109,12 @@ export function catalogOf(catalog: Catalog): { sections: Section[], entries: Cat
   return { sections, entries }
 }
 
-function unavailable(plugin: Plugin, action: PluginAction) {
-  if (!action.supported) {
+function unavailable(plugin: Plugin, action: PluginAction, model: string | null) {
+  if (!action.models.length) {
     return t('actions.plugins.forDials')
+  }
+  if (model && !action.models.includes(model)) {
+    return t('actions.plugins.otherDock')
   }
   return plugin.run.state === 'unavailable' ? plugin.run.reason : undefined
 }

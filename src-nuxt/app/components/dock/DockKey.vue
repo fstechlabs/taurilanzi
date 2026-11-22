@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Trash2 } from '@lucide/vue'
+import { Trash2, TriangleAlert } from '@lucide/vue'
+import { keyRadius } from '~/lib/dock'
 
 const props = defineProps<{
   page: string
@@ -8,7 +9,10 @@ const props = defineProps<{
   configured: boolean
   pressed: boolean
   selected: boolean
-  wide?: boolean
+  /** Width over height. */
+  aspect: number
+  /** Its action does not run on this dock. */
+  unsupported?: boolean
   compact?: boolean
 }>()
 
@@ -37,8 +41,7 @@ function click() {
 
 <template>
   <div
-    class="relative"
-    :class="props.wide ? 'col-span-2 aspect-[452/196]' : 'aspect-square'"
+    class="absolute"
     data-key-slot
     :data-page="props.page"
     :data-index="props.index"
@@ -47,15 +50,15 @@ function click() {
       type="button"
       :aria-label="t('dock.key.label', { n: props.index + 1 })"
       class="group nopan absolute inset-0 touch-none overflow-hidden bg-neutral-900 ring-offset-black transition outline-none select-none focus-visible:ring-2 focus-visible:ring-ring"
+      :style="{ borderRadius: keyRadius(props.aspect) }"
       :class="[
-        props.wide ? 'rounded-[4%/9%]' : 'rounded-[9%]',
         props.compact ? 'ring-offset-1' : 'ring-offset-2',
         over ? 'ring-2 ring-sky-400' : props.selected ? 'ring-2 ring-white' : 'hover:ring-2 hover:ring-neutral-600',
         props.pressed ? 'scale-95 brightness-125' : '',
         lifted ? 'opacity-30' : '',
         props.configured ? 'cursor-grab' : '',
       ]"
-      @pointerdown="keyDrag.press($event, slot, props.configured ? props.imageUrl : null, Boolean(props.wide))"
+      @pointerdown="keyDrag.press($event, slot, props.configured ? props.imageUrl : null, props.aspect)"
       @pointermove="keyDrag.move"
       @pointerup="keyDrag.release"
       @pointercancel="keyDrag.release"
@@ -74,6 +77,14 @@ function click() {
         class="absolute inset-0 flex items-center justify-center text-xs text-neutral-600 group-hover:text-neutral-400"
       >
         {{ t('dock.key.empty') }}
+      </span>
+      <span
+        v-if="props.configured && props.unsupported"
+        class="pointer-events-none absolute top-[6%] left-[6%] grid size-[22%] max-h-6 max-w-6 place-items-center rounded-full bg-amber-500 text-black"
+        :title="t('dock.key.unsupported')"
+        data-key-unsupported
+      >
+        <TriangleAlert class="size-[70%]" />
       </span>
     </button>
     <slot />

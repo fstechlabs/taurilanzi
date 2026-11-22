@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { AppWindow, Cloud, CloudOff, Copy, Ellipsis, FileStack, MonitorPlay, Pencil, Pin, Plus, Trash2 } from '@lucide/vue'
+import { failure } from '~/lib/errors'
+import { AppWindow, ArrowRightLeft, Cloud, CloudOff, Copy, Ellipsis, FileStack, MonitorPlay, Pencil, Pin, Plus, Trash2 } from '@lucide/vue'
 import type { DeepReadonly, Ref } from 'vue'
 import type { ContextMenuItem } from '~/composables/useContextMenu'
 import type { ProfileSummary } from '~/types/engine'
@@ -10,6 +11,7 @@ type Profile = DeepReadonly<ProfileSummary>
 const MAX_ICONS = 2
 
 const { profiles, active, chosenBy, activate, create, rename, duplicate, remove, setLocal, moveTo } = useProfiles()
+const { snapshot } = useEngine()
 const cloud = useCloud()
 const contextMenu = useContextMenu()
 const { t } = useI18n()
@@ -22,6 +24,9 @@ const linking = ref<string | null>(null)
 /** A synced profile about to be deleted, or kept on this computer only: the user says what happens elsewhere. */
 const deleting = ref<Profile | null>(null)
 const makingLocal = ref<Profile | null>(null)
+/** The profile being taken to another dock. */
+const transferring = ref<Profile | null>(null)
+const otherDocks = computed(() => (snapshot.value?.devices.length ?? 0) > 1)
 
 function askingOpen(target: Ref<Profile | null>) {
   return computed({
@@ -35,6 +40,7 @@ function askingOpen(target: Ref<Profile | null>) {
 }
 const deletingOpen = askingOpen(deleting)
 const makingLocalOpen = askingOpen(makingLocal)
+const transferringOpen = askingOpen(transferring)
 
 /** Local profiles always say so; the others, once this computer is connected, whether the cloud has their last changes. */
 function cloudMark(profile: Profile) {
@@ -102,8 +108,8 @@ async function attempt(work: () => Promise<unknown>, message: string) {
   try {
     await work()
   }
-  catch {
-    error.value = message
+  catch (err) {
+    error.value = failure(message, err)
   }
 }
 
@@ -142,6 +148,7 @@ function items(profile: Profile): ContextMenuItem[] {
     { label: t('shell.profiles.menu.rename'), icon: Pencil, separated: true, run: () => { naming.value = { id: profile.id, name: profile.name } } },
     { label: t('shell.profiles.menu.duplicate'), icon: Copy, run: () => attempt(() => duplicate(profile.id), t('shell.profiles.errors.duplicate')) },
     { label: t('shell.profiles.menu.apps'), icon: AppWindow, run: () => { linking.value = profile.id } },
+    { label: t('shell.profiles.menu.transfer'), icon: ArrowRightLeft, disabled: !otherDocks.value, run: () => { transferring.value = profile } },
     profile.local
       ? { label: t('shell.profiles.menu.sync'), icon: Cloud, run: () => startLocal(profile) }
       : { label: t('shell.profiles.menu.local'), icon: CloudOff, run: () => startLocal(profile) },
@@ -279,6 +286,13 @@ function appsTitle(profile: Profile) {
     </Dialog>
 
     <LinkedAppsDialog v-if="linking" v-model:open="linkingOpen" :profile-id="linking" />
+
+    <TransferProfileDialog
+      v-if="transferring"
+      v-model:open="transferringOpen"
+      :profile-id="transferring.id"
+      :profile-name="transferring.name"
+    />
 
     <Dialog v-model:open="deletingOpen">
       <DialogContent class="sm:max-w-md" data-profile-delete>

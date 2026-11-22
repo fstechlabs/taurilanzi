@@ -97,6 +97,7 @@ mod tests {
             .collect();
         Profile {
             id: Uuid::new_v4(),
+            device: crate::config::FIRST_DOCK,
             name: "Test".into(),
             home_page: pages[0].id,
             pages,

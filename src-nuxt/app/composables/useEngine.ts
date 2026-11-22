@@ -1,7 +1,7 @@
 import { getName, getVersion } from '@tauri-apps/api/app'
 import { invoke } from '@tauri-apps/api/core'
 import { commands, events } from '~/ipc/bindings'
-import type { Appearance, ErrorKind, IpcError, Scene, Snapshot } from '~/types/engine'
+import type { Appearance, DeviceModel, ErrorKind, IpcError, Scene, Snapshot } from '~/types/engine'
 import { hasWidget } from '~/lib/widgets'
 
 type Status = 'connecting' | 'online' | 'offline'
@@ -31,7 +31,10 @@ export async function call<T>(pending: Promise<Result<T>>): Promise<T> {
 /** Keys a plugin redrew since the app opened, and how many times. */
 const redrawn = ref(new Map<string, number>())
 const snapshot = ref<Snapshot | null>(null)
+/** Every dock model the app drives, which never change while it runs. */
+const models = ref<DeviceModel[]>([])
 const status = ref<Status>('connecting')
+/** Keys held down on the dock the editor shows. */
 const pressed = ref(new Set<number>())
 const version = ref<string | null>(null)
 /** Development builds have a name of their own, so they are never mistaken for the released app. */
@@ -71,6 +74,9 @@ async function connect() {
     redrawn.value = new Map(redrawn.value).set(id, (redrawn.value.get(id) ?? 0) + 1)
   })
   await events.keyChanged.listen(({ payload }) => {
+    if (payload.device !== snapshot.value?.device_id) {
+      return
+    }
     const next = new Set(pressed.value)
     if (payload.pressed) {
       next.add(payload.index)
@@ -82,6 +88,7 @@ async function connect() {
   })
   version.value = await getVersion()
   name.value = await getName()
+  models.value = await commands.dockModels()
   while (!snapshot.value) {
     try {
       await refresh()
@@ -118,6 +125,16 @@ async function assetBlob(id: string) {
   return await response.blob()
 }
 
+/** The dock the editor shows, as the snapshot tells of it. */
+const focusedDevice = computed(() => snapshot.value?.devices.find(d => d.id === snapshot.value?.device_id) ?? null)
+
+function modelOf(id: string | undefined) {
+  return models.value.find(m => m.id === id) ?? null
+}
+
+/** The model of the dock the editor shows, which lays out its keys. */
+const focusedModel = computed(() => modelOf(focusedDevice.value?.model))
+
 /** The engine's state, kept up to date by its events, and what the UI can ask of it. */
 export function useEngine() {
   if (!started && import.meta.client) {
@@ -151,15 +168,20 @@ export function useEngine() {
     return `${IMAGES}/preview/${index}?appearance=${json}${page ? `&page=${page}` : ''}`
   }
 
-  /** The dock showing a screensaver scene, `width` pixels wide. */
+  /** The dock the editor shows, showing a screensaver scene, `width` pixels wide. */
   function screensaverUrl(scene: Scene, width: number) {
-    return `${IMAGES}/screensaver/${scene}?width=${width}`
+    const model = focusedModel.value ? `&model=${focusedModel.value.id}` : ''
+    return `${IMAGES}/screensaver/${scene}?width=${width}${model}`
   }
 
   return {
     version: readonly(version),
     name: readonly(name),
     snapshot: readonly(snapshot),
+    models: readonly(models),
+    device: focusedDevice,
+    model: focusedModel,
+    modelOf,
     status: readonly(status),
     pressed: readonly(pressed),
     keyImageUrl,

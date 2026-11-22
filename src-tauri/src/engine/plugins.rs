@@ -13,15 +13,17 @@ use super::commands::{CommandError, KeySlot};
 use super::runtime::Engine;
 use super::snapshot::EngineEvent;
 use crate::config::{Action, Key, LayerConfig};
-use crate::driver::d200::KEY_SIZE;
+use crate::driver::{DeviceModel, FIRST_MODEL};
 use crate::plugins::{
-    Instance, NO_CONNECTION, PluginHost, PluginInput, Protocol, Registry, StateManifest,
-    VisualChange, as_qt_draws, event, image_file, key_fields, key_name, settings_object,
+    Instance, KeyDock, NO_CONNECTION, PluginHost, PluginInput, Protocol, Registry, StateManifest,
+    VisualChange, as_qt_draws, event, image_file, key_fields, runs_on, settings_object,
     with_settings,
 };
 use crate::render::{Color, DEFAULT_FAMILY, Fit, ImageData, Layer, Outline, VerticalPosition};
 
 const TITLE_SIZE: f32 = 26.0;
+/// Sizes of texts are pixels of a key this tall, as the renderer draws them.
+const DESIGN_KEY: f32 = 196.0;
 /// The Stream Deck sizes titles in points of a key of 72, 12 unless the manifest gives a number.
 const ELGATO_KEY: f32 = 72.0;
 const ELGATO_SIZE: f64 = 12.0;
@@ -143,15 +145,48 @@ pub fn plugin_action(key: &Key) -> Option<(&str, Uuid, &Value)> {
     })
 }
 
-fn instance(action: &str, index: u8, id: Uuid) -> Instance {
-    Instance {
-        action: action.to_owned(),
-        key: key_name(index),
-        actionid: id.to_string(),
-    }
-}
-
 impl Engine {
+    /// An instance of `action` on key `index` of `page`, as its plugin knows it, and the dock it
+    /// is on.
+    pub(super) fn placement(
+        &self,
+        action: &str,
+        page: Uuid,
+        index: u8,
+        id: Uuid,
+    ) -> (Instance, KeyDock) {
+        let device = self.config.device_of_page(page);
+        let model = device
+            .and_then(|d| self.model_of(d))
+            .or_else(|| crate::driver::model(FIRST_MODEL))
+            .expect("the first model is in the catalog");
+        let size = model.image_size(index);
+        let instance = Instance {
+            action: action.to_owned(),
+            key: model.key_name(index),
+            actionid: id.to_string(),
+            device: device.map(|d| d.to_string()).unwrap_or_default(),
+        };
+        let dock = KeyDock {
+            model: model.plugins.ulanzi_model.unwrap_or(model.name).to_owned(),
+            width: size.map_or(DESIGN_KEY as u32, |s| s.width),
+            height: size.map_or(DESIGN_KEY as u32, |s| s.height),
+        };
+        (instance, dock)
+    }
+
+    /// Whether a plugin's action can go on a dock of this model; one the app does not know may.
+    pub(super) fn plugin_runs_on(&self, action: &str, model: &DeviceModel) -> bool {
+        let registry = self
+            .plugin_keys
+            .registry
+            .read()
+            .unwrap_or_else(PoisonError::into_inner);
+        registry
+            .action(action)
+            .is_none_or(|(_, manifest)| manifest.supports_keys() && runs_on(manifest, model))
+    }
+
     /// Brings the plugins up to date with the keys: `clear` for placements that are gone, `add`
     /// and `setactive` for those now on the dock, `setactive(false)` for those that left it.
     pub(super) fn sync_plugins(&mut self) {
@@ -162,23 +197,35 @@ impl Engine {
         for page in self.config.profiles.iter().flat_map(|p| &p.pages) {
             for (&index, key) in &page.keys {
                 if let Some((action, id, _)) = plugin_action(key) {
-                    all.insert(id.to_string(), instance(action, index, id));
+                    all.insert(id.to_string(), self.placement(action, page.id, index, id).0);
                 }
             }
         }
-        let showing = !self.paused && self.screen.showing_keys();
         let mut visible = HashMap::new();
         let mut settings = HashMap::new();
-        let on_dock = self.current_page().filter(|_| showing);
-        let edited = self
-            .plugin_keys
-            .edited
-            .and_then(|id| self.config.active_profile()?.page(id));
-        for page in on_dock.into_iter().chain(edited) {
+        let mut docks = HashMap::new();
+        // A dock that is not connected shows its page as soon as it is: its keys stay on view,
+        // as they were when the app knew a single dock.
+        let on_docks: Vec<&crate::config::Page> = self
+            .config
+            .devices
+            .iter()
+            .filter(|_| !self.paused)
+            .filter(|known| self.showing_keys(known.id))
+            .filter_map(|known| self.current_page(known.id))
+            .collect();
+        let edited = self.plugin_keys.edited.and_then(|id| {
+            self.config
+                .page_owner(id)
+                .and_then(|profile| profile.page(id))
+        });
+        for page in on_docks.into_iter().chain(edited) {
             for (&index, key) in &page.keys {
                 if let Some((action, id, values)) = plugin_action(key) {
-                    visible.insert(id.to_string(), instance(action, index, id));
+                    let (instance, dock) = self.placement(action, page.id, index, id);
+                    visible.insert(id.to_string(), instance);
                     settings.insert(id.to_string(), settings_object(values));
+                    docks.insert(id.to_string(), dock);
                 }
             }
         }
@@ -228,7 +275,16 @@ impl Engine {
         }
         for now in &shown {
             let values = settings.get(&now.actionid).cloned().unwrap_or_default();
-            announce(&host, now, &values, self.plugin_resources(&now.actionid));
+            let Some(dock) = docks.get(&now.actionid) else {
+                continue;
+            };
+            announce(
+                &host,
+                now,
+                &values,
+                dock,
+                self.plugin_resources(&now.actionid),
+            );
         }
         self.plugin_keys.known = all;
         self.plugin_keys.visible = visible;
@@ -305,7 +361,7 @@ impl Engine {
                 content.clone(),
                 json!({
                     "fontFamily": told_as(&TITLE_FONTS, family),
-                    "fontSize": (size * ELGATO_KEY / KEY_SIZE.0 as f32).round() as u32,
+                    "fontSize": (size * ELGATO_KEY / DESIGN_KEY).round() as u32,
                     "fontStyle": if weight >= 700 { "Bold" } else { "Regular" },
                     "fontUnderline": false,
                     "showTitle": true,
@@ -366,7 +422,7 @@ impl Engine {
             "event": "titleParametersDidChange",
             "action": instance.action,
             "context": instance.actionid,
-            "device": crate::plugins::DEVICE_ID,
+            "device": instance.device,
             "payload": {
                 "controller": "Keypad",
                 "coordinates": {
@@ -391,11 +447,14 @@ impl Engine {
     }
 
     /// The physical press and release of a key go to its plugin as they happen.
-    pub(super) fn plugin_key(&self, index: u8, pressed: bool) {
+    pub(super) fn plugin_key(&self, device: Uuid, index: u8, pressed: bool) {
         let Some(host) = &self.plugin_keys.host else {
             return;
         };
-        let Some(key) = self.current_page().and_then(|p| p.keys.get(&index)) else {
+        let Some(page) = self.current_page(device) else {
+            return;
+        };
+        let Some(key) = page.keys.get(&index) else {
             return;
         };
         let Some((action, id, settings)) = plugin_action(key) else {
@@ -408,12 +467,13 @@ impl Engine {
             return;
         }
         let cmd = if pressed { "keydown" } else { "keyup" };
+        let (instance, dock) = self.placement(action, page.id, index, id);
         host.to_main(
             &host.plugin_id(action),
             &event(
                 cmd,
-                &instance(action, index, id),
-                key_fields(&settings_object(settings)),
+                &instance,
+                key_fields(&settings_object(settings), &dock),
             ),
         );
     }
@@ -432,11 +492,14 @@ impl Engine {
                     .cloned()
                     .collect();
                 for instance in mine {
-                    let settings = self.plugin_settings(&instance.actionid).unwrap_or_default();
+                    let Some((_, settings, dock)) = self.plugin_instance(&instance.actionid) else {
+                        continue;
+                    };
                     announce(
                         &host,
                         &instance,
                         &settings,
+                        &dock,
                         self.plugin_resources(&instance.actionid),
                     );
                 }
@@ -447,12 +510,16 @@ impl Engine {
                 instance,
                 settings: opened_with,
             } => {
-                let settings = self
-                    .plugin_settings(&instance.actionid)
+                let placed = self.plugin_instance(&instance.actionid);
+                let settings = placed
+                    .as_ref()
+                    .map(|(_, settings, _)| settings.clone())
                     .or_else(|| self.plugin_keys.pending.get(&instance.actionid).cloned())
                     .or(opened_with)
                     .unwrap_or_default();
-                let fields = key_fields(&settings);
+                let dock =
+                    placed.map_or_else(|| self.inspected_dock(&instance), |(_, _, dock)| dock);
+                let fields = key_fields(&settings, &dock);
                 host.to_conn(conn, &event("add", &instance, fields.clone()));
                 host.to_conn(conn, &event("paramfromapp", &instance, fields.clone()));
                 host.to_main(
@@ -461,7 +528,7 @@ impl Engine {
                 );
             }
             PluginInput::GetSettings { actionid, conn, id } => {
-                if let Some((instance, settings)) = self.plugin_instance(&actionid) {
+                if let Some((instance, settings, _)) = self.plugin_instance(&actionid) {
                     let mut answer = with_settings(
                         &event("didReceiveSettings", &instance, json!({})),
                         "didReceiveSettings",
@@ -477,7 +544,7 @@ impl Engine {
                 }
             }
             PluginInput::GetResources { actionid, conn, id } => {
-                if let Some((instance, settings)) = self.plugin_instance(&actionid) {
+                if let Some((instance, settings, _)) = self.plugin_instance(&actionid) {
                     let mut answer = with_settings(
                         &event("didReceiveResources", &instance, json!({})),
                         "didReceiveResources",
@@ -495,7 +562,7 @@ impl Engine {
                 resources,
                 from,
             } => {
-                let Some((instance, settings)) = self.plugin_instance(&actionid) else {
+                let Some((instance, settings, _)) = self.plugin_instance(&actionid) else {
                     return;
                 };
                 self.store_plugin_resources(&actionid, resources.clone());
@@ -517,7 +584,7 @@ impl Engine {
                 if actionid.is_empty() {
                     return;
                 }
-                let Some((instance, _)) = self.plugin_instance(&actionid) else {
+                let Some((instance, _, _)) = self.plugin_instance(&actionid) else {
                     self.plugin_keys.pending.insert(actionid, settings);
                     return;
                 };
@@ -565,7 +632,7 @@ impl Engine {
     fn plugin_visual(&mut self, actionid: &str, change: VisualChange) {
         let states = self
             .plugin_instance(actionid)
-            .and_then(|(instance, _)| {
+            .and_then(|(instance, _, _)| {
                 let registry = self
                     .plugin_keys
                     .registry
@@ -637,19 +704,7 @@ impl Engine {
             page: slot.page,
             index: slot.index,
         });
-        if self.paused
-            || !self.screen.showing_keys()
-            || self.current_page().map(|p| p.id) != Some(slot.page)
-        {
-            return;
-        }
-        let Some(design) = self.design_for(slot.index) else {
-            return;
-        };
-        match self.draw(slot.index, &design) {
-            Ok(png) => self.dock.set_keys(BTreeMap::from([(slot.index, png)])),
-            Err(err) => warn!("key {} could not be drawn: {err}", slot.index),
-        }
+        self.redraw_on_dock(slot.page, slot.index);
     }
 
     /// Whether the key is of a plugin that speaks the Stream Deck protocol.
@@ -758,22 +813,26 @@ impl Engine {
         Some((image, title))
     }
 
-    /// Where a placement is, in the active profile.
+    /// Where a placement is.
     fn plugin_slot(&self, actionid: &str) -> Option<KeySlot> {
-        let profile = self.config.active_profile()?;
-        profile.pages.iter().find_map(|page| {
-            page.keys.iter().find_map(|(&index, key)| {
-                plugin_action(key)
-                    .filter(|(_, id, _)| id.to_string() == actionid)
-                    .map(|_| KeySlot {
-                        page: page.id,
-                        index,
-                    })
+        self.config
+            .profiles
+            .iter()
+            .flat_map(|p| &p.pages)
+            .find_map(|page| {
+                page.keys.iter().find_map(|(&index, key)| {
+                    plugin_action(key)
+                        .filter(|(_, id, _)| id.to_string() == actionid)
+                        .map(|_| KeySlot {
+                            page: page.id,
+                            index,
+                        })
+                })
             })
-        })
     }
 
-    fn plugin_instance(&self, actionid: &str) -> Option<(Instance, Value)> {
+    /// A placement with its settings and the dock it is on.
+    fn plugin_instance(&self, actionid: &str) -> Option<(Instance, Value, KeyDock)> {
         self.config
             .profiles
             .iter()
@@ -781,14 +840,37 @@ impl Engine {
             .find_map(|page| {
                 page.keys.iter().find_map(|(&index, key)| {
                     let (action, id, settings) = plugin_action(key)?;
-                    (id.to_string() == actionid)
-                        .then(|| (instance(action, index, id), settings_object(settings)))
+                    (id.to_string() == actionid).then(|| {
+                        let (instance, dock) = self.placement(action, page.id, index, id);
+                        (instance, settings_object(settings), dock)
+                    })
                 })
             })
     }
 
-    fn plugin_settings(&self, actionid: &str) -> Option<Value> {
-        self.plugin_instance(actionid).map(|(_, settings)| settings)
+    /// The dock of an inspector whose key is not saved yet: the one its page was opened for, or
+    /// the focused one.
+    fn inspected_dock(&self, instance: &Instance) -> KeyDock {
+        let device = instance
+            .device
+            .parse::<Uuid>()
+            .ok()
+            .filter(|d| self.config.device(*d).is_some())
+            .unwrap_or(self.focused());
+        let model = self
+            .model_of(device)
+            .or_else(|| crate::driver::model(FIRST_MODEL))
+            .expect("the first model is in the catalog");
+        let size = model
+            .controls
+            .iter()
+            .find(|c| model.key_name(c.index) == instance.key)
+            .and_then(|c| model.image_size(c.index));
+        KeyDock {
+            model: model.plugins.ulanzi_model.unwrap_or(model.name).to_owned(),
+            width: size.map_or(DESIGN_KEY as u32, |s| s.width),
+            height: size.map_or(DESIGN_KEY as u32, |s| s.height),
+        }
     }
 
     /// Settings written for a key from outside its inspector: saved and told to the plugin and
@@ -799,7 +881,7 @@ impl Engine {
         settings: Value,
     ) -> Result<(), CommandError> {
         let actionid = placement.to_string();
-        let Some((instance, _)) = self.plugin_instance(&actionid) else {
+        let Some((instance, _, _)) = self.plugin_instance(&actionid) else {
             return Err(CommandError::UnknownPlacement(placement));
         };
         let settings = settings_object(&settings);
@@ -1046,14 +1128,14 @@ fn stream_deck_title(
         } else {
             STREAM_DOCK_UNREADABLE_SIZE
         };
-        let size = (points as f32 + 2.0) * STREAM_DOCK_POINT * KEY_SIZE.0 as f32 / STREAM_DOCK_KEY;
+        let size = (points as f32 + 2.0) * STREAM_DOCK_POINT * DESIGN_KEY / STREAM_DOCK_KEY;
         (size, if bold { 700 } else { 400 })
     } else {
         let points = font_size
             .as_f64()
             .filter(|p| *p > 0.0)
             .unwrap_or(ELGATO_SIZE);
-        let size = points as f32 * KEY_SIZE.0 as f32 / ELGATO_KEY;
+        let size = points as f32 * DESIGN_KEY / ELGATO_KEY;
         (size, if bold || style.is_empty() { 700 } else { 400 })
     };
     let color = look
@@ -1086,16 +1168,22 @@ fn stream_deck_title(
                 g: 255 - color.g,
                 b: 255 - color.b,
             },
-            width: KEY_SIZE.0 as f32 / STREAM_DOCK_KEY,
+            width: DESIGN_KEY / STREAM_DOCK_KEY,
         }),
     })
 }
 
 /// What Ulanzi Studio sends when a key of a plugin shows up: `add` with its settings, then
 /// `setactive`.
-fn announce(host: &PluginHost, instance: &Instance, settings: &Value, resources: Value) {
+fn announce(
+    host: &PluginHost,
+    instance: &Instance,
+    settings: &Value,
+    dock: &KeyDock,
+    resources: Value,
+) {
     let plugin = host.plugin_id(&instance.action);
-    let mut add = event("add", instance, key_fields(settings));
+    let mut add = event("add", instance, key_fields(settings, dock));
     if host.stream_deck(&instance.action) {
         add["resources"] = resources;
     }
@@ -1124,7 +1212,6 @@ mod tests {
     use crate::config::{
         Appearance, Config, DeviceSettings, LayerConfig, Page, Position, Profile, Store,
     };
-    use crate::driver::d200::D200;
     use crate::engine::handle::Activity;
     use crate::engine::runtime::Links;
     use crate::plugins::{Desktop, Plugins, PluginsSetup};
@@ -1251,6 +1338,7 @@ mod tests {
                 let _ = tx.send(input);
             }),
             desktop: Arc::new(Quiet),
+            docks: Vec::new(),
         })
         .unwrap();
         let host = plugins.host();
@@ -1263,6 +1351,7 @@ mod tests {
         let (home_id, other_id) = (home.id, other.id);
         let profile = Profile {
             id: Uuid::new_v4(),
+            device: crate::config::FIRST_DOCK,
             name: "Perfil".into(),
             home_page: home.id,
             pages: vec![home, other],
@@ -1270,14 +1359,17 @@ mod tests {
         };
         let store = Store::open(dir.path().join("store")).unwrap();
         let config = Config {
-            schema: 2,
+            schema: crate::config::SCHEMA_VERSION,
             revision: 0,
-            device: DeviceSettings {
+            devices: vec![crate::config::first_device(DeviceSettings {
                 brightness: 50,
                 sleep_minutes: 0,
-            },
+            })],
             preferences: Default::default(),
-            active_profile: profile.id,
+            active_profiles: std::collections::BTreeMap::from([(
+                crate::config::FIRST_DOCK,
+                profile.id,
+            )]),
             profiles: vec![profile],
             plugin_settings: Default::default(),
             integrations: Vec::new(),
@@ -1285,7 +1377,6 @@ mod tests {
             plugins: Default::default(),
             declined_plugins: Default::default(),
         };
-        let (dock, _) = D200::detached();
         let (events, _) = broadcast::channel(16);
         let context = Context {
             assets: store.assets.clone(),
@@ -1300,7 +1391,7 @@ mod tests {
             inputs: mpsc::channel().0,
             plugins: PluginKeys::new(Some(host), plugins.registry()),
         };
-        let engine = Engine::new(store, config, Renderer::new(), dock, links, context);
+        let engine = Engine::new(store, config, Renderer::new(), links, context);
         Setup {
             engine,
             port,
@@ -1391,18 +1482,43 @@ mod tests {
     }
 
     fn at(index: u8, id: Uuid) -> Instance {
-        instance(ACTION, index, id)
+        let d200 = crate::driver::model(crate::driver::FIRST_MODEL).unwrap();
+        Instance {
+            action: ACTION.into(),
+            key: d200.key_name(index),
+            actionid: id.to_string(),
+            device: crate::config::FIRST_DOCK.to_string(),
+        }
+    }
+
+    fn on_d200(index: u8) -> KeyDock {
+        let d200 = crate::driver::model(crate::driver::FIRST_MODEL).unwrap();
+        let size = d200.image_size(index).unwrap();
+        KeyDock {
+            model: "D200".into(),
+            width: size.width,
+            height: size.height,
+        }
+    }
+
+    /// An event as a plugin of Ulanzi's protocol gets it, without the host's own fields.
+    fn sent(cmd: &str, instance: &Instance, extra: Value) -> Value {
+        crate::plugins::for_plugin(&event(cmd, instance, extra))
     }
 
     fn added(index: u8, id: Uuid, settings: Value) -> Vec<Value> {
         vec![
-            event("add", &at(index, id), key_fields(&settings)),
-            event("setactive", &at(index, id), json!({ "active": true })),
+            sent(
+                "add",
+                &at(index, id),
+                key_fields(&settings, &on_d200(index)),
+            ),
+            sent("setactive", &at(index, id), json!({ "active": true })),
         ]
     }
 
     fn left(index: u8, id: Uuid) -> Value {
-        event("setactive", &at(index, id), json!({ "active": false }))
+        sent("setactive", &at(index, id), json!({ "active": false }))
     }
 
     #[test]
@@ -1419,7 +1535,9 @@ mod tests {
         let other = setup.other;
         setup
             .engine
-            .navigate(|nav, profile| nav.open(profile, other));
+            .navigate(crate::config::FIRST_DOCK, |nav, profile| {
+                nav.open(profile, other)
+            });
         setup.engine.sync_plugins();
         let mut expected = vec![left(7, x)];
         expected.extend(added(0, z, json!({})));
@@ -1445,7 +1563,9 @@ mod tests {
         let home = setup.home;
         setup
             .engine
-            .navigate(|nav, profile| nav.open(profile, home));
+            .navigate(crate::config::FIRST_DOCK, |nav, profile| {
+                nav.open(profile, home)
+            });
         setup.engine.sync_plugins();
         assert_eq!(drain(&mut main), added(7, x, json!({ "n": 3 })));
         setup.engine.paused = true;
@@ -1498,15 +1618,16 @@ mod tests {
         let (x, z) = (Uuid::new_v4(), Uuid::new_v4());
         let setup = setup(x, z);
         let mut main = setup.main();
-        setup.engine.plugin_key(7, true);
-        setup.engine.plugin_key(7, false);
-        setup.engine.plugin_key(0, true);
-        let fields = key_fields(&json!({ "n": 3 }));
+        let dock = crate::config::FIRST_DOCK;
+        setup.engine.plugin_key(dock, 7, true);
+        setup.engine.plugin_key(dock, 7, false);
+        setup.engine.plugin_key(dock, 0, true);
+        let fields = key_fields(&json!({ "n": 3 }), &on_d200(7));
         assert_eq!(
             drain(&mut main),
             vec![
-                event("keydown", &at(7, x), fields.clone()),
-                event("keyup", &at(7, x), fields),
+                sent("keydown", &at(7, x), fields.clone()),
+                sent("keyup", &at(7, x), fields),
             ]
         );
 
@@ -1522,7 +1643,11 @@ mod tests {
         setup.engine.run_actions(pressed.actions, slot);
         assert_eq!(
             next(&mut main),
-            event("run", &at(7, x), key_fields(&json!({ "n": 3 })))
+            sent(
+                "run",
+                &at(7, x),
+                key_fields(&json!({ "n": 3 }), &on_d200(7))
+            )
         );
     }
 
@@ -1537,17 +1662,17 @@ mod tests {
         };
 
         setup.engine.on_plugin(connected);
-        let fields = key_fields(&json!({ "n": 3 }));
+        let fields = key_fields(&json!({ "n": 3 }), &on_d200(7));
         assert_eq!(
             drain(&mut inspector),
             vec![
-                event("add", &at(7, x), fields.clone()),
-                event("paramfromapp", &at(7, x), fields.clone()),
+                sent("add", &at(7, x), fields.clone()),
+                sent("paramfromapp", &at(7, x), fields.clone()),
             ]
         );
         assert_eq!(
             drain(&mut main),
-            vec![event("paramfromapp", &at(7, x), fields)]
+            vec![sent("paramfromapp", &at(7, x), fields)]
         );
 
         setup.engine.on_plugin(PluginInput::SaveSettings {
@@ -1557,11 +1682,11 @@ mod tests {
             forward: "didReceiveSettings",
         });
         assert_eq!(setup.settings(setup.home, 7), json!({ "n": 5 }));
-        let saved = with_settings(
+        let saved = crate::plugins::for_plugin(&with_settings(
             &event("didReceiveSettings", &at(7, x), json!({})),
             "didReceiveSettings",
             json!({ "n": 5 }),
-        );
+        ));
         assert_eq!(drain(&mut main), vec![saved.clone()]);
         assert!(
             drain(&mut inspector).is_empty(),
@@ -1948,7 +2073,7 @@ mod tests {
         };
         let texts = |engine: &Engine| -> Vec<String> {
             engine
-                .design_for(3)
+                .design_for(crate::config::FIRST_DOCK, 3)
                 .unwrap()
                 .layers
                 .into_iter()
@@ -2122,6 +2247,7 @@ mod tests {
             action: STREAM_DECK_ACTION.into(),
             key: "3_0".into(),
             actionid: id.to_string(),
+            device: crate::config::FIRST_DOCK.to_string(),
         };
         let told = setup.engine.title_event(&host, &instance).unwrap();
         assert_eq!(told["event"], "titleParametersDidChange");
@@ -2183,7 +2309,7 @@ mod tests {
         );
         let images: Vec<Vec<u8>> = setup
             .engine
-            .design_for(3)
+            .design_for(crate::config::FIRST_DOCK, 3)
             .unwrap()
             .layers
             .into_iter()

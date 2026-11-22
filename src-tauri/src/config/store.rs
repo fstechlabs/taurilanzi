@@ -7,9 +7,9 @@ use super::assets::AssetStore;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use super::integrations;
 use super::model::{Config, SCHEMA_VERSION};
 use super::navigation::Navigation;
+use super::{devices, integrations};
 
 const CONFIG_FILE: &str = "config.json";
 const NAVIGATION_FILE: &str = "navigation.json";
@@ -30,10 +30,11 @@ impl Store {
 
     /// Older schemas are read as the current one; the next save writes them in the new format.
     pub fn load(&self) -> io::Result<Option<Config>> {
-        let Some(raw) = self.read::<serde_json::Value>(CONFIG_FILE)? else {
+        let Some(mut raw) = self.read::<serde_json::Value>(CONFIG_FILE)? else {
             return Ok(None);
         };
         let legacy_obs = serde_json::from_value(raw["preferences"]["obs"].clone()).ok();
+        devices::migrate(&mut raw);
         let mut config: Config = serde_json::from_value(raw).map_err(io::Error::other)?;
         config.schema = config.schema.max(SCHEMA_VERSION);
         integrations::migrate(&mut config, legacy_obs);

@@ -12,6 +12,7 @@ import { obsError } from '~/lib/actions/obs'
 import { NO_SERVER } from '~/lib/integrations'
 import type { NewKeyStyle } from '~/lib/new-key'
 // Relative, not `~`: the unit tests import this file without Nuxt's alias.
+import { failure } from '../lib/errors'
 import { t } from '../lib/i18n'
 
 export interface ImageDraft {
@@ -439,11 +440,11 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
         status.value = 'saved'
       }
     }
-    catch {
+    catch (err) {
       sent = sent.filter(s => s !== text)
       known.value = before
       status.value = 'error'
-      error.value = t('editor.errors.save')
+      error.value = failure(t('editor.errors.save'), err)
     }
   }
 
@@ -597,8 +598,8 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
     try {
       await call(commands.pressKey(key.page, key.index, gesture))
     }
-    catch {
-      error.value = t('editor.errors.try')
+    catch (err) {
+      error.value = failure(t('editor.errors.try'), err)
     }
   }
 
@@ -618,8 +619,8 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
       const id = await upload(file, file.type)
       setImage({ asset: id, source: id, crop: null, fit: 'cover', inset: 0, tint: null, icon: null })
     }
-    catch {
-      error.value = t('editor.errors.upload')
+    catch (err) {
+      error.value = failure(t('editor.errors.upload'), err)
     }
   }
 
@@ -630,8 +631,8 @@ export function useKeyEditor(target: Ref<KeyRef | null>) {
       const tint = multicolor ? null : (state.value?.text?.color ?? '#ffffff')
       setImage({ asset, source: asset, crop: null, fit: 'contain', inset: 0.22, tint, icon })
     }
-    catch {
-      error.value = t('editor.errors.icon')
+    catch (err) {
+      error.value = failure(t('editor.errors.icon'), err)
     }
   }
 

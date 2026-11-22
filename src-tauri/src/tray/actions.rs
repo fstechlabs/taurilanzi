@@ -44,10 +44,13 @@ async fn act(app: &AppHandle, id: &str) -> Result<(), String> {
     } else if let Some(level) = id.strip_prefix(BRIGHTNESS_PREFIX) {
         let brightness = level.parse().map_err(|_| "bad brightness")?;
         engine
-            .set_device(DeviceSettings {
-                brightness,
-                ..snapshot.settings.clone()
-            })
+            .set_device(
+                snapshot.device_id,
+                DeviceSettings {
+                    brightness,
+                    ..snapshot.settings.clone()
+                },
+            )
             .await
     } else {
         return Ok(());

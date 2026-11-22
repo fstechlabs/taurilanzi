@@ -9,7 +9,6 @@ use crate::config::model::DeviceSettings;
 use crate::config::preferences::{Preferences, ScreensaverImage};
 use crate::hass::Address;
 
-const SLEEP_MINUTES: [u32; 7] = [0, 1, 5, 10, 15, 30, 60];
 const IDLE_MINUTES: [u32; 8] = [0, 1, 2, 5, 10, 15, 30, 60];
 const OFF_AFTER_MINUTES: [u32; 7] = [0, 5, 10, 15, 30, 60, 120];
 const BRIGHTNESS: (u8, u8) = (0, 100);
@@ -17,13 +16,18 @@ const SCREENSAVER_BRIGHTNESS: (u8, u8) = (5, 100);
 const LONG_PRESS_MS: (u32, u32) = (250, 2000);
 const DOUBLE_PRESS_MS: (u32, u32) = (150, 800);
 
-pub fn check_device(new: &DeviceSettings, current: &DeviceSettings) -> Result<(), Problem> {
+/// `sleep_minutes` are the times the dock's firmware offers.
+pub fn check_device(
+    new: &DeviceSettings,
+    current: &DeviceSettings,
+    sleep_minutes: &[u32],
+) -> Result<(), Problem> {
     in_range("brightness", new.brightness, current.brightness, BRIGHTNESS)?;
     one_of(
         "sleep_minutes",
         new.sleep_minutes,
         current.sleep_minutes,
-        &SLEEP_MINUTES,
+        sleep_minutes,
     )
 }
 
@@ -164,6 +168,9 @@ mod tests {
     #[test]
     fn the_dock_sleeps_after_one_of_the_times_offered() {
         let current = device(70, 0);
+        let offered = &crate::driver::model("ulanzi.d200").unwrap().sleep_minutes;
+        let check_device =
+            |new: &DeviceSettings, current: &DeviceSettings| check_device(new, current, offered);
         assert!(check_device(&device(0, 60), &current).is_ok());
         assert!(check_device(&device(100, 15), &current).is_ok());
         assert_eq!(

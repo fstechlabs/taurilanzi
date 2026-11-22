@@ -27,7 +27,8 @@ impl Engine {
     }
 
     /// What an automation of Home Assistant asks with the `taurilanzi` event: `profile` and
-    /// `page` by name, `brightness` from 0 to 100, and `wake` to bring the keys back.
+    /// `page` by name, `brightness` from 0 to 100, and `wake` to bring the keys back. `dock`
+    /// names the dock it is about, the one the app shows by default.
     pub(super) fn on_hass_remote(&mut self, data: &Value) {
         let named = |field: &str| {
             data[field]
@@ -35,17 +36,32 @@ impl Engine {
                 .map(str::trim)
                 .filter(|n| !n.is_empty())
         };
+        let device = match named("dock") {
+            Some(name) => {
+                let found = self
+                    .config
+                    .devices
+                    .iter()
+                    .map(|d| d.id)
+                    .find(|id| self.device_name(*id).eq_ignore_ascii_case(name));
+                match found {
+                    Some(id) => id,
+                    None => {
+                        warn!("Home Assistant asked for an unknown dock: {name}");
+                        return;
+                    }
+                }
+            }
+            None => self.focused(),
+        };
         if data["wake"].as_bool() == Some(true) {
             self.activity.touch();
-            if let Some(change) = self.screen.wake_from_idle() {
-                self.apply_screen(change);
-            }
+            self.wake_from_idle();
         }
         if let Some(name) = named("profile") {
             let found = self
                 .config
-                .profiles
-                .iter()
+                .profiles_of(device)
                 .find(|p| p.name.eq_ignore_ascii_case(name))
                 .map(|p| p.id);
             match found {
@@ -58,7 +74,7 @@ impl Engine {
             }
         }
         if let Some(name) = named("page") {
-            let found = self.config.active_profile().and_then(|profile| {
+            let found = self.config.active_profile_of(device).and_then(|profile| {
                 profile
                     .pages
                     .iter()
@@ -66,62 +82,43 @@ impl Engine {
                     .map(|p| p.id)
             });
             match found {
-                Some(page) => self.navigate(|nav, profile| nav.open(profile, page)),
+                Some(page) => self.navigate(device, |nav, profile| nav.open(profile, page)),
                 None => warn!("Home Assistant asked for an unknown page: {name}"),
             }
         }
         if let Some(brightness) = data["brightness"].as_f64() {
             let settings = DeviceSettings {
                 brightness: brightness.clamp(0.0, 100.0).round() as u8,
-                ..self.config.device.clone()
+                ..self.settings_of(device)
             };
-            if let Err(err) = self.set_device(settings) {
+            if let Err(err) = self.set_device(device, settings) {
                 warn!("Home Assistant could not change the brightness: {err}");
             }
         }
     }
 
-    /// Draws again the keys on the dock that show what changed on `server`.
+    /// Draws again the keys on the docks that show what changed on `server`.
     fn redraw_hass(&mut self, server: Uuid, changed: &BTreeSet<Topic>, everything: bool) {
-        if self.paused || !self.screen.showing_keys() {
+        if self.paused {
             return;
         }
-        let Some(page) = self.current_page() else {
-            return;
-        };
         let everything = everything || changed.contains(&Topic::Everything);
-        let redraw: Vec<u8> = page
-            .keys
-            .iter()
-            .filter(|(index, key)| {
-                let turn = self.key_widgets.turn((page.id, **index));
-                widget_topics(self.appearance_now(page.id, **index, key).widget_at(turn))
-                    .iter()
-                    .any(|(on, topic)| *on == server && (everything || changed.contains(topic)))
-            })
-            .map(|(index, _)| *index)
-            .collect();
-        self.redraw_indexes(redraw);
-    }
-
-    pub(super) fn redraw_indexes(&mut self, indexes: Vec<u8>) {
-        if indexes.is_empty() || !self.screen.showing_keys() {
-            return;
-        }
-        let mut images = BTreeMap::new();
-        for index in indexes {
-            let Some(design) = self.design_for(index) else {
+        for device in self.docks.ids() {
+            let Some(page) = self.current_page(device) else {
                 continue;
             };
-            match self.draw(index, &design) {
-                Ok(png) => {
-                    images.insert(index, png);
-                }
-                Err(err) => warn!("key {index} could not be drawn: {err}"),
-            }
-        }
-        if !images.is_empty() {
-            self.dock.set_keys(images);
+            let redraw: Vec<u8> = page
+                .keys
+                .iter()
+                .filter(|(index, key)| {
+                    let turn = self.key_widgets.turn((page.id, **index));
+                    widget_topics(self.appearance_now(page.id, **index, key).widget_at(turn))
+                        .iter()
+                        .any(|(on, topic)| *on == server && (everything || changed.contains(topic)))
+                })
+                .map(|(index, _)| *index)
+                .collect();
+            self.redraw_indexes(device, redraw);
         }
     }
 
@@ -176,10 +173,13 @@ impl Engine {
                 }
             }
         }
-        if !self.paused
-            && self.screen.showing_keys()
-            && let Some(page) = self.current_page()
-        {
+        let on_view = self
+            .docks
+            .sessions
+            .iter()
+            .filter(|(_, session)| !self.paused && session.screen.showing_keys())
+            .filter_map(|(&device, _)| self.current_page(device));
+        for page in on_view {
             for (&index, key) in &page.keys {
                 let turn = self.key_widgets.turn((page.id, index));
                 let Some(widget) = self.appearance_now(page.id, index, key).widget_at(turn) else {

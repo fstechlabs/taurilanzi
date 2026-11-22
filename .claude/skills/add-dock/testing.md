@@ -36,14 +36,21 @@ control; disconnecting and reconnecting must recover; nothing forbidden is ever 
 
 ## 3. Virtual docks
 
-`driver/virtual_dock.rs` runs any model in development and e2e builds, through its emulator, with
-no USB. It replaces `TAURILANZI_NO_DOCK` (see the environment variables in `CLAUDE.md`: keep that
-section up to date with whatever variable selects the virtual docks).
+`driver/virtual_dock.rs` connects docks of any model in development and e2e builds, with no USB:
+`TAURILANZI_VIRTUAL_DOCKS=ulanzi.d200,ulanzi.d200` (model ids separated by commas, the n-th listed
+with serial `VIRTUAL-<n>`). They take every request and show nothing; what they would show
+is what the editor shows. They work with or without `TAURILANZI_NO_DOCK`, so the real D200 and
+virtual docks can run together.
 
 - The UI, the editor, MCP, plugins, moving profiles and the warning are tried on every model
   this way, by the user (step 5 of the skill) and by e2e specs.
 - e2e specs that only need a dock use the D200 model; specs about a new model or several devices
-  use virtual docks of those models. Screenshots of new faces go through `shot()` for review.
+  use virtual docks of those models, listed for their spec in `VIRTUAL_DOCKS` of
+  `tests/e2e/run.ts` (`devices.e2e.ts` is the example). Screenshots of new faces go through
+  `shot()` for review.
+- The engine's tests plug docks in by hand: `engine/test_engine.rs` builds an engine on a
+  temporary folder, and `Setup::plug` feeds it the events of `driver::plugged` (any serial, real
+  or virtual).
 
 ## 4. The D200
 

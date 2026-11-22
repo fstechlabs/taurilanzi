@@ -38,17 +38,12 @@ impl Engine {
     }
 
     fn restore(&mut self, profiles: Vec<crate::config::Profile>) -> Result<(), CommandError> {
-        let active = self.config.active_profile;
+        let active = self.active_profiles();
         self.config.profiles = profiles;
-        if self.config.active_profile().is_none()
-            && let Some(first) = self.config.profiles.first()
-        {
-            self.config.active_profile = first.id;
-        }
-        self.profiles_restored(active);
+        self.profiles_restored(&active);
         self.save()?;
         self.forget_stale_states();
-        self.show_current_page();
+        self.show_all_pages();
         Ok(())
     }
 }

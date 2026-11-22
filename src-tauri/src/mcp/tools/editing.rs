@@ -31,8 +31,9 @@ pub struct Point {
 #[derive(Deserialize, JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum ChangeInput {
-    /// Puts a key in a slot, replacing what was there. `key` is a `Key` (see get_schema); fields
-    /// it leaves out take their defaults, and a missing `appearance` takes the look of new keys.
+    /// Puts a key in a slot, replacing what was there: `index` is a control of the page's dock
+    /// (see the layout of its dock in get_overview). `key` is a `Key` (see get_schema); fields it
+    /// leaves out take their defaults, and a missing `appearance` takes the look of new keys.
     SetKey {
         page: String,
         index: u8,
@@ -74,11 +75,13 @@ pub enum ChangeInput {
         page: String,
     },
     /// A new profile has one empty page, its home; `home_name` names that page for later
-    /// changes of the same call.
+    /// changes of the same call. It goes on `dock` (an id from get_overview), or on the dock the
+    /// app shows.
     CreateProfile {
         profile_name: Option<String>,
         name: Option<String>,
         home_name: Option<String>,
+        dock: Option<String>,
     },
     RenameProfile {
         profile: String,
@@ -88,17 +91,28 @@ pub enum ChangeInput {
         profile: String,
         name: Option<String>,
     },
-    /// Keys that switched to it stop doing so. The last profile cannot be deleted.
+    /// Keys that switched to it stop doing so. The last profile of a dock cannot be deleted.
     DeleteProfile {
         profile: String,
     },
-    /// Moves a profile to another place in the list, from 0.
+    /// Moves a profile to another place among the profiles of its dock, from 0.
     MoveProfile {
         profile: String,
         index: usize,
     },
-    /// The profile comes to the dock when this app comes to the front (see list_running_apps).
-    /// An app belongs to one profile at most.
+    /// Takes a profile to another dock (an id from get_overview), or with `copy` puts a copy of
+    /// it there, named `name` for later changes. Keys go to the same place in the grid of the
+    /// other dock; those it has no place for are left out, and keys whose action it cannot run
+    /// show an alert there. Switches to profiles of the first dock are dropped.
+    TransferProfile {
+        profile: String,
+        dock: String,
+        #[serde(default)]
+        copy: bool,
+        name: Option<String>,
+    },
+    /// The profile comes to its dock when this app comes to the front (see list_running_apps).
+    /// An app belongs to one profile at most on each dock.
     LinkApp {
         profile: String,
         app_id: String,
@@ -119,7 +133,7 @@ pub struct ApplyParams {
 #[derive(Deserialize, JsonSchema)]
 pub struct SetKeyParams {
     pub page: String,
-    /// 0 to 12, or 13 for the wide key.
+    /// A control of the page's dock: see the layout of its dock in get_overview.
     pub index: u8,
     /// A `Key` (see get_schema), or null to empty the slot.
     pub key: Option<Value>,
@@ -206,7 +220,7 @@ impl Assistant {
         .await
     }
 
-    #[tool(description = "Shows a profile on the dock. It is not an edit: undo leaves it alone.")]
+    #[tool(description = "Shows a profile on its dock. It is not an edit: undo leaves it alone.")]
     async fn switch_profile(&self, Parameters(params): Parameters<ProfileParams>) -> Answer {
         let profile = match parse_id(&params.profile, "profile") {
             Ok(profile) => profile,
@@ -218,7 +232,9 @@ impl Assistant {
         }
     }
 
-    #[tool(description = "Shows a page on the dock, switching to its profile first if needed.")]
+    #[tool(
+        description = "Shows a page on its dock, switching the dock to its profile first if needed."
+    )]
     async fn show_page(
         &self,
         Parameters(params): Parameters<super::reading::PageParams>,
@@ -227,18 +243,6 @@ impl Assistant {
             Ok(page) => page,
             Err(err) => return refused(err),
         };
-        let config = match self.tools.engine.config().await {
-            Ok(config) => config,
-            Err(err) => return engine_error(err),
-        };
-        let Some(owner) = config.page_owner(page) else {
-            return refused(format!("page {page} does not exist"));
-        };
-        if owner.id != config.active_profile
-            && let Err(err) = self.tools.engine.set_profile(owner.id).await
-        {
-            return engine_error(err);
-        }
         match self.tools.engine.show_page(page).await {
             Ok(()) => text("the dock shows that page"),
             Err(err) => engine_error(err),
@@ -246,7 +250,7 @@ impl Assistant {
     }
 
     #[tool(
-        description = "Runs what a key does, as if it were pressed on the dock (or double pressed, or held), to try it. The key must be on a page of the profile on the dock. It really does it: opens apps, presses shortcuts, changes OBS…",
+        description = "Runs what a key does, as if it were pressed on its dock (or double pressed, or held), to try it, on any page. It really does it: opens apps, presses shortcuts, changes OBS…",
         annotations(destructive_hint = true)
     )]
     async fn press_key(&self, Parameters(params): Parameters<PressParams>) -> Answer {
@@ -407,7 +411,9 @@ impl Assistant {
                 profile_name,
                 name,
                 home_name,
+                dock,
             } => {
+                let device = dock.map(|d| parse_id(&d, "dock")).transpose()?;
                 let id = names.declare(name.as_deref())?;
                 let home = names.declare(home_name.as_deref())?;
                 right_edges.insert(id, Some(Position::default()));
@@ -415,8 +421,19 @@ impl Assistant {
                     id,
                     home,
                     name: profile_name,
+                    device,
                 }
             }
+            ChangeInput::TransferProfile {
+                profile,
+                dock,
+                copy,
+                name,
+            } => Change::TransferProfile {
+                profile: names.resolve(&profile, "profile")?,
+                device: parse_id(&dock, "dock")?,
+                copy: copy.then(|| names.declare(name.as_deref())).transpose()?,
+            },
             ChangeInput::RenameProfile {
                 profile,
                 profile_name,

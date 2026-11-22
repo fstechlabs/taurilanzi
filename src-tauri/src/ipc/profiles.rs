@@ -82,12 +82,7 @@ async fn profile_name(engine: &EngineHandle, profile: Uuid) -> Result<String> {
         .into_iter()
         .find(|p| p.id == profile)
         .map(|p| p.name)
-        .ok_or_else(|| {
-            IpcError::new(
-                ErrorKind::NotFound,
-                format!("profile {profile} does not exist"),
-            )
-        })
+        .ok_or_else(|| IpcError::new(ErrorKind::NotFound, tr!("errors.unknownProfile")))
 }
 
 #[tauri::command]
@@ -122,7 +117,7 @@ pub async fn app_at_path(path: String) -> Result<AppRef> {
         .await
         .ok()
         .flatten()
-        .ok_or_else(|| IpcError::new(ErrorKind::Invalid, "that is not an app"))
+        .ok_or_else(|| IpcError::new(ErrorKind::Invalid, tr!("errors.unknownApp")))
 }
 
 /// Apps open now, to link one with a click.

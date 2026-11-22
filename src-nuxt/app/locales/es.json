@@ -395,7 +395,8 @@
     "plugins": {
       "sectionBy": "Plugin de {author}",
       "section": "Plugin",
-      "forDials": "Es para diales u otros modelos: el D200 no la puede usar"
+      "forDials": "Es para diales: un dock sin ellos no la puede usar",
+      "otherDock": "Es para otros modelos: este dock no la puede usar"
     },
     "keys": {
       "space": "Espacio",
@@ -1045,7 +1046,8 @@
     "key": {
       "label": "Tecla {n}",
       "empty": "Vacía",
-      "remove": "Eliminar tecla"
+      "remove": "Eliminar tecla",
+      "unsupported": "Este dock no puede hacer lo que hace esta tecla"
     }
   },
   "editor": {
@@ -1080,8 +1082,10 @@
     "errors": {
       "save": "No se pudo guardar la tecla.",
       "try": "No se pudo probar la tecla.",
-      "upload": "No se pudo subir la imagen. Formatos: PNG, JPG, WebP, GIF o SVG de hasta 10 MB.",
-      "icon": "No se pudo descargar el icono. Prueba de nuevo en unos segundos."
+      "upload": "No se pudo subir la imagen.",
+      "icon": "No se pudo descargar el icono.",
+        "undo": "No se pudo deshacer.",
+        "redo": "No se pudo rehacer."
     },
     "validation": {
       "urlMissing": "Escribe una dirección",
@@ -1175,7 +1179,8 @@
         "remove": "No se pudo eliminar la página.",
         "show": "No se pudo mostrar la página.",
         "duplicate": "No se pudo duplicar la página.",
-        "home": "No se pudo cambiar el inicio."
+        "home": "No se pudo cambiar el inicio.",
+        "route": "No se pudo cambiar el recorrido del enlace."
       }
     },
     "page": {
@@ -1465,7 +1470,8 @@
       "brightnessLabel": "Brillo del dock",
       "sleep": "Suspensión",
       "sleepHint": "El dock apaga la pantalla tras este rato sin pulsar teclas.",
-      "sleepLabel": "Suspensión del dock"
+      "sleepLabel": "Suspensión del dock",
+      "of": "Los ajustes de {name}, el dock que muestra el editor."
     },
     "presses": {
       "long": "Pulsación larga",
@@ -1582,7 +1588,8 @@
       "accountConnected": "Este equipo está conectado al cloud",
       "mcp": "IA · MCP",
       "mcpOff": "Conecta un asistente de IA para configurar el dock hablando con él",
-      "mcpRunning": "Los asistentes de IA pueden conectarse"
+      "mcpRunning": "Los asistentes de IA pueden conectarse",
+      "resize": "Cambiar el ancho de la barra lateral"
     },
     "statusBar": {
       "starting": "Arrancando…",
@@ -1625,8 +1632,9 @@
         "duplicate": "Duplicar",
         "apps": "Apps vinculadas…",
         "delete": "Eliminar",
-        "sync": "Sincronizar con el cloud",
-        "local": "Solo en este equipo…"
+        "sync": "Activar sincronización cloud",
+        "local": "Desactivar sincronización cloud…",
+        "transfer": "Mover o copiar a otro dock…"
       },
       "errors": {
         "rename": "No se pudo renombrar el perfil.",
@@ -1678,6 +1686,48 @@
         "needs_relogin": "La extensión ya está. Cierra la sesión y vuelve a entrar para que GNOME la cargue.",
         "unavailable": "Este escritorio no deja saber qué app está delante, así que los perfiles no cambiarán solos.",
         "install": "Instalar la extensión"
+      }
+    },
+    "docks": {
+      "options": "Opciones de {name}",
+      "rename": "Renombrar",
+      "renameTitle": "Renombrar el dock",
+      "renameHint": "Vacío vuelve al nombre de su modelo.",
+      "nameLabel": "Nombre del dock",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "forget": "Olvidar este dock…",
+      "forgetTitle": "¿Olvidar {name}?",
+      "forgetBody": "Se borran el dock y todos sus perfiles, también en el cloud y en tus otros equipos. No se puede deshacer. Si quieres conservar algún perfil, muévelo antes a otro dock.",
+      "forgetConfirm": "Olvidar el dock",
+      "untested": "Nadie ha probado aún este modelo con el dock real. Si algo no funciona, abre una issue en GitHub.",
+      "report": "Abrir una issue",
+      "understood": "Entendido",
+      "errors": {
+        "focus": "No se ha podido mostrar ese dock",
+        "rename": "No se ha podido renombrar el dock",
+        "forget": "No se ha podido olvidar el dock"
+      },
+      "model": "Modelo",
+      "serial": "Número de serie",
+      "noSerial": "Aún no se ha conectado"
+    },
+    "transfer": {
+      "title": "Llevar «{name}» a otro dock",
+      "hint": "Se eliminarán las teclas que el dock destino no soporte.",
+      "target": "Dock de destino",
+      "fits": "Todas las teclas caben y funcionan en ese dock.",
+      "removed": "Se quedan fuera, porque ese dock no tiene su sitio:",
+      "unsupported": "Van con un aviso, porque ese dock no puede hacer lo que hacen:",
+      "key": "{page}: tecla {number}",
+      "move": "Mover",
+      "copy": "Copiar",
+      "cancel": "Cancelar",
+      "onlyProfile": "Es el único perfil de su dock, que está conectado y no puede quedarse sin ninguno: puedes copiarlo, pero no moverlo.",
+      "errors": {
+        "plan": "No se ha podido ver qué cabe en ese dock",
+        "move": "No se ha podido mover el perfil",
+        "copy": "No se ha podido copiar el perfil"
       }
     }
   },
@@ -1978,7 +2028,7 @@
     "empty": "Todavía no hay ningún servidor de {kind}."
   },
   "cloudJoin": {
-    "title": "Tu cuenta ya tiene perfiles",
+    "title": "El cloud ya tiene perfiles",
     "body": "Hay {count} perfiles en el cloud. ¿Qué hacemos con los de este equipo?",
     "merge": "Juntar los dos",
     "mergeHint": "Juntar: los perfiles de este equipo se suben y los del cloud llegan aquí. Todos los equipos ven todos.",

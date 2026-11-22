@@ -21,7 +21,21 @@ export const commands = {
 	showPage: (page: string) => typedError<null, IpcError>(__TAURI_INVOKE("show_page", { page })),
 	/**  Tells the engine which page the editor shows, so the keys of plugins on it draw. */
 	editPage: (page: string | null) => typedError<null, IpcError>(__TAURI_INVOKE("edit_page", { page })),
-	setDevice: (settings: DeviceSettings) => typedError<null, IpcError>(__TAURI_INVOKE("set_device", { settings })),
+	/**  Every dock model the app drives, to draw them. */
+	dockModels: () => __TAURI_INVOKE<DeviceModel[]>("dock_models"),
+	setDevice: (device: string, settings: DeviceSettings) => typedError<null, IpcError>(__TAURI_INVOKE("set_device", { device, settings })),
+	/**  The dock the editor shows. */
+	focusDevice: (device: string) => typedError<null, IpcError>(__TAURI_INVOKE("focus_device", { device })),
+	renameDevice: (device: string, name: string) => typedError<null, IpcError>(__TAURI_INVOKE("rename_device", { device, name })),
+	/**  Drops a dock that is not connected, with its profiles. */
+	forgetDevice: (device: string) => typedError<null, IpcError>(__TAURI_INVOKE("forget_device", { device })),
+	/**  What taking a profile to another dock would leave out, and what would not work there. */
+	transferPlan: (profile: string, device: string) => typedError<TransferPlan, IpcError>(__TAURI_INVOKE("transfer_plan", { profile, device })),
+	/**
+	 *  Moves a profile to another dock, or puts a copy there; answers the id it has there. One step
+	 *  of undo.
+	 */
+	transferProfile: (profile: string, device: string, copy: boolean) => typedError<string, IpcError>(__TAURI_INVOKE("transfer_profile", { profile, device, copy })),
 	/**  Gesture timing, the look of new keys and the screensaver. */
 	setPreferences: (preferences: Preferences) => typedError<null, IpcError>(__TAURI_INVOKE("set_preferences", { preferences })),
 	/**  Shows the screensaver on the dock for a minute, or until a key is pressed; `false` stops it. */
@@ -301,6 +315,14 @@ export type CatalogSource =
  */
 "elgato_archive";
 
+/**  The control's place in the grid of the layout, with the cells it spans. */
+export type Cell = {
+	row: number,
+	column: number,
+	row_span: number,
+	column_span: number,
+};
+
 /**  What a digital clock shows under the time. */
 export type ClockLine = "none" | "date" | "weekday" | "weekday_date";
 
@@ -346,6 +368,20 @@ export type Color = {
 	b: number,
 };
 
+/**  Something on the device the configuration can put a key on. */
+export type Control = {
+	/**  Where its key is kept in a page. */
+	index: number,
+	kind: ControlKind,
+	cell: Cell,
+	/**  Where it sits on the panel. */
+	bounds: Rect,
+};
+
+export type ControlKind = 
+/**  A key with a screen, drawn as a whole image of this size. */
+{ type: "key"; image: Size };
+
 /**
  *  The renderer never reads it: it draws the edited asset as it is. The image is scaled to
  *  cover the frame, then zoomed, moved and rotated around the frame center. Offsets are fractions
@@ -368,15 +404,61 @@ export type DeviceInfo = {
 	hardware: string,
 };
 
+/**  One hardware layout. Rebrands of the same hardware are variants of one model. */
+export type DeviceModel = {
+	/**  Kept in configurations: never renamed once released. */
+	id: string,
+	name: string,
+	family: Family,
+	variants: Variant[],
+	/**  The face of the device, in the pixels its controls are laid out in. */
+	panel: Size,
+	columns: number,
+	rows: number,
+	controls: Control[],
+	/**  Sleep times the firmware offers, in minutes; `0` never sleeps. */
+	sleep_minutes: number[],
+	/**  The firmware shows a press by itself, so keys are drawn without one. */
+	firmware_press_effect: boolean,
+	/**  The device keeps a picture of the whole panel to show while nobody talks to it. */
+	screensaver: boolean,
+	plugins: PluginIdentity,
+	/**  Whether the serial number tells two units apart; otherwise the USB port does. */
+	stable_serial: boolean,
+	confirmed_on_hardware: boolean,
+};
+
 export type DeviceSettings = {
 	brightness: number,
 	/**  `0` disables sleep. */
 	sleep_minutes: number,
 };
 
+export type DeviceSummary = {
+	id: string,
+	/**  Its model's id. */
+	model: string,
+	/**  As the app shows it. */
+	name: string,
+	/**  The name the user gave it, if any. */
+	custom_name: string,
+	/**  Its serial number, once a unit connected. */
+	serial: string | null,
+	connected: boolean,
+	info: DeviceInfo | null,
+	settings: DeviceSettings,
+	active_profile: string,
+	/**  The page it shows, or would show once connected. */
+	page: string,
+	profiles: number,
+	screen: ScreenMode,
+};
+
 export type ErrorKind = "not_found" | "invalid" | "conflict" | 
 /**  The engine is starting or has stopped. */
 "unavailable" | "failed";
+
+export type Family = "ulanzi";
 
 export type Fit = 
 /**  Whole image visible, may leave empty space. */
@@ -668,6 +750,7 @@ export type Key = {
 };
 
 export type KeyChanged = {
+	device: string,
 	index: number,
 	pressed: boolean,
 };
@@ -876,8 +959,8 @@ export type PluginActionInfo = {
 	icon: string | null,
 	/**  Its property inspector page, relative to the plugin folder. */
 	inspector: string | null,
-	/**  Can go on a key of the D200: dials and other models are not supported yet. */
-	supported: boolean,
+	/**  The dock models it can go on a key of, by id: dials are not supported yet. */
+	models: string[],
 	/**  What a new key of it starts with. */
 	settings: any,
 	/**
@@ -896,6 +979,14 @@ export type PluginCatalog = {
 	python: string | null,
 	language: string,
 	plugins: PluginInfo[],
+};
+
+/**  How the plugin SDKs are told about the device. */
+export type PluginIdentity = {
+	/**  Elgato's device type for the Stream Deck with the same keypad, or 0. */
+	elgato_type: number,
+	/**  The model name Ulanzi's plugins filter their actions by. */
+	ulanzi_model: string | null,
 };
 
 export type PluginInfo = {
@@ -980,6 +1071,13 @@ export type ProfileSwitching = {
 	follow_apps?: boolean,
 };
 
+export type Rect = {
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+};
+
 export type RunState = 
 /**  Started and waiting for it to connect, or running. */
 { state: "running" } | 
@@ -1028,10 +1126,21 @@ export type Security = {
 	secrets: number,
 };
 
+export type Size = {
+	width: number,
+	height: number,
+};
+
 /**  Everything the UI and the menu bar show, sent whole after every change. */
 export type Snapshot = {
+	/**  The focused dock is connected. */
 	connected: boolean,
+	/**  What the focused dock said it is, while connected. */
 	device: DeviceInfo | null,
+	/**  The dock the editor shows: the settings, profiles and pages below are its. */
+	device_id: string,
+	/**  Every known dock, connected or not. */
+	devices: DeviceSummary[],
 	/**  Increases with every saved change, so key images can be fetched again. */
 	revision: number,
 	settings: DeviceSettings,
@@ -1049,6 +1158,8 @@ export type Snapshot = {
 	path: string[],
 	/**  Keys of two states now showing and doing their second one. */
 	second_states: KeySlot[],
+	/**  Keys whose action this dock cannot run, which show an alert. */
+	unsupported: KeySlot[],
 	/**  Whether there are edits to undo or redo. */
 	can_undo: boolean,
 	can_redo: boolean,
@@ -1098,6 +1209,25 @@ export type TileDrawing =
 /**  A roller blind of fabric. */
 "shade" | "garage" | "awning" | "gate" | "door" | "window" | "valve" | "lock" | "thermometer" | "droplet" | "battery";
 
+export type TransferPlan = {
+	/**  Keys on places the other dock does not have: they are left out. */
+	removed: TransferredKey[],
+	/**  Keys that go, but whose action the other dock cannot run: they show an alert there. */
+	unsupported: TransferredKey[],
+	/**
+	 *  The profile is the only one of a connected dock, which cannot be left without one: it
+	 *  can be copied, not moved.
+	 */
+	only_profile: boolean,
+};
+
+/**  A key of a profile, for the list of what taking it to another dock changes. */
+export type TransferredKey = {
+	page: string,
+	page_name: string,
+	index: number,
+};
+
 /**  The update the window offers to install, or the one being installed. */
 export type UpdateOffer = {
 	version: string,
@@ -1110,6 +1240,20 @@ export type UpdateOffer = {
 export type UpdateOffered = UpdateOffer | null;
 
 export type Usage = "cpu" | "memory";
+
+export type Usb = {
+	vendor_id: number,
+	product_id: number,
+	/**  The HID interface the driver talks to. */
+	interface: number,
+};
+
+/**  A product sold with this hardware, and how it shows up on USB. */
+export type Variant = {
+	vendor: string,
+	name: string,
+	usb: Usb,
+};
 
 export type VerticalPosition = "top" | "middle" | "bottom";
 

@@ -7,8 +7,11 @@ import type { CatalogEntry } from '~/lib/actions/catalog'
 import { KEY_DRAFT, KEY_TARGET } from '~/lib/actions/key-draft'
 import { applyType, hasTypeSettings } from '~/lib/key-kinds'
 import type { Gesture } from '~/types/engine'
+import { isWide, keyAspect, keyRadius, keySize } from '~/lib/dock'
 
-const WIDE_KEY = 13
+/** How wide the preview of a square key is, and the widest any preview goes, in rem. */
+const PREVIEW_REM = 7
+const PREVIEW_MAX_REM = 16
 /** 30 % wider than the first inspector, which was too tight for the action editors. */
 const DEFAULT_WIDTH = 500
 const MIN_WIDTH = 340
@@ -20,7 +23,7 @@ const target = toRef(props, 'target')
 
 const { stored, draft, state, editing, shownWidget, preview, dirty, invalid, status, error, create, clear, uploadImage, pickIcon, tryKey } = useKeyEditor(target)
 const { pages } = useWorkspace()
-const { snapshot, previewUrl } = useEngine()
+const { snapshot, previewUrl, model } = useEngine()
 
 /** Dragging the left edge resizes the inspector; the width is kept for next time. */
 const width = useLocalStorage('inspector-width', DEFAULT_WIDTH)
@@ -41,7 +44,18 @@ function stopResize() {
   resizing = null
 }
 
-const wide = computed(() => props.target?.index === WIDE_KEY)
+const index = computed(() => props.target?.index ?? 0)
+const wide = computed(() => isWide(model.value, index.value))
+const size = computed(() => keySize(model.value, index.value))
+/** The preview has the shape of the key. */
+const shape = computed(() => {
+  const aspect = keyAspect(model.value, index.value)
+  return {
+    width: `${Math.min(PREVIEW_MAX_REM, PREVIEW_REM * aspect)}rem`,
+    aspectRatio: `${aspect}`,
+    borderRadius: keyRadius(aspect),
+  }
+})
 const title = computed(() => (wide.value ? t('editor.inspector.wideKey') : t('editor.inspector.key', { number: (props.target?.index ?? 0) + 1 })))
 const pageName = computed(() => pages.value.find(p => p.id === props.target?.page)?.name ?? '')
 
@@ -121,7 +135,7 @@ const thumbnails = computed(() => (draft.value?.second && props.target ? [draft.
 
     <div v-else-if="!draft" class="flex flex-col" data-choose-type>
       <div class="flex flex-col items-center gap-2 border-b p-5">
-        <div class="rounded-xl bg-neutral-900" :class="wide ? 'aspect-[452/196] w-64' : 'aspect-square w-28'" />
+        <div class="bg-neutral-900" :style="shape" />
         <p class="text-sm font-medium">
           {{ title }} · {{ pageName }}
         </p>
@@ -152,15 +166,15 @@ const thumbnails = computed(() => (draft.value?.second && props.target ? [draft.
     <template v-else>
       <ScrollArea class="min-h-0 flex-1">
         <div class="flex flex-col items-center gap-2 border-b p-5">
-          <div :class="wide ? 'w-64' : 'w-28'">
-            <img v-if="preview" :src="preview" alt="" class="w-full" :class="wide ? 'rounded-[4%/9%]' : 'rounded-[9%]'" data-key-preview>
-            <div v-else class="w-full rounded-xl bg-neutral-900" :class="wide ? 'aspect-[452/196]' : 'aspect-square'" />
+          <div :style="{ width: shape.width }">
+            <img v-if="preview" :src="preview" alt="" class="w-full" :style="{ borderRadius: shape.borderRadius }" data-key-preview>
+            <div v-else class="w-full bg-neutral-900" :style="shape" />
           </div>
           <p class="text-sm font-medium">
             {{ title }} · {{ pageName }}
           </p>
           <p class="text-xs text-muted-foreground">
-            {{ t('editor.inspector.preview', { size: wide ? '452 × 196' : '196 × 196' }) }}
+            {{ t('editor.inspector.preview', { size: `${size.width} × ${size.height}` }) }}
           </p>
         </div>
 
@@ -228,7 +242,7 @@ const thumbnails = computed(() => (draft.value?.second && props.target ? [draft.
             </div>
           </div>
           <BackgroundFields v-model="state" />
-          <ImageFields v-model="state" :wide="wide" @upload="uploadImage" @pick-icon="pickIcon" />
+          <ImageFields v-model="state" :aspect="keyAspect(model, index)" @upload="uploadImage" @pick-icon="pickIcon" />
           <TextFields v-model="state" />
         </section>
       </ScrollArea>

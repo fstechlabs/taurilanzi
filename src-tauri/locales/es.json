@@ -359,5 +359,31 @@
   "mcp": {
     "portTaken": "Otro programa está usando el puerto {port}: ciérralo o reinicia la app.",
     "failed": "El servidor MCP no ha podido arrancar: {error}"
+  },
+  "errors": {
+    "invalidKey": "El dock no tiene la tecla {key}.",
+    "noActiveProfile": "No hay ningún perfil activo.",
+    "unknownDevice": "Ese dock ya no existe.",
+    "otherDevice": "Una tecla solo se puede mover dentro del mismo dock.",
+    "deviceConnected": "No se puede olvidar un dock mientras está conectado: desconéctalo primero.",
+    "lastDevice": "No se puede olvidar el único dock que conoce la app.",
+    "unknownProfile": "Ese perfil ya no existe.",
+    "unknownPage": "Esa página ya no existe en el perfil.",
+    "deleteHome": "La página de inicio no se puede eliminar.",
+    "invalid": "El cambio no es válido: {reason}",
+    "save": "No se ha podido guardar la configuración: {reason}",
+    "render": "No se ha podido dibujar la tecla: {reason}",
+    "engineStopped": "El motor de la app no está en marcha. Reinicia la app.",
+    "lastProfile": "Es el único perfil de su dock y no se puede eliminar.",
+    "onlyProfile": "Es el único perfil de su dock, que está conectado y no puede quedarse sin ninguno: cópialo en vez de moverlo.",
+    "appAlreadyLinked": "{app} ya está vinculada a «{profile}».",
+    "unknownApp": "Eso no es una aplicación.",
+    "idTaken": "Ya hay una página o un perfil con ese identificador.",
+    "unknownPlacement": "Ninguna tecla tiene ya esa acción del plugin.",
+    "change": "Cambio {at}: {reason}",
+    "missingAppearance": "Falta el aspecto de la tecla o no es válido.",
+    "preview": "No se ha podido dibujar la vista previa.",
+    "starting": "La app todavía está arrancando.",
+    "notFound": "No se ha encontrado."
   }
 }

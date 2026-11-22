@@ -4,6 +4,7 @@ import { EdgeLabelRenderer, getBezierPath, useVueFlow } from '@vue-flow/core'
 import type { EdgeProps } from '@vue-flow/core'
 import type { Point } from '~/lib/link-path'
 import { nearestStretch, roundedPath } from '~/lib/link-path'
+import { reasonOf } from '~/lib/errors'
 
 interface LinkData { color: string, waypoints: Point[], page: string, index: number }
 
@@ -16,6 +17,7 @@ const PULL_THRESHOLD = 4
 const CORNER = 18
 
 const { selection, selectLink } = useWorkspace()
+const { show } = useToasts()
 const { screenToFlowCoordinate, viewport } = useVueFlow()
 const actions = usePages()
 const contextMenu = useContextMenu()
@@ -104,8 +106,9 @@ async function up() {
   try {
     await actions.setWaypoints(props.data.page, props.data.index, waypoints.value)
   }
-  catch {
+  catch (err) {
     draft.value = null
+    show(t('editor.canvas.errors.route'), reasonOf(err))
   }
 }
 

@@ -26,6 +26,7 @@ impl Server {
             data_dir: dir.path().to_path_buf(),
             identifier: "com.taurilanzi.test".into(),
             dock: false,
+            virtual_docks: Vec::new(),
             watch_apps: false,
             plugins: None,
         })
@@ -203,7 +204,7 @@ fn an_assistant_builds_a_profile_sees_it_and_undoes_it() {
     assert!(names.contains(&"apply_changes") && names.contains(&"render_page"));
 
     let before = server.ok("get_overview", json!({}));
-    let profiles = before["profiles"].as_array().unwrap().len();
+    let profiles = before["docks"][0]["profiles"].as_array().unwrap().len();
 
     let created = server.ok(
         "apply_changes",
@@ -222,9 +223,19 @@ fn an_assistant_builds_a_profile_sees_it_and_undoes_it() {
     let key = server.ok("get_key", json!({ "page": home, "index": 13 }));
     assert_eq!(key["actions"][0]["page"], scenes.as_str());
     let overview = server.ok("get_overview", json!({}));
-    assert_eq!(overview["profiles"].as_array().unwrap().len(), profiles + 1);
+    assert_eq!(
+        overview["docks"][0]["profiles"].as_array().unwrap().len(),
+        profiles + 1
+    );
+    let active = overview["docks"][0]["profiles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["active"] == true)
+        .unwrap()["id"]
+        .clone();
     assert_ne!(
-        overview["active_profile"], created["created"]["$p"],
+        active, created["created"]["$p"],
         "building a profile does not take the dock to it"
     );
 
@@ -253,7 +264,7 @@ fn an_assistant_builds_a_profile_sees_it_and_undoes_it() {
     server.ok("undo", json!({}));
     let after = server.ok("get_overview", json!({}));
     assert_eq!(
-        after["profiles"].as_array().unwrap().len(),
+        after["docks"][0]["profiles"].as_array().unwrap().len(),
         profiles,
         "one undo takes the whole call back"
     );
@@ -273,7 +284,7 @@ fn the_schema_and_the_guide_are_there_to_read() {
 fn secrets_in_keys_stay_hidden_and_keep_their_value() {
     let server = Server::start();
     let overview = server.ok("get_overview", json!({}));
-    let home = overview["profiles"][0]["home_page"]
+    let home = overview["docks"][0]["profiles"][0]["home_page"]
         .as_str()
         .unwrap()
         .to_owned();

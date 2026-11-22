@@ -4,20 +4,59 @@
 
 use serde_json::{Map, Value, json};
 
-use crate::driver::d200::COLUMNS;
-
 /// Where an instance of an action is, as the plugin knows it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Instance {
     /// The action id, five segments or more.
     pub action: String,
+    /// Its place in the grid of its dock, `column_row`.
     pub key: String,
     pub actionid: String,
+    /// The known dock it is on, which Stream Deck plugins are told; empty when not known.
+    pub device: String,
 }
 
-/// Key 7 of the D200 is the third column of the second row: `2_1`.
-pub fn key_name(index: u8) -> String {
-    format!("{}_{}", index % COLUMNS, index / COLUMNS)
+/// The dock a key is on and the size it is drawn at, as the events of the key tell plugins.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeyDock {
+    /// The model's name for Ulanzi's plugins.
+    pub model: String,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// Fields of the host's own, which carry what Stream Deck plugins are told and Ulanzi's never see.
+const DEVICE_FIELD: &str = "_device";
+const SIZE_FIELD: &str = "_size";
+
+/// The known dock of an event, if it says.
+pub fn device_of(message: &Value) -> Option<String> {
+    Some(text(message, DEVICE_FIELD)).filter(|d| !d.is_empty())
+}
+
+/// The size of the key of an event, if it says.
+pub fn size_of(message: &Value) -> Option<(u32, u32)> {
+    let size = message.get(SIZE_FIELD)?;
+    let side = |field| {
+        size.get(field)?
+            .as_u64()
+            .and_then(|v| u32::try_from(v).ok())
+    };
+    Some((side("width")?, side("height")?))
+}
+
+/// A message as plugins of this protocol get it, without the host's own fields.
+pub fn for_plugin(message: &Value) -> Value {
+    match message {
+        Value::Object(fields) if fields.keys().any(|k| k.starts_with('_')) => Value::Object(
+            fields
+                .iter()
+                .filter(|(k, _)| !k.starts_with('_'))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        ),
+        _ => message.clone(),
+    }
 }
 
 pub fn text(message: &Value, field: &str) -> String {
@@ -35,6 +74,9 @@ pub fn event(cmd: &str, instance: &Instance, extra: Value) -> Value {
     message.insert("uuid".into(), instance.action.clone().into());
     message.insert("key".into(), instance.key.clone().into());
     message.insert("actionid".into(), instance.actionid.clone().into());
+    if !instance.device.is_empty() {
+        message.insert(DEVICE_FIELD.into(), instance.device.clone().into());
+    }
     if let Value::Object(fields) = extra {
         message.extend(fields);
     }
@@ -42,13 +84,14 @@ pub fn event(cmd: &str, instance: &Instance, extra: Value) -> Value {
 }
 
 /// The fields Ulanzi Studio adds to the events of a key.
-pub fn key_fields(param: &Value) -> Value {
+pub fn key_fields(param: &Value, dock: &KeyDock) -> Value {
     json!({
         "param": param,
         "controller": "Keypad",
-        "device": "D200",
+        "device": dock.model,
         "isInMultiAction": false,
         "multiActionState": -1,
+        SIZE_FIELD: { "width": dock.width, "height": dock.height },
     })
 }
 
@@ -98,22 +141,29 @@ mod tests {
             action: "com.a.b.c.act".into(),
             key: "2_1".into(),
             actionid: "id-1".into(),
+            device: "dock-1".into(),
+        }
+    }
+
+    fn d200() -> KeyDock {
+        KeyDock {
+            model: "D200".into(),
+            width: 196,
+            height: 196,
         }
     }
 
     #[test]
-    fn keys_are_named_by_column_and_row() {
-        assert_eq!(key_name(0), "0_0");
-        assert_eq!(key_name(4), "4_0");
-        assert_eq!(key_name(7), "2_1");
-        assert_eq!(key_name(13), "3_2");
-    }
-
-    #[test]
     fn events_address_an_instance_without_a_code() {
-        let message = event("keydown", &instance(), key_fields(&json!({ "n": 1 })));
+        let message = event(
+            "keydown",
+            &instance(),
+            key_fields(&json!({ "n": 1 }), &d200()),
+        );
+        assert_eq!(device_of(&message).as_deref(), Some("dock-1"));
+        assert_eq!(size_of(&message), Some((196, 196)));
         assert_eq!(
-            message,
+            for_plugin(&message),
             json!({
                 "cmd": "keydown",
                 "uuid": "com.a.b.c.act",
@@ -128,7 +178,7 @@ mod tests {
         );
         assert!(message.get("code").is_none());
         assert_eq!(
-            event("setactive", &instance(), Value::Null),
+            for_plugin(&event("setactive", &instance(), Value::Null)),
             json!({ "cmd": "setactive", "uuid": "com.a.b.c.act", "key": "2_1", "actionid": "id-1" })
         );
     }

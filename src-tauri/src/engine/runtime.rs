@@ -4,7 +4,6 @@ use std::sync::atomic::AtomicU64;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
-use crate::driver::DeviceInfo;
 use log::{info, warn};
 use tokio::sync::broadcast;
 use uuid::Uuid;
@@ -13,9 +12,9 @@ use super::actions::check_key;
 use super::app_profiles::AppProfiles;
 use super::appearance::{self, PageVars};
 use super::commands::{Command, CommandError, Input, KeySlot, Reply};
-use super::display::timing;
+use super::docks::Docks;
 use super::follow::followed;
-use super::gestures::{Gesture, Gestures, Reacts};
+use super::gestures::{Gesture, Reacts};
 use super::handle::Activity;
 use super::history::{History, Target};
 use super::key_widgets::KeyWidgets;
@@ -24,8 +23,8 @@ use super::pages::NewPage;
 use super::plugins::{PluginKeys, plugin_action};
 use super::profiles::NewProfile;
 use super::results::Results;
-use super::screen::Screen;
-use super::snapshot::{EngineEvent, ProfileSummary, Snapshot};
+use super::screen::ScreenMode;
+use super::snapshot::{DeviceSummary, EngineEvent, ProfileSummary, Snapshot};
 use super::sync::Saved;
 use super::widgets::Feeds;
 use crate::actions;
@@ -33,7 +32,7 @@ use crate::config::{
     AppRef, Config, DeviceSettings, Key, Navigation, Page, Profile, ScreensaverImage, Store,
     Widget, assets_in, rules,
 };
-use crate::driver::d200::{D200, Event, KEY_COUNT, KEY_SIZE, WIDE_KEY, WIDE_KEY_SIZE};
+use crate::driver::DeviceModel;
 use crate::hass::{HassReport, Wants as HassWants};
 use crate::monitor::Monitor;
 use crate::obs::{ObsReport, Wants};
@@ -49,28 +48,27 @@ pub struct Engine {
     pub(super) config: Config,
     pub(super) navigation: Navigation,
     pub(super) renderer: Renderer,
-    pub(super) dock: D200,
+    pub(super) docks: Docks,
+    /// The dock the editor shows.
+    pub(super) focus: Uuid,
     events: broadcast::Sender<EngineEvent>,
-    device: Option<DeviceInfo>,
     pub(super) paused: bool,
     pub(super) activity: Activity,
     /// Lets actions running on their own thread ask the engine to move the dock.
     pub(super) inputs: Sender<Input>,
     pub(super) context: actions::Context,
     pub(super) history: History,
-    pub(super) gestures: Gestures,
     /// Keys of two states now in their second one. Runtime state, like the path.
     pub(super) second_states: HashSet<(Uuid, u8)>,
     /// Something the snapshot shows changed while handling the current input.
     pub(super) changed: bool,
     last_prune: Option<Instant>,
-    pub(super) screen: Screen,
-    /// The screensaver picture last drawn, and for which choice.
-    pub(super) screensaver_drawn: Option<(ScreensaverImage, Pixmap)>,
+    /// The screensaver picture last drawn, and for which choice and model.
+    pub(super) screensaver_drawn: Option<(ScreensaverImage, &'static str, Pixmap)>,
     /// Bumped for every copy of the screensaver sent to the dock, so a slow, older one is dropped.
     pub(super) screensaver_uploads: Arc<AtomicU64>,
-    /// Which profile to show as apps come to the front. Runtime state, like the path.
-    pub(super) app_profiles: AppProfiles,
+    /// Which profile each dock shows as apps come to the front. Runtime state, like the path.
+    pub(super) app_profiles: BTreeMap<Uuid, AppProfiles>,
     pub(super) front_app: Option<AppRef>,
     pub(super) live: Live,
     pub(super) key_widgets: KeyWidgets,
@@ -105,7 +103,6 @@ impl Engine {
         store: Store,
         config: Config,
         renderer: Renderer,
-        dock: D200,
         links: Links,
         context: actions::Context,
     ) -> Self {
@@ -117,7 +114,12 @@ impl Engine {
         } = links;
         let navigation = store.load_navigation();
         let key_widgets = KeyWidgets::with_counters(store.load_counters());
-        let app_profiles = AppProfiles::new(config.active_profile);
+        let app_profiles = config
+            .devices
+            .iter()
+            .filter_map(|d| Some((d.id, AppProfiles::new(config.active_profile_of(d.id)?.id))))
+            .collect();
+        let focus = config.devices.first().map(|d| d.id).unwrap_or_default();
         let mut config = config;
         let exists: HashSet<Uuid> = config.profiles.iter().map(|p| p.id).collect();
         config.local_profiles.retain(|id| exists.contains(id));
@@ -127,19 +129,17 @@ impl Engine {
             config,
             navigation,
             renderer,
-            dock,
+            docks: Docks::default(),
+            focus,
             events,
-            device: None,
             paused: false,
             activity,
             inputs,
             context,
             history: History::default(),
-            gestures: Gestures::default(),
             second_states: HashSet::new(),
             changed: false,
             last_prune: None,
-            screen: Screen::default(),
             screensaver_drawn: None,
             screensaver_uploads: Arc::new(AtomicU64::new(0)),
             app_profiles,
@@ -159,16 +159,11 @@ impl Engine {
         }
     }
 
-    /// Pushes the current page to the dock and serves dock events and commands until every
-    /// sender is gone.
+    /// Serves dock events and commands until every sender is gone. Each dock gets its page as it
+    /// connects.
     pub fn run(mut self, inputs: Receiver<Input>) {
-        self.gestures.set_timing(timing(&self.config.preferences));
-        self.dock.set_brightness(self.config.device.brightness);
-        self.dock
-            .set_sleep_minutes(self.config.device.sleep_minutes);
+        self.tell_plugins_of_docks();
         self.sync_integrations();
-        self.show_current_page();
-        self.store_screensaver();
         self.prune_assets();
         self.update_sampling();
         self.publish();
@@ -177,8 +172,7 @@ impl Engine {
             // Waits for the next input, or until a held or pending press, or a change of the
             // screen, is due.
             let due = self
-                .gestures
-                .deadline()
+                .gestures_deadline()
                 .into_iter()
                 .chain(self.screen_deadline())
                 .chain(self.live_deadline())
@@ -201,7 +195,7 @@ impl Engine {
             match input {
                 Some(Input::Dock(event)) => self.on_dock(event),
                 Some(Input::Command(command)) => self.on_command(command),
-                Some(Input::Navigate(step)) => self.navigate_to(step),
+                Some(Input::Navigate { page, step }) => self.navigate_to(page, step),
                 Some(Input::Locked(locked)) => self.on_lock(locked),
                 Some(Input::FrontApp(app)) => self.on_front_app(app),
                 Some(Input::Obs(server, report)) => self.on_obs(server, report),
@@ -212,8 +206,7 @@ impl Engine {
                 None => {}
             }
             let now = Instant::now();
-            let due = self.gestures.tick(now);
-            self.fire(due);
+            self.tick_gestures(now);
             self.tick_screen(now);
             self.tick_live();
             self.tick_results(now);
@@ -224,51 +217,11 @@ impl Engine {
         }
     }
 
-    fn on_dock(&mut self, event: Event) {
-        match event {
-            Event::Connected(device) => {
-                info!(
-                    "dock ready: {} with firmware {}",
-                    device.model, device.firmware
-                );
-                self.device = Some(device);
-                self.changed = true;
-                if let Some(host) = self.plugin_keys.host() {
-                    host.set_dock(true);
-                }
-            }
-            Event::Disconnected => {
-                info!("dock lost, waiting for it to come back");
-                self.device = None;
-                self.changed = true;
-                if let Some(host) = self.plugin_keys.host() {
-                    host.set_dock(false);
-                }
-            }
-            Event::Key { index, pressed } => {
-                self.activity.touch();
-                if self.paused {
-                    return;
-                }
-                if !self.screen.showing_keys() {
-                    if pressed {
-                        self.press_while_away();
-                    }
-                    return;
-                }
-                self.emit(EngineEvent::Key { index, pressed });
-                self.on_key(index, pressed);
-            }
-        }
-    }
-
     fn on_command(&mut self, command: Command) {
         // Someone working on the keys wants to see them on the dock.
         if command.changes_keys() {
             self.activity.touch();
-            if let Some(change) = self.screen.wake_from_idle() {
-                self.apply_screen(change);
-            }
+            self.wake_from_idle();
         }
         match command {
             Command::Snapshot(reply) => {
@@ -286,11 +239,36 @@ impl Engine {
             }
             // Only what comes from outside is held to what the settings offer: sync brings what
             // other computers saved, and Home Assistant any brightness.
-            Command::SetDevice { settings, reply } => {
-                let result = rules::check_device(&settings, &self.config.device)
-                    .map_err(CommandError::from)
-                    .and_then(|()| self.set_device(settings));
+            Command::SetDevice {
+                device,
+                settings,
+                reply,
+            } => {
+                let result = self.checked_device_settings(device, settings);
                 self.respond(reply, result);
+            }
+            Command::FocusDevice { device, reply } => {
+                let result = self.focus_device(device);
+                self.respond(reply, result);
+            }
+            Command::RenameDevice {
+                device,
+                name,
+                reply,
+            } => {
+                let result = self.rename_device(device, name);
+                self.respond(reply, result);
+            }
+            Command::ForgetDevice { device, reply } => {
+                let result = self.forget_device(device);
+                self.respond(reply, result);
+            }
+            Command::TransferPlan {
+                profile,
+                device,
+                reply,
+            } => {
+                let _ = reply.send(self.transfer_plan(profile, device));
             }
             Command::SetPreferences { preferences, reply } => {
                 let result = rules::check_preferences(
@@ -315,7 +293,7 @@ impl Engine {
                 appearance,
                 reply,
             } => {
-                let page = page.unwrap_or_else(|| self.current_page_id());
+                let page = page.unwrap_or_else(|| self.current_page_id(self.focused()));
                 let vars = self.page_vars(page);
                 let mut design = appearance::resolve(
                     &appearance,
@@ -324,14 +302,15 @@ impl Engine {
                     self.key_widgets.key_now((page, index), Instant::now()),
                 );
                 if let Some(key) = self
-                    .profile()
-                    .ok()
+                    .config
+                    .page_owner(page)
                     .and_then(|p| p.page(page))
                     .and_then(|p| p.keys.get(&index))
                 {
                     self.with_plugin(key, &mut design);
                 }
-                let _ = reply.send(check_index(index).and_then(|()| self.draw(index, &design)));
+                let device = self.config.device_of_page(page).unwrap_or(self.focused());
+                let _ = reply.send(self.draw_for(device, index, &design));
             }
             Command::Fonts(reply) => {
                 let _ = reply.send(self.renderer.font_families());
@@ -495,20 +474,48 @@ impl Engine {
     }
 
     fn snapshot(&self) -> Snapshot {
-        let profile = self.config.active_profile();
+        let focused = self.focused();
+        let profile = self.config.active_profile_of(focused);
         let path = profile.map(|p| self.navigation.path(p)).unwrap_or_default();
+        let session = self.docks.get(focused);
         Snapshot {
-            connected: self.device.is_some(),
-            device: self.device.clone(),
+            connected: session.is_some(),
+            device: session.map(|s| s.info.clone()),
+            device_id: focused,
+            devices: self
+                .config
+                .devices
+                .iter()
+                .map(|known| {
+                    let session = self.docks.get(known.id);
+                    DeviceSummary {
+                        id: known.id,
+                        model: known.model.clone(),
+                        name: self.device_name(known.id),
+                        custom_name: known.name.clone(),
+                        serial: known.serial.clone(),
+                        connected: session.is_some(),
+                        info: session.map(|s| s.info.clone()),
+                        settings: known.settings.clone(),
+                        active_profile: self
+                            .config
+                            .active_profile_of(known.id)
+                            .map(|p| p.id)
+                            .unwrap_or_default(),
+                        page: self.current_page_id(known.id),
+                        profiles: self.config.profiles_of(known.id).count() as u32,
+                        screen: session.map_or(ScreenMode::Keys, |s| s.screen.mode()),
+                    }
+                })
+                .collect(),
             revision: self.config.revision,
-            settings: self.config.device.clone(),
+            settings: self.settings_of(focused),
             preferences: self.config.preferences.clone(),
-            screen: self.screen.mode(),
+            screen: session.map_or(ScreenMode::Keys, |s| s.screen.mode()),
             paused: self.paused,
             profiles: self
                 .config
-                .profiles
-                .iter()
+                .profiles_of(focused)
                 .map(|p| ProfileSummary {
                     id: p.id,
                     name: p.name.clone(),
@@ -516,7 +523,7 @@ impl Engine {
                     local: self.config.local_profiles.contains(&p.id),
                 })
                 .collect(),
-            active_profile: self.config.active_profile,
+            active_profile: profile.map(|p| p.id).unwrap_or_default(),
             home_page: profile.map(|p| p.home_page).unwrap_or_default(),
             pages: profile.map(|p| p.pages.clone()).unwrap_or_default(),
             path,
@@ -525,10 +532,23 @@ impl Engine {
                 .iter()
                 .map(|&(page, index)| KeySlot { page, index })
                 .collect(),
+            unsupported: profile
+                .into_iter()
+                .flat_map(|p| &p.pages)
+                .flat_map(|page| {
+                    page.keys
+                        .iter()
+                        .filter(|(_, key)| !self.runs_here(page.id, key))
+                        .map(|(&index, _)| KeySlot {
+                            page: page.id,
+                            index,
+                        })
+                })
+                .collect(),
             can_undo: self.history.can_undo(),
             can_redo: self.history.can_redo(),
             front_app: self.front_app.clone(),
-            automatic_profile: self.automatic_profile(),
+            automatic_profile: self.automatic_profile(focused),
             integrations: self.config.integrations.clone(),
             obs: self
                 .obs
@@ -550,7 +570,11 @@ impl Engine {
         index: u8,
         key: Option<Key>,
     ) -> Result<(), CommandError> {
-        check_index(index)?;
+        let device = self
+            .config
+            .device_of_page(page)
+            .ok_or(CommandError::UnknownPage(page))?;
+        self.check_index(device, index)?;
         let mut key = key;
         if let Some(key) = &mut key {
             check_key(
@@ -587,28 +611,58 @@ impl Engine {
         self.save()?;
 
         if !self.applying
-            && self.screen.showing_keys()
-            && self.current_page().is_some_and(|p| p.id == page)
+            && let Some(session) = self.docks.get(device)
+            && session.screen.showing_keys()
+            && self.current_page_id(device) == page
         {
             let design = self
-                .design_for(index)
+                .design_for(device, index)
                 .unwrap_or_else(|| KeyDesign::solid(Color::BLACK));
-            let png = self.draw(index, &design)?;
-            self.dock.set_keys(BTreeMap::from([(index, png)]));
+            let png = self.draw_for(device, index, &design)?;
+            if let Some(session) = self.docks.get(device) {
+                session.dock.set_keys(BTreeMap::from([(index, png)]));
+            }
         }
         Ok(())
     }
 
-    pub(super) fn set_device(&mut self, settings: DeviceSettings) -> Result<(), CommandError> {
+    /// Only what comes from outside is held to what the settings offer: sync brings what other
+    /// computers saved, and Home Assistant any brightness.
+    fn checked_device_settings(
+        &mut self,
+        device: Uuid,
+        settings: DeviceSettings,
+    ) -> Result<(), CommandError> {
+        let model = self
+            .model_of(device)
+            .ok_or(CommandError::UnknownDevice(device))?;
+        rules::check_device(&settings, &self.settings_of(device), &model.sleep_minutes)?;
+        self.set_device(device, settings)
+    }
+
+    pub(super) fn set_device(
+        &mut self,
+        device: Uuid,
+        settings: DeviceSettings,
+    ) -> Result<(), CommandError> {
         let settings = DeviceSettings {
             brightness: settings.brightness.min(100),
             ..settings
         };
-        if !self.paused && self.screen.showing_keys() {
-            self.dock.set_brightness(settings.brightness);
+        let known = self
+            .config
+            .device_mut(device)
+            .ok_or(CommandError::UnknownDevice(device))?;
+        if known.settings == settings {
+            return Ok(());
         }
-        self.dock.set_sleep_minutes(settings.sleep_minutes);
-        self.config.device = settings;
+        known.settings = settings.clone();
+        if let Some(session) = self.docks.get(device) {
+            if !self.paused && session.screen.showing_keys() {
+                session.dock.set_brightness(settings.brightness);
+            }
+            session.dock.set_sleep_minutes(settings.sleep_minutes);
+        }
         self.save()
     }
 
@@ -619,33 +673,46 @@ impl Engine {
         }
         self.paused = paused;
         info!("dock paused: {paused}");
-        if paused && let Some(change) = self.screen.reset() {
-            self.apply_screen(change);
+        for device in self.docks.ids() {
+            let reset = self
+                .docks
+                .get_mut(device)
+                .and_then(|session| session.screen.reset());
+            if paused && let Some(change) = reset {
+                self.apply_screen(device, change);
+            }
+            let brightness = self.settings_of(device).brightness;
+            if let Some(session) = self.docks.get(device) {
+                session
+                    .dock
+                    .set_brightness(if paused { 0 } else { brightness });
+            }
         }
-        self.dock.set_brightness(if paused {
-            0
-        } else {
-            self.config.device.brightness
-        });
         self.changed = true;
     }
 
     /// Each profile keeps its own path, so coming back to one shows where it was left.
+    /// The profile goes on its own dock.
     pub(super) fn set_profile(&mut self, id: Uuid) -> Result<(), CommandError> {
-        if !self.config.profiles.iter().any(|p| p.id == id) {
-            return Err(CommandError::UnknownProfile(id));
-        }
-        self.chose_profile(id);
-        if self.config.active_profile != id {
-            self.config.active_profile = id;
+        let device = self
+            .config
+            .profile(id)
+            .ok_or(CommandError::UnknownProfile(id))?
+            .device;
+        self.chose_profile(device, id);
+        if !self.config.is_active(id) {
+            self.config.active_profiles.insert(device, id);
             self.save()?;
-            self.show_current_page();
+            self.show_current_page(device);
         }
         Ok(())
     }
 
     fn key_image(&mut self, page: Uuid, index: u8) -> Result<Vec<u8>, CommandError> {
-        check_index(index)?;
+        let device = self
+            .config
+            .device_of_page(page)
+            .ok_or(CommandError::UnknownPage(page))?;
         let design = self
             .owner(page)?
             .page(page)
@@ -654,7 +721,7 @@ impl Engine {
             .get(&index)
             .map(|key| self.design_of(page, index, key))
             .unwrap_or_else(|| KeyDesign::solid(Color::BLACK));
-        self.draw(index, &design)
+        self.draw_for(device, index, &design)
     }
 
     pub(super) fn save(&mut self) -> Result<(), CommandError> {
@@ -704,15 +771,17 @@ impl Engine {
         used
     }
 
-    pub(super) fn profile(&self) -> Result<&Profile, CommandError> {
+    /// The profile the focused dock shows, which the editor works on.
+    pub(super) fn focused_profile(&self) -> Result<&Profile, CommandError> {
         self.config
-            .active_profile()
+            .active_profile_of(self.focused())
             .ok_or(CommandError::NoActiveProfile)
     }
 
-    pub(super) fn profile_mut(&mut self) -> Result<&mut Profile, CommandError> {
+    pub(super) fn focused_profile_mut(&mut self) -> Result<&mut Profile, CommandError> {
+        let focused = self.focused();
         self.config
-            .active_profile_mut()
+            .active_profile_of_mut(focused)
             .ok_or(CommandError::NoActiveProfile)
     }
 
@@ -729,19 +798,23 @@ impl Engine {
             .ok_or(CommandError::UnknownPage(page))
     }
 
-    pub(super) fn current_page(&self) -> Option<&Page> {
-        let profile = self.config.active_profile()?;
+    pub(super) fn current_page(&self, device: Uuid) -> Option<&Page> {
+        let profile = self.config.active_profile_of(device)?;
         profile.page(self.navigation.current(profile))
     }
 
-    /// Moves the dock along the path of the active profile and shows the result.
-    pub(super) fn navigate(&mut self, step: impl FnOnce(&mut Navigation, &Profile) -> bool) {
-        let Some(profile) = self.config.active_profile() else {
+    /// Moves a dock along the path of its profile and shows the result.
+    pub(super) fn navigate(
+        &mut self,
+        device: Uuid,
+        step: impl FnOnce(&mut Navigation, &Profile) -> bool,
+    ) {
+        let Some(profile) = self.config.active_profile_of(device) else {
             return;
         };
         if step(&mut self.navigation, profile) {
             self.save_navigation();
-            self.show_current_page();
+            self.show_current_page(device);
         }
     }
 
@@ -754,37 +827,52 @@ impl Engine {
         }
     }
 
-    pub(super) fn show_current_page(&mut self) {
-        self.gestures.cancel();
+    pub(super) fn show_current_page(&mut self, device: Uuid) {
+        if let Some(session) = self.docks.get_mut(device) {
+            session.gestures.cancel();
+        }
         self.changed = true;
         if self.applying {
             return;
         }
         // The screensaver owns the screen; the page goes up when it ends.
-        if !self.screen.showing_keys() {
+        let Some(session) = self.docks.get(device) else {
+            return;
+        };
+        if !session.screen.showing_keys() {
             return;
         }
+        let model = session.model;
         let mut images = BTreeMap::new();
-        for index in (0..KEY_COUNT).chain([WIDE_KEY]) {
-            let Some(design) = self.design_for(index) else {
+        for index in model.indexes() {
+            let Some(design) = self.design_for(device, index) else {
                 continue;
             };
-            match self.draw(index, &design) {
+            match self.draw(model, index, &design) {
                 Ok(png) => {
                     images.insert(index, png);
                 }
                 Err(err) => warn!("key {index} could not be drawn: {err}"),
             }
         }
-        self.dock.replace_page(images);
+        if let Some(session) = self.docks.get(device) {
+            session.dock.replace_page(images);
+        }
     }
 
-    fn on_key(&mut self, index: u8, pressed: bool) {
-        self.plugin_key(index, pressed);
-        let page = self.current_page_id();
+    pub(super) fn show_all_pages(&mut self) {
+        self.changed = true;
+        for device in self.docks.ids() {
+            self.show_current_page(device);
+        }
+    }
+
+    pub(super) fn on_key(&mut self, device: Uuid, index: u8, pressed: bool) {
+        self.plugin_key(device, index, pressed);
+        let page = self.current_page_id(device);
         let turn = self.key_widgets.turn((page, index));
         let reacts = self
-            .key(index)
+            .key(device, index)
             .filter(|key| key.second_state.is_none())
             .map(|key| Reacts {
                 double: !key.double_press.is_empty(),
@@ -793,16 +881,37 @@ impl Engine {
             })
             .unwrap_or_default();
         let now = Instant::now();
-        let fired = if pressed {
-            self.gestures.down(index, reacts, now)
-        } else {
-            self.gestures.up(index, now)
+        let Some(session) = self.docks.get_mut(device) else {
+            return;
         };
-        self.fire(fired);
+        let fired = if pressed {
+            session.gestures.down(index, reacts, now)
+        } else {
+            session.gestures.up(index, now)
+        };
+        self.fire(device, fired);
     }
 
-    fn fire(&mut self, fired: Vec<(u8, Gesture)>) {
-        let page = self.current_page_id();
+    fn gestures_deadline(&self) -> Option<Instant> {
+        self.docks
+            .sessions
+            .values()
+            .filter_map(|s| s.gestures.deadline())
+            .min()
+    }
+
+    fn tick_gestures(&mut self, now: Instant) {
+        for device in self.docks.ids() {
+            let fired = match self.docks.get_mut(device) {
+                Some(session) => session.gestures.tick(now),
+                None => continue,
+            };
+            self.fire(device, fired);
+        }
+    }
+
+    fn fire(&mut self, device: Uuid, fired: Vec<(u8, Gesture)>) {
+        let page = self.current_page_id(device);
         for (index, gesture) in fired {
             self.perform(page, index, gesture);
         }
@@ -811,8 +920,8 @@ impl Engine {
     /// Does what a gesture on a key does, and moves a key of two states to its other one.
     pub(super) fn perform(&mut self, page: Uuid, index: u8, gesture: Gesture) {
         let Some(key) = self
-            .profile()
-            .ok()
+            .config
+            .page_owner(page)
             .and_then(|profile| profile.page(page))
             .and_then(|p| p.keys.get(&index))
         else {
@@ -846,20 +955,12 @@ impl Engine {
                 self.second_states.insert((page, index));
             }
             self.changed = true;
-            if self.screen.showing_keys()
-                && self.current_page_id() == page
-                && let Some(design) = self.design_for(index)
-            {
-                match self.draw(index, &design) {
-                    Ok(png) => self.dock.set_keys(BTreeMap::from([(index, png)])),
-                    Err(err) => warn!("key {index} could not be drawn: {err}"),
-                }
-            }
+            self.redraw_on_dock(page, index);
         }
     }
 
-    fn key(&self, index: u8) -> Option<&Key> {
-        self.current_page()?.keys.get(&index)
+    fn key(&self, device: Uuid, index: u8) -> Option<&Key> {
+        self.current_page(device)?.keys.get(&index)
     }
 
     /// What a press does to the widget of its key: timers, stopwatches and counters answer to it.
@@ -920,22 +1021,48 @@ impl Engine {
         }
     }
 
-    /// Draws a key again if it is on the dock now.
-    fn redraw_on_dock(&mut self, page: Uuid, index: u8) {
-        if !self.screen.showing_keys() || self.current_page_id() != page {
+    /// Draws a key again if its dock shows it now.
+    pub(super) fn redraw_on_dock(&mut self, page: Uuid, index: u8) {
+        let Some(device) = self.config.device_of_page(page) else {
+            return;
+        };
+        if self.paused || self.current_page_id(device) != page {
             return;
         }
-        if let Some(design) = self.design_for(index) {
-            match self.draw(index, &design) {
-                Ok(png) => self.dock.set_keys(BTreeMap::from([(index, png)])),
+        self.redraw_indexes(device, vec![index]);
+    }
+
+    /// Draws keys of the page a dock shows again, in one update.
+    pub(super) fn redraw_indexes(&mut self, device: Uuid, indexes: Vec<u8>) {
+        let Some(session) = self.docks.get(device) else {
+            return;
+        };
+        if indexes.is_empty() || !session.screen.showing_keys() {
+            return;
+        }
+        let model = session.model;
+        let mut images = BTreeMap::new();
+        for index in indexes {
+            let Some(design) = self.design_for(device, index) else {
+                continue;
+            };
+            match self.draw(model, index, &design) {
+                Ok(png) => {
+                    images.insert(index, png);
+                }
                 Err(err) => warn!("key {index} could not be drawn: {err}"),
             }
         }
+        if !images.is_empty()
+            && let Some(session) = self.docks.get(device)
+        {
+            session.dock.set_keys(images);
+        }
     }
 
-    pub(super) fn design_for(&self, index: u8) -> Option<KeyDesign> {
-        let key = self.key(index)?;
-        Some(self.design_of(self.current_page_id(), index, key))
+    pub(super) fn design_for(&self, device: Uuid, index: u8) -> Option<KeyDesign> {
+        let key = self.key(device, index)?;
+        Some(self.design_of(self.current_page_id(device), index, key))
     }
 
     /// How a key of `page` looks now: in its current state, with the page's values in its text.
@@ -954,6 +1081,9 @@ impl Engine {
         self.with_plugin(key, &mut design);
         if let Some(ok) = self.result_of(page, index) {
             design.layers.push(Layer::Status { ok });
+        }
+        if !self.runs_here(page, key) {
+            design.layers.push(Layer::Unsupported);
         }
         design
     }
@@ -996,7 +1126,7 @@ impl Engine {
         let Some(profile) = self
             .config
             .page_owner(page)
-            .or_else(|| self.config.active_profile())
+            .or_else(|| self.focused_profile().ok())
         else {
             return PageVars::default();
         };
@@ -1010,22 +1140,22 @@ impl Engine {
         }
     }
 
-    fn current_page_id(&self) -> Uuid {
-        self.current_page().map(|page| page.id).unwrap_or_default()
+    pub(super) fn current_page_id(&self, device: Uuid) -> Uuid {
+        self.current_page(device)
+            .map(|page| page.id)
+            .unwrap_or_default()
     }
 
     /// Drops the second states of keys that no longer have two.
     pub(super) fn forget_stale_states(&mut self) {
-        let Some(profile) = self.config.active_profile() else {
-            return;
-        };
         let keep: HashSet<(Uuid, u8)> = self
             .second_states
             .iter()
             .copied()
             .filter(|(page, index)| {
-                profile
-                    .page(*page)
+                self.config
+                    .page_owner(*page)
+                    .and_then(|profile| profile.page(*page))
                     .and_then(|p| p.keys.get(index))
                     .is_some_and(|key| key.second_state.is_some())
             })
@@ -1033,16 +1163,51 @@ impl Engine {
         self.second_states = keep;
     }
 
-    pub(super) fn draw(&mut self, index: u8, design: &KeyDesign) -> Result<Vec<u8>, CommandError> {
-        let size = if index == WIDE_KEY {
-            WIDE_KEY_SIZE
-        } else {
-            KEY_SIZE
-        };
+    /// A key drawn at the size of its control on `model`.
+    pub(super) fn draw(
+        &mut self,
+        model: &DeviceModel,
+        index: u8,
+        design: &KeyDesign,
+    ) -> Result<Vec<u8>, CommandError> {
+        let size = model
+            .image_size(index)
+            .ok_or(CommandError::InvalidKey(index))?;
         self.renderer
-            .render(design, size)
+            .render(design, (size.width, size.height))
             .map(|png| png.as_ref().clone())
             .map_err(|err| CommandError::Render(err.to_string()))
+    }
+
+    pub(super) fn draw_for(
+        &mut self,
+        device: Uuid,
+        index: u8,
+        design: &KeyDesign,
+    ) -> Result<Vec<u8>, CommandError> {
+        let model = self
+            .model_of(device)
+            .ok_or(CommandError::UnknownDevice(device))?;
+        self.draw(model, index, design)
+    }
+
+    /// Whether a key of `page` can do what it does on the page's dock.
+    pub(super) fn runs_here(&self, page: Uuid, key: &Key) -> bool {
+        self.config
+            .device_of_page(page)
+            .and_then(|device| self.model_of(device))
+            .is_none_or(|model| self.key_runs_on(key, model))
+    }
+
+    /// Whether a dock has a control at `index`.
+    pub(super) fn check_index(&self, device: Uuid, index: u8) -> Result<(), CommandError> {
+        let model = self
+            .model_of(device)
+            .ok_or(CommandError::UnknownDevice(device))?;
+        match model.control(index) {
+            Some(_) => Ok(()),
+            None => Err(CommandError::InvalidKey(index)),
+        }
     }
 
     /// Sends the new state before the reply, so whoever asked sees the change once it is done.
@@ -1064,14 +1229,6 @@ impl Engine {
 
     pub(super) fn emit(&self, event: EngineEvent) {
         let _ = self.events.send(event);
-    }
-}
-
-pub(super) fn check_index(index: u8) -> Result<(), CommandError> {
-    if index < KEY_COUNT || index == WIDE_KEY {
-        Ok(())
-    } else {
-        Err(CommandError::InvalidKey(index))
     }
 }
 

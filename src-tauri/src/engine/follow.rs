@@ -32,9 +32,17 @@ pub fn followed(key: &Key) -> Option<Followed> {
 
 impl Engine {
     /// Keys of two states that follow a server show their second state while what they follow
-    /// is on, and their first one while the server is not connected.
+    /// is on, and their first one while the server is not connected. On the profile each dock
+    /// shows.
     pub(super) fn follow_servers(&mut self) {
-        let Some(profile) = self.config.active_profile() else {
+        let devices: Vec<Uuid> = self.config.devices.iter().map(|d| d.id).collect();
+        for device in devices {
+            self.follow_servers_on(device);
+        }
+    }
+
+    fn follow_servers_on(&mut self, device: Uuid) {
+        let Some(profile) = self.config.active_profile_of(device) else {
             return;
         };
         let mut moved = Vec::new();
@@ -72,6 +80,6 @@ impl Engine {
                 redraw.push(index);
             }
         }
-        self.redraw_indexes(redraw);
+        self.redraw_indexes(device, redraw);
     }
 }

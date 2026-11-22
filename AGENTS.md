@@ -32,7 +32,7 @@ in Settings → General (`preferences.language`). Every user-visible text exists
 ```
 src-nuxt/       The UI, a whole Nuxt project (SPA mode): nuxt.config.ts, app/, public/
                 src-nuxt/app/ipc/bindings.ts is generated from Rust
-src-tauri/      Rust: engine, D200 driver, renderer, store, IPC, plugin host, tray…
+src-tauri/      Rust: engine, dock drivers, renderer, store, IPC, plugin host, tray…
 tests/          unit/ (bun test) and e2e/ (WebdriverIO against the real app)
 scripts/        app build, local update server, bundled Node download
 ```
@@ -120,7 +120,10 @@ developing, except to take screenshots for a UI review (below).
 
 App environment variables:
 
-- `TAURILANZI_NO_DOCK=1` does not open the USB device (the dock stays with whoever has it).
+- `TAURILANZI_NO_DOCK=1` does not open the USB devices (the docks stay with whoever has them).
+- `TAURILANZI_VIRTUAL_DOCKS=<model>,<model>` connects docks that exist only in the app, one per
+  model id listed (`ulanzi.d200`): they take everything and show nothing, for working on several
+  docks or models without the devices.
 - `TAURILANZI_DATA_DIR=<folder>` uses another data folder instead of the real one, and turns off
   the single-instance lock. Without it, `tauri dev` uses the development app's own data folder,
   apart from the released app's.
@@ -224,7 +227,13 @@ Commits, versions and releases:
   wlr-foreign-toplevel protocol or, on GNOME, an extension of the app's, which it installs when
   asked; the scripts are next to their code in `src/foreground/linux/`.
 - Keys are drawn on the computer as whole images (layers → SVG → PNG with `resvg`); the legacy
-  mode (title drawn by the firmware) only for compatibility.
+  mode (title drawn by the firmware) only for compatibility. Sizes in a design are pixels of a key
+  196 px tall, scaled to the key drawn.
+- Docks: each model is a descriptor in `src-tauri/src/driver` (one folder per protocol family,
+  one file per hardware model, all listed in `catalog.rs`), driven natively: never through device
+  plugins. A profile belongs to one physical dock; several docks run at once, and profiles move or
+  copy between them by hand. Adding a model or a family follows the `add-dock` skill
+  (`.claude/skills/add-dock`), which also holds what is known about each family.
 - Ulanzi plugins run as Ulanzi Studio runs them: the extension of `CodePath` (or `Type: Python`)
   picks Node, a page or Python. JavaScript runs on Node, never on Bun: the app's own Node, pinned
   in `scripts/node-runtime.json` for each system and processor and bundled only by `build-app.ts`
@@ -309,6 +318,15 @@ Commits, versions and releases:
     for it too.
   - Clients that only start commands (Claude Desktop) reach the server through the app's own
     program: `<app> --mcp-bridge <url>` with `TAURILANZI_MCP_TOKEN`, handled before Tauri starts.
+- **Errors are always handled and always told with their specific reason, never a generic
+  one.** The engine says what went wrong in the app's language: every `CommandError` has its
+  text in `src/ipc/error.rs` (`tr!`, under `errors` in the engine's locales), and its English
+  message stays for logs and MCP. The UI shows what failed and why, `failure(what, err)` from
+  `src-nuxt/app/lib/errors.ts` ("Could not move the profile: it is the only profile of its
+  dock…"), never "it could not be done" alone. No error the user should know of is swallowed:
+  an empty `catch` only where failing is expected and harmless, with a comment saying why. A new
+  error gets its specific text in the same change; what can be known beforehand (a button that
+  would fail) is told before, not after.
 - Right click never shows the browser menu (blocked in the layout); custom context menus open
   with `useContextMenu().open(event, items)`.
 - In development Nuxt does not register new shadcn components and Tailwind does not see new files

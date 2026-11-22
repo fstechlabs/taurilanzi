@@ -1,13 +1,14 @@
 # Building keys
 
-How to set up the Ulanzi D200 through these tools so every change is accepted the first time and
-looks like what the app's own editor makes. The exact JSON of every type is in `get_schema`; this
+How to set up the docks through these tools so every change is accepted the first time and looks
+like what the app's own editor makes. The exact JSON of every type is in `get_schema`; this
 guide says which combinations are valid and gives working examples.
 
 ## Workflow
 
-1. `get_overview` first: profiles, pages (with a summary of their keys), links between pages,
-   integrations and their status, and the page on the dock. Ids come from here.
+1. `get_overview` first: the docks, each with its layout, its profiles and their pages (with a
+   summary of their keys), links between pages, integrations and their status, and the page each
+   dock shows. Ids come from here.
 2. `get_page` or `get_key` before changing a key that exists, and change what you read: keys hold
    fields you would otherwise lose (plugin settings, hidden secrets, waypoints).
 3. Build several keys, pages or profiles with one `apply_changes` call: all or nothing, and one Undo
@@ -27,7 +28,10 @@ guide says which combinations are valid and gives working examples.
 - Refused changes say which change and why (`change 2: actions[0] (open_url): url must…`). Fix that
   field and send the call again: nothing of a refused call was applied.
 
-## The device
+## The docks
+
+Each dock has its own layout: the `layout` of each dock in `get_overview` lists its keys row by row,
+with the index of each and the size it is drawn at. The Ulanzi D200, which the examples here use:
 
 ```
  0   1   2   3   4
@@ -35,15 +39,19 @@ guide says which combinations are valid and gives working examples.
 10  11  12  [ 13 wide ]
 ```
 
-- Keys 0-12 are 196×196 px. Key 13 is the wide key, 452×196 px, over the last two slots of the
-  bottom row.
-- A page holds keys by index; missing indexes are empty slots.
-- The firmware shrinks a key while it is held down. Never add a press effect.
+- On the D200, keys 0-12 are 196×196 px. Key 13 is the wide key, 452×196 px, over the last two
+  slots of the bottom row.
+- A page holds keys by index; missing indexes are empty slots. An index the page's dock does not
+  have is refused.
+- The firmware of the D200 shrinks a key while it is held down. Never add a press effect.
 - Every new page gets a back key in slot 0. Keep it, or replace it with another way out (`back` or
   `home`).
-- Pages belong to a profile. Each profile has a home page, where the dock starts and where `home`
-  leads. The dock shows one profile at a time. A profile linked to apps comes to the dock when one
-  of those apps comes to the front.
+- Pages belong to a profile, and each profile to one dock. Each profile has a home page, where its
+  dock starts and where `home` leads. Each dock shows one of its profiles at a time, and a key can
+  only switch to a profile of its own dock. A profile linked to apps comes to its dock when one of
+  those apps comes to the front.
+- `transfer_profile` in `apply_changes` takes a profile, or a copy of it, to another dock: keys go
+  to the same place in its grid, and those it has no place for are left out.
 
 ## Anatomy of a key
 
@@ -84,7 +92,7 @@ Layers:
   for photos and multicolour icons.
 - Text: `{ "type": "text", "content": "Mic", "font_family": "Inter", "font_weight": 700,
   "size": 26, "color": C, "position": "top" | "middle" | "bottom", "outline": null }`.
-  `size` is 10 to 80 (in pixels of a 196 px key). `font_weight` is one of 400, 500, 600, 700, 800,
+  `size` is 10 to 80 (in pixels of a 196 px tall key; smaller keys scale it down). `font_weight` is one of 400, 500, 600, 700, 800,
   900. `font_family` is not empty; `list_fonts` lists the families, "Inter" is always there.
   `outline` is null or `{ "color": C, "width": 2 }`. Lines break with `\n`.
   Text can show the page it is on: `{page}` (its name), `{page_number}` (from 1) and
