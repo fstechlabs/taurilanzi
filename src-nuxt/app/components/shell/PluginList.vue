@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { ArrowUpCircle, Plus, Puzzle } from '@lucide/vue'
+import { ArrowUpCircle, FolderOpen, Plus, Puzzle, RotateCcw, Trash2 } from '@lucide/vue'
 import type { DeepReadonly } from 'vue'
+import type { ContextMenuItem } from '~/composables/useContextMenu'
 import { pluginImage } from '~/lib/actions/plugins'
 import type { PluginInfo } from '~/types/engine'
 
 type Plugin = DeepReadonly<PluginInfo>
 
-const { catalog } = usePlugins()
+const { catalog, restart, showFolder } = usePlugins()
 const store = useStorePlugins()
 const { t } = useI18n()
 const { recommendation } = useMcp()
+const contextMenu = useContextMenu()
 const browsing = ref(false)
 
 watch(recommendation, (plugin) => {
@@ -31,15 +33,31 @@ onMounted(() => {
 
 const plugins = computed(() => catalog.value?.plugins ?? [])
 const open = ref<string | null>(null)
+/** The dialog was opened to confirm removing the plugin, which a context menu cannot ask on its own button. */
+const removing = ref(false)
 const opened = computed(() => plugins.value.find(p => p.id === open.value) ?? null)
 const dialogOpen = computed({
   get: () => Boolean(opened.value),
   set: (value) => {
     if (!value) {
       open.value = null
+      removing.value = false
     }
   },
 })
+
+function show(id: string, remove = false) {
+  removing.value = remove
+  open.value = id
+}
+
+function items(plugin: Plugin): ContextMenuItem[] {
+  return [
+    { label: t('plugins.dialog.restart'), icon: RotateCcw, disabled: !canRestart(plugin), run: () => restart(plugin.id) },
+    { label: t('plugins.dialog.folder'), icon: FolderOpen, run: () => showFolder() },
+    { label: t('plugins.dialog.remove'), icon: Trash2, destructive: true, separated: true, run: () => show(plugin.id, true) },
+  ]
+}
 
 function status(plugin: Plugin): { color: string, label: string } {
   switch (plugin.run.state) {
@@ -74,7 +92,8 @@ function status(plugin: Plugin): { color: string, label: string } {
       type="button"
       class="flex items-center gap-2 rounded px-2 py-1 text-left hover:bg-neutral-800/60"
       :data-plugin="plugin.id"
-      @click="open = plugin.id"
+      @click="show(plugin.id)"
+      @contextmenu="contextMenu.open($event, items(plugin))"
     >
       <img v-if="plugin.icon" :src="pluginImage(plugin.id, plugin.icon)" alt="" class="size-4 shrink-0 rounded-sm">
       <Puzzle v-else class="size-4 shrink-0 text-muted-foreground" />
@@ -92,7 +111,7 @@ function status(plugin: Plugin): { color: string, label: string } {
       <span class="flex-1">{{ t('plugins.list.add') }}</span>
     </button>
 
-    <PluginStoreDialog v-model:open="browsing" :recommended="recommendation" @added="open = $event" />
-    <PluginDialog v-if="opened" v-model:open="dialogOpen" :plugin="opened" :status="status(opened).label" />
+    <PluginStoreDialog v-model:open="browsing" :recommended="recommendation" @added="show($event)" />
+    <PluginDialog v-if="opened" v-model:open="dialogOpen" :plugin="opened" :status="status(opened).label" :removing="removing" />
   </div>
 </template>
