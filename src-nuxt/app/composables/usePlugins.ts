@@ -1,9 +1,10 @@
 import { open } from '@tauri-apps/plugin-dialog'
+import type { DeepReadonly } from 'vue'
 import { commands } from '~/ipc/bindings'
 import { pluginEntries, pluginSections } from '~/lib/actions/catalog'
 import { catalogOf } from '~/lib/actions/plugins'
 import { t } from '~/lib/i18n'
-import type { PluginCatalog } from '~/types/engine'
+import type { PluginCatalog, PluginInfo } from '~/types/engine'
 
 /** What plugin packages come as: ZIP files, renamed by the Stream Dock and the Stream Deck. */
 const PACKAGE_FILES = ['zip', 'sdPlugin', 'streamDockPlugin', 'streamDeckPlugin']
@@ -25,6 +26,11 @@ async function refresh() {
   catch {
     catalog.value = null
   }
+}
+
+/** Passive plugins and those that could not start have no process to restart. */
+export function canRestart(plugin: DeepReadonly<PluginInfo>) {
+  return !['passive', 'unavailable'].includes(plugin.run.state)
 }
 
 /** The plugins installed in the app, and what can be done with them. */

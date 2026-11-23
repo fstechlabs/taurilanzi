@@ -5,7 +5,12 @@ import { pluginImage } from '~/lib/actions/plugins'
 import type { PluginInfo } from '~/types/engine'
 
 const open = defineModel<boolean>('open', { required: true })
-const props = defineProps<{ plugin: DeepReadonly<PluginInfo>, status: string }>()
+const props = defineProps<{
+  plugin: DeepReadonly<PluginInfo>
+  status: string
+  /** Opens already asking to remove it, as the list's context menu does. */
+  removing?: boolean
+}>()
 
 const { restart, uninstall, showFolder } = usePlugins()
 const store = useStorePlugins()
@@ -33,11 +38,11 @@ async function update() {
   }
 }
 
-const runs = computed(() => !['passive', 'unavailable'].includes(props.plugin.run.state))
+const runs = computed(() => canRestart(props.plugin))
 /** Removing cannot be undone, so it asks once more on the same button. */
-const confirming = ref(false)
+const confirming = ref(props.removing)
 watch(() => props.plugin.id, () => {
-  confirming.value = false
+  confirming.value = props.removing
 })
 
 async function remove() {
